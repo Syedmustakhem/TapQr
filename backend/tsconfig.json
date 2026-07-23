@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+
+    "rootDir": "src",
+    "outDir": "./dist",
+
+    "strict": true,
+
+    "esModuleInterop": true,
+
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true,
+
+    "moduleResolution": "node",
+
+    "resolveJsonModule": true,
+
+    "types": ["node"]
+  },
+
+  "include": ["src", "src/app.ts", "src/server.ts", "src/modules/auth"],
+
+  "exclude": ["node_modules", "dist"]
+}

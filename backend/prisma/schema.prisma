@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//
+// ENUMS
+//
+
+enum AuthProviderType {
+  EMAIL
+  PHONE
+  GOOGLE
+}
+
+enum UserRole {
+  OWNER
+  STAFF
+  ADMIN
+}
+
+enum BusinessStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+//
+// USER
+//
+
+model User {
+  id        String   @id @default(uuid())
+  fullName  String
+
+  email     String?  @unique
+  phone     String?  @unique
+
+  role      UserRole @default(OWNER)
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  authProviders AuthProvider[]
+  businesses    Business[]
+}
+
+//
+// AUTH PROVIDER
+//
+
+model AuthProvider {
+  id             String           @id @default(uuid())
+
+  provider       AuthProviderType
+
+  passwordHash   String?
+
+  providerUserId String?
+
+  isVerified     Boolean          @default(false)
+
+  createdAt      DateTime         @default(now())
+
+  updatedAt      DateTime         @updatedAt
+
+  userId         String
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+
+  @@unique([provider, userId])
+}
+
+//
+// BUSINESS
+//
+
+model Business {
+  id          String         @id @default(uuid())
+
+  ownerId     String
+
+  owner       User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  name        String
+
+  slug        String         @unique
+
+  email       String?
+
+  phone       String?
+
+  logo        String?
+
+  description String?
+
+  status      BusinessStatus @default(ACTIVE)
+
+  createdAt   DateTime       @default(now())
+
+  updatedAt   DateTime       @updatedAt
+
+  deletedAt   DateTime?
+
+  @@index([ownerId])
+  @@index([slug])
+  @@index([status])
+}

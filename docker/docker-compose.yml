@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+
+  postgres:
+
+    image: postgres:17
+
+    container_name: tapqr-postgres
+
+    restart: always
+
+    environment:
+
+      POSTGRES_USER: tapqr
+
+      POSTGRES_PASSWORD: tapqr123
+
+      POSTGRES_DB: tapqr
+
+    ports:
+
+      - "5432:5432"
+
+    volumes:
+
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+
+  postgres_data:
