@@ -1,27 +1,27 @@
-import { AnyZodObject } from "zod";
-import { Request, Response, NextFunction } from "express";
+    import { ZodSchema } from "zod";
+    import { Request, Response, NextFunction } from "express";
 
-export const validate =
-(schema: AnyZodObject)=>
+    export const validate =
+    (schema: ZodSchema)=>
 
-(req:Request,res:Response,next:NextFunction)=>{
+    (req:Request,res:Response,next:NextFunction)=>{
 
-const result=schema.safeParse(req.body);
+    const result=schema.safeParse(req.body);
 
-if(!result.success){
+    if(!result.success){
 
-return res.status(400).json({
+    return res.status(400).json({
 
-success:false,
+    success:false,
 
-errors:result.error.flatten()
+    errors:result.error.flatten()
 
-});
+    });
 
-}
+    }
 
-req.body=result.data;
+    req.body=result.data;
 
-next();
+    next();
 
-};
+    };

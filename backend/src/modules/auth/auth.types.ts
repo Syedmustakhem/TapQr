@@ -1,3 +1,5 @@
+import { Request } from "express";
+
 /**
  * User Registration DTO
  */
@@ -28,4 +30,11 @@ export interface RefreshTokenDTO {
 export interface JwtPayload {
   id: string;
   role: string;
+}
+
+/**
+ * Authenticated Request
+ */
+export interface AuthRequest extends Request {
+  user?: JwtPayload;
 }

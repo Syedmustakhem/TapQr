@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
-import { AuthRequest } from "./auth.middleware";
+import { AuthRequest } from "./auth.types";
 import { ResponseHandler } from "../../cores/responses/ResponseHandler";
 
 export class AuthController {

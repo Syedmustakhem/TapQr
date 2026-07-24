@@ -4,12 +4,12 @@ import jwt from "jsonwebtoken";
 import { AuthRepository } from "./auth.repository";
 import { RegisterUserDTO, LoginUserDTO } from "./auth.types";
 
-import { AppError } from "../../utils/app-error";
+import { AppError } from "../../cores/errors/AppError";
 import { env } from "../../config/env";
 import {
   generateAccessToken,
   generateRefreshToken,
-} from "../../utils/jwt";
+} from "./jwt";
 
 export class AuthService {
   private authRepository = new AuthRepository();
@@ -46,9 +46,9 @@ export class AuthService {
       throw new AppError("Invalid Email or Password", 401);
     }
 
-    const authProvider =
-      await this.authRepository.findEmailAuthProvider(user.id);
-
+  const authProvider =
+  await this.authRepository.findAuthProviderByUserId(user.id);
+  
     if (!authProvider || !authProvider.passwordHash) {
       throw new AppError("Invalid Email or Password", 401);
     }
@@ -78,7 +78,12 @@ export class AuthService {
       user,
     };
   }
-
+async logout() {
+  return {
+    success: true,
+    message: "Logout successful",
+  };
+}
   async me(userId: string) {
     const user =
       await this.authRepository.findUserById(userId);
