@@ -29,19 +29,38 @@ enum BusinessStatus {
   SUSPENDED
 }
 
+enum BusinessMemberRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum BusinessMemberStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 //
 // USER
 //
 
 model User {
-  id        String   @id @default(uuid())
-  fullName  String
+  id       String @id @default(uuid())
+  fullName String
 
-  email     String?  @unique
-  phone     String?  @unique
+  email String? @unique
+  phone String? @unique
 
-  role      UserRole @default(OWNER)
-  isActive  Boolean  @default(true)
+  role     UserRole @default(OWNER)
+  isActive Boolean  @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -49,6 +68,9 @@ model User {
   // Relations
   authProviders AuthProvider[]
   businesses    Business[]
+  memberships   BusinessMember[]
+
+  sentInvitations BusinessInvitation[]
 }
 
 //
@@ -56,27 +78,26 @@ model User {
 //
 
 model AuthProvider {
-  id             String           @id @default(uuid())
+  id String @id @default(uuid())
 
-  provider       AuthProviderType
+  provider AuthProviderType
 
-  passwordHash   String?
+  passwordHash String?
 
   providerUserId String?
 
-  isVerified     Boolean          @default(false)
+  isVerified Boolean @default(false)
 
-  createdAt      DateTime         @default(now())
+  createdAt DateTime @default(now())
 
-  updatedAt      DateTime         @updatedAt
+  updatedAt DateTime @updatedAt
 
-  userId         String
+  userId String
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, userId])
+  @@index([userId])
 }
 
 //
@@ -84,33 +105,87 @@ model AuthProvider {
 //
 
 model Business {
-  id          String         @id @default(uuid())
+  id String @id @default(uuid())
 
-  ownerId     String
+  ownerId String
 
-  owner       User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  name        String
+  name String
 
-  slug        String         @unique
+  slug String @unique
 
-  email       String?
+  email String?
 
-  phone       String?
+  phone String?
 
-  logo        String?
+  logo String?
 
   description String?
 
-  status      BusinessStatus @default(ACTIVE)
+  status BusinessStatus @default(ACTIVE)
 
-  createdAt   DateTime       @default(now())
+  createdAt DateTime @default(now())
 
-  updatedAt   DateTime       @updatedAt
+  updatedAt DateTime @updatedAt
 
-  deletedAt   DateTime?
+  deletedAt DateTime?
+
+  members BusinessMember[]
+
+  invitations BusinessInvitation[]
 
   @@index([ownerId])
   @@index([slug])
   @@index([status])
+}
+
+model BusinessMember {
+  id String @id @default(uuid())
+
+  userId     String
+  businessId String
+
+  role   BusinessMemberRole   @default(STAFF)
+  status BusinessMemberStatus @default(ACTIVE)
+
+  invitedById String?
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+}
+
+model BusinessInvitation {
+  id String @id @default(uuid())
+
+  businessId  String
+  invitedById String
+
+  email String
+
+  role BusinessMemberRole
+
+  status InvitationStatus @default(PENDING)
+
+  token String @unique
+
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([invitedById])
+  @@index([email])
 }
