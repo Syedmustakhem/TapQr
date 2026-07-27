@@ -1,0 +1,118 @@
+import { Request, Response, NextFunction } from "express";
+
+import { StaffService } from "../services/staff.service";
+
+export class StaffController {
+  private staffService = new StaffService();
+
+  /**
+   * POST /staff/invitations
+   */
+  async inviteStaff(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result =
+        await this.staffService.inviteStaff({
+          ownerId: req.user.id,
+          email: req.body.email,
+          role: req.body.role,
+        });
+
+      return res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /staff/invitations/:token/accept
+   */
+  async acceptInvitation(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result =
+        await this.staffService.acceptInvitation({
+          userId: req.user.id,
+          token: req.params.token,
+        });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /staff/members
+   */
+  async getMembers(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const members =
+        await this.staffService.getMembers(
+          req.user.id
+        );
+
+      return res.status(200).json({
+        members,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /staff/members/:memberId
+   */
+  async updateMemberRole(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const member =
+        await this.staffService.updateMemberRole(
+          req.user.id,
+          req.params.memberId,
+          req.body.role
+        );
+
+      return res.status(200).json({
+        message: "Member updated successfully.",
+        member,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /staff/members/:memberId
+   */
+  async removeMember(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const result =
+        await this.staffService.removeMember(
+          req.user.id,
+          req.params.memberId
+        );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+}
