@@ -5,7 +5,7 @@ export interface CreateBusinessRepositoryInput {
   name: string;
   slug: string;
   email?: string;
-  phone?: string;
+  phone ?: string;
   logo?: string;
   description?: string;
 }
@@ -82,4 +82,4 @@ export class BusinessRepository {
       },
     });
   }
-}
+} 

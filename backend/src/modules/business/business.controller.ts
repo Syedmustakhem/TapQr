@@ -30,7 +30,7 @@ getMyBusiness = async (
       success: false,
       message:
         error.message ||
-        "Internal Server Error",
+        "Internal Server Error. please try again",
     });
 
   }
