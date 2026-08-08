@@ -4,7 +4,7 @@ import cors from "cors";
 
 import authRoutes from "./modules/auth/auth.routes";
 import businessRoutes from "./modules/business/business.routes";
-
+import qrCodeRoutes from "./modules/qrcode/qrcode.routes";
 import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
   import staffRoutes from "./modules/staff/routes/staff.routes";
@@ -34,6 +34,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/qrcodes", qrCodeRoutes);
 // Global Error Handler (Always Last)
 app.use(errorHandler);
 
