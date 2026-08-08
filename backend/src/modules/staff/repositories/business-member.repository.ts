@@ -2,7 +2,7 @@ import {
   BusinessMemberRole,
   BusinessMemberStatus,
 } from "@prisma/client";
-import { prisma } from "../../../../src/config/prisma";
+import { prisma } from "../../../config/prisma";
 
 export interface CreateBusinessMemberRepositoryInput {
   userId: string;
@@ -20,7 +20,9 @@ export class BusinessMemberRepository {
   /**
    * Create a new business member
    */
-  async create(data: CreateBusinessMemberRepositoryInput) {
+  async create(
+    data: CreateBusinessMemberRepositoryInput
+  ) {
     return prisma.businessMember.create({
       data: {
         userId: data.userId,
@@ -32,7 +34,7 @@ export class BusinessMemberRepository {
   }
 
   /**
-   * Find business member by ID
+   * Find member by ID
    */
   async findById(id: string) {
     return prisma.businessMember.findUnique({
@@ -43,8 +45,7 @@ export class BusinessMemberRepository {
   }
 
   /**
-   * Find a membership by user and business.
-   * Used to prevent duplicate memberships.
+   * Find membership by user and business
    */
   async findByUserAndBusiness(
     userId: string,
@@ -61,10 +62,11 @@ export class BusinessMemberRepository {
   }
 
   /**
-   * Get all members of a business.
-   * Includes user details for the frontend.
+   * Get all members of a business
    */
-  async findByBusiness(businessId: string) {
+  async findByBusiness(
+    businessId: string
+  ) {
     return prisma.businessMember.findMany({
       where: {
         businessId,
@@ -76,13 +78,32 @@ export class BusinessMemberRepository {
         user: true,
       },
       orderBy: {
-        createdAt: "asc",
+        joinedAt: "asc",
       },
     });
   }
 
   /**
-   * Update member role or status
+   * Get all memberships of a user
+   */
+  async findByUser(
+    userId: string
+  ) {
+    return prisma.businessMember.findMany({
+      where: {
+        userId,
+        status: {
+          not: BusinessMemberStatus.REMOVED,
+        },
+      },
+      include: {
+        business: true,
+      },
+    });
+  }
+
+  /**
+   * Update member
    */
   async update(
     id: string,
@@ -97,8 +118,7 @@ export class BusinessMemberRepository {
   }
 
   /**
-   * Remove a member from the business.
-   * We don't delete the record—we simply mark it as REMOVED.
+   * Soft remove member
    */
   async remove(id: string) {
     return prisma.businessMember.update({
@@ -107,6 +127,48 @@ export class BusinessMemberRepository {
       },
       data: {
         status: BusinessMemberStatus.REMOVED,
+      },
+    });
+  }
+
+  /**
+   * Suspend member
+   */
+  async suspend(id: string) {
+    return prisma.businessMember.update({
+      where: {
+        id,
+      },
+      data: {
+        status: BusinessMemberStatus.SUSPENDED,
+      },
+    });
+  }
+
+  /**
+   * Activate member
+   */
+  async activate(id: string) {
+    return prisma.businessMember.update({
+      where: {
+        id,
+      },
+      data: {
+        status: BusinessMemberStatus.ACTIVE,
+      },
+    });
+  }
+
+  /**
+   * Count active members
+   */
+  async countActiveMembers(
+    businessId: string
+  ) {
+    return prisma.businessMember.count({
+      where: {
+        businessId,
+        status: BusinessMemberStatus.ACTIVE,
       },
     });
   }

@@ -48,6 +48,17 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum QRType {
+  STATIC
+  DYNAMIC
+}
+
+enum QRStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
 //
 // USER
 //
@@ -65,10 +76,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   authProviders AuthProvider[]
-  businesses    Business[]
-  memberships   BusinessMember[]
+
+  businesses Business[]
+
+  memberships BusinessMember[]
 
   sentInvitations BusinessInvitation[]
 }
@@ -135,26 +147,36 @@ model Business {
 
   invitations BusinessInvitation[]
 
+  qrCodes QRCode[]
+
   @@index([ownerId])
   @@index([slug])
   @@index([status])
 }
 
+//
+// BUSINESS MEMBER
+//
+
 model BusinessMember {
   id String @id @default(uuid())
 
-  userId     String
+  userId String
+
   businessId String
 
-  role   BusinessMemberRole   @default(STAFF)
+  role BusinessMemberRole @default(STAFF)
+
   status BusinessMemberStatus @default(ACTIVE)
 
-  invitedById String?
+  joinedAt DateTime @default(now())
 
-  joinedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([userId, businessId])
@@ -162,10 +184,15 @@ model BusinessMember {
   @@index([businessId])
 }
 
+//
+// BUSINESS INVITATION
+//
+
 model BusinessInvitation {
   id String @id @default(uuid())
 
-  businessId  String
+  businessId String
+
   invitedById String
 
   email String
@@ -177,8 +204,11 @@ model BusinessInvitation {
   token String @unique
 
   expiresAt DateTime
-acceptedAt DateTime?
+
+  acceptedAt DateTime?
+
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -188,4 +218,38 @@ acceptedAt DateTime?
   @@index([businessId])
   @@index([invitedById])
   @@index([email])
+}
+
+//
+// QR CODE
+//
+
+model QRCode {
+  id String @id @default(cuid())
+
+  businessId String
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name String
+
+  description String?
+
+  type QRType @default(DYNAMIC)
+
+  destinationUrl String
+
+  shortCode String @unique
+
+  status QRStatus @default(ACTIVE)
+
+  scanCount Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  deletedAt DateTime?
+
+  @@index([businessId])
 }
