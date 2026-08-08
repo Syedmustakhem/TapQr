@@ -10,6 +10,16 @@ datasource db {
 //
 // ENUMS
 //
+enum QRType {
+  STATIC
+  DYNAMIC
+}
+
+enum QRStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
 
 enum AuthProviderType {
   EMAIL
@@ -134,6 +144,7 @@ model Business {
   members BusinessMember[]
 
   invitations BusinessInvitation[]
+  QRCode      QRCode[]
 
   @@index([ownerId])
   @@index([slug])
@@ -162,6 +173,65 @@ model BusinessMember {
   @@index([businessId])
 }
 
+model QRCode {
+  id String @id @default(cuid())
+
+  businessId String
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  name String
+
+  description String?
+
+  type QRType @default(DYNAMIC)
+
+  destinationUrl String
+
+  shortCode String @unique
+
+  status QRStatus @default(ACTIVE)
+
+  scanCount Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  scanEvents ScanEvent[]
+
+  @@index([businessId])
+}
+
+model ScanEvent {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  ipAddress String?
+
+  country String?
+
+  city String?
+
+  browser String?
+
+  device String?
+
+  operatingSystem String?
+
+  referrer String?
+
+  userAgent String?
+
+  scannedAt DateTime @default(now())
+
+  @@index([qrCodeId])
+  @@index([scannedAt])
+}
+
 model BusinessInvitation {
   id String @id @default(uuid())
 
@@ -176,10 +246,10 @@ model BusinessInvitation {
 
   token String @unique
 
-  expiresAt DateTime
-acceptedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
