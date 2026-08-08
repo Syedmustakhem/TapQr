@@ -11,6 +11,17 @@ datasource db {
 // ENUMS
 //
 
+enum QRType {
+  STATIC
+  DYNAMIC
+}
+
+enum QRStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
 enum AuthProviderType {
   EMAIL
   PHONE
@@ -48,23 +59,13 @@ enum InvitationStatus {
   EXPIRED
 }
 
-enum QRType {
-  STATIC
-  DYNAMIC
-}
-
-enum QRStatus {
-  ACTIVE
-  PAUSED
-  EXPIRED
-}
-
 //
 // USER
 //
 
 model User {
-  id       String @id @default(uuid())
+  id String @id @default(uuid())
+
   fullName String
 
   email String? @unique
@@ -76,12 +77,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
   authProviders AuthProvider[]
 
+  // Businesses owned by this user
   businesses Business[]
 
+  // Businesses where this user is a member
   memberships BusinessMember[]
 
+  // Invitations sent by this user
   sentInvitations BusinessInvitation[]
 }
 
@@ -101,15 +106,19 @@ model AuthProvider {
   isVerified Boolean @default(false)
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
   userId String
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   @@unique([provider, userId])
   @@index([userId])
+  @@index([provider])
 }
 
 //
@@ -121,28 +130,30 @@ model Business {
 
   ownerId String
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner User @relation(
+    fields: [ownerId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   name String
 
   slug String @unique
 
   email String?
-
   phone String?
 
   logo String?
-
   description String?
 
   status BusinessStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
   deletedAt DateTime?
 
+  // Relations
   members BusinessMember[]
 
   invitations BusinessInvitation[]
@@ -150,74 +161,44 @@ model Business {
   qrCodes QRCode[]
 
   @@index([ownerId])
-  @@index([slug])
   @@index([status])
 }
 
 //
-// BUSINESS MEMBER
+// BUSINESS MEMBERS
 //
 
 model BusinessMember {
   id String @id @default(uuid())
 
   userId String
-
   businessId String
 
   role BusinessMemberRole @default(STAFF)
 
   status BusinessMemberStatus @default(ACTIVE)
 
+  invitedById String?
+
   joinedAt DateTime @default(now())
-
-  createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(
+    fields: [userId],
+    references: [id],
+    onDelete: Cascade
+  )
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(
+    fields: [businessId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   @@unique([userId, businessId])
   @@index([userId])
   @@index([businessId])
-}
-
-//
-// BUSINESS INVITATION
-//
-
-model BusinessInvitation {
-  id String @id @default(uuid())
-
-  businessId String
-
-  invitedById String
-
-  email String
-
-  role BusinessMemberRole
-
-  status InvitationStatus @default(PENDING)
-
-  token String @unique
-
-  expiresAt DateTime
-
-  acceptedAt DateTime?
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
-
-  @@index([businessId])
   @@index([invitedById])
-  @@index([email])
 }
 
 //
@@ -229,7 +210,11 @@ model QRCode {
 
   businessId String
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business @relation(
+    fields: [businessId],
+    references: [id],
+    onDelete: Cascade
+  )
 
   name String
 
@@ -246,10 +231,93 @@ model QRCode {
   scanCount Int @default(0)
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
   deletedAt DateTime?
 
+  // Scan analytics
+  scanEvents ScanEvent[]
+
   @@index([businessId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+//
+// QR SCAN EVENTS
+//
+
+model ScanEvent {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  qrCode QRCode @relation(
+    fields: [qrCodeId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  ipAddress String?
+
+  country String?
+  city String?
+
+  browser String?
+  device String?
+  operatingSystem String?
+
+  referrer String?
+  userAgent String?
+
+  scannedAt DateTime @default(now())
+
+  @@index([qrCodeId])
+  @@index([scannedAt])
+  @@index([country])
+  @@index([city])
+}
+
+//
+// BUSINESS INVITATIONS
+//
+
+model BusinessInvitation {
+  id String @id @default(uuid())
+
+  businessId String
+  invitedById String
+
+  email String
+
+  role BusinessMemberRole
+
+  status InvitationStatus @default(PENDING)
+
+  token String @unique
+
+  expiresAt DateTime
+
+  acceptedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(
+    fields: [businessId],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  invitedBy User @relation(
+    fields: [invitedById],
+    references: [id],
+    onDelete: Cascade
+  )
+
+  @@index([businessId])
+  @@index([invitedById])
+  @@index([email])
+  @@index([status])
+  @@index([expiresAt])
 }
