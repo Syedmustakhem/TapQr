@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 
-import { COLORS } from "../../constants/colors";
+import { colors } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 
 interface InputProps extends TextInputProps {
@@ -34,7 +34,7 @@ export default function Input({
           styles.input,
           error ? styles.inputError : null,
         ]}
-        placeholderTextColor={COLORS.textSecondary}
+        placeholderTextColor={colors.textSecondary}
       />
 
       {error ? (
@@ -54,28 +54,28 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
 
   input: {
     height: 52,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: SPACING.md,
     fontSize: 16,
-    color: COLORS.text,
-    backgroundColor: COLORS.surface,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
 
   inputError: {
-    borderColor: COLORS.error,
+    borderColor: colors.error,
   },
 
   error: {
     marginTop: SPACING.xs,
     fontSize: 13,
-    color: COLORS.error,
+    color: colors.error,
   },
 });
