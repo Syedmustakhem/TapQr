@@ -1,0 +1,14 @@
+name : Tap Qr Backend Pipeline
+
+on:
+ push:
+   branches:
+     - develop
+     - main 
+
+  pull_request:
+      branches:
+       - develop 
+  jobs:
+   backend-build:
+    runs-on: ubuntu-latest

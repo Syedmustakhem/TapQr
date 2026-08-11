@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import QRCode from "react-native-qrcode-svg";
+
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +17,15 @@ import {
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
+
 import {
   getQRCodes,
   updateQRCode,
   deleteQRCode,
   type QRCode as StoredQRCode,
 } from "../../services/qrStorage";
+
+import { downloadQR } from "../../services/qrDownload.web";
 
 export default function QRDetailsScreen() {
   const params = useLocalSearchParams<{
@@ -32,19 +37,30 @@ export default function QRDetailsScreen() {
     status?: string;
   }>();
 
-  const [qr, setQr] = useState<StoredQRCode | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const qrRef = useRef<View>(null);
+
+  const [qr, setQr] =
+    useState<StoredQRCode | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [updating, setUpdating] =
+    useState(false);
 
   useEffect(() => {
     loadQRCode();
   }, [params.id]);
 
+  /*
+   * LOAD QR CODE
+   */
   const loadQRCode = async () => {
     try {
       setLoading(true);
 
-      const allQRCodes = await getQRCodes();
+      const allQRCodes =
+        await getQRCodes();
 
       const found = allQRCodes.find(
         (item) => item.id === params.id
@@ -53,24 +69,40 @@ export default function QRDetailsScreen() {
       if (found) {
         setQr(found);
       } else {
-        // Fallback for older navigation data
+        /*
+         * Fallback for older navigation data.
+         */
         setQr({
-          id: params.id || Date.now().toString(),
-          name: params.name || "Untitled QR Code",
+          id:
+            params.id ||
+            Date.now().toString(),
+
+          name:
+            params.name ||
+            "Untitled QR Code",
+
           destination:
-            params.destination || "https://example.com",
+            params.destination ||
+            "https://example.com",
+
           type:
             params.qrType === "STATIC"
               ? "STATIC"
               : "DYNAMIC",
+
           status:
             params.status === "PAUSED"
               ? "PAUSED"
               : "ACTIVE",
+
           scans: 0,
+
           destinationType:
-            params.destinationType || "WEBSITE",
-          createdAt: new Date().toISOString(),
+            params.destinationType ||
+            "WEBSITE",
+
+          createdAt:
+            new Date().toISOString(),
         });
       }
     } catch (error) {
@@ -78,11 +110,49 @@ export default function QRDetailsScreen() {
         "Failed to load QR details:",
         error
       );
+
+      Alert.alert(
+        "Error",
+        "Could not load the QR code."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  /*
+   * DOWNLOAD QR
+   */
+  const handleDownload = async () => {
+    if (!qr || updating) {
+      return;
+    }
+
+    try {
+      setUpdating(true);
+
+      await downloadQR(
+        qrRef,
+        qr.name
+      );
+    } catch (error) {
+      console.error(
+        "Failed to download QR:",
+        error
+      );
+
+      Alert.alert(
+        "Download failed",
+        "Could not save the QR code. Please try again."
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  /*
+   * PAUSE / ACTIVATE
+   */
   const handleToggleStatus = async () => {
     if (!qr || updating) {
       return;
@@ -96,16 +166,19 @@ export default function QRDetailsScreen() {
     try {
       setUpdating(true);
 
-      const updated = await updateQRCode(
-        qr.id,
-        {
-          status: newStatus,
-        }
-      );
+      const updated =
+        await updateQRCode(
+          qr.id,
+          {
+            status: newStatus,
+          }
+        );
 
-      const updatedQR = updated.find(
-        (item) => item.id === qr.id
-      );
+      const updatedQR =
+        updated.find(
+          (item) =>
+            item.id === qr.id
+        );
 
       if (updatedQR) {
         setQr(updatedQR);
@@ -124,47 +197,60 @@ export default function QRDetailsScreen() {
       setUpdating(false);
     }
   };
-const handleDelete = () => {
-  if (!qr || updating) {
-    return;
-  }
 
-  Alert.alert(
-    "Delete QR Code?",
-    `Are you sure you want to delete "${qr.name}"? This action cannot be undone.`,
-    [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setUpdating(true);
+  /*
+   * DELETE QR
+   */
+  const handleDelete = () => {
+    if (!qr || updating) {
+      return;
+    }
 
-            await deleteQRCode(qr.id);
-
-            router.replace("/app/tabs/qrcodes");
-          } catch (error) {
-            console.error(
-              "Failed to delete QR code:",
-              error
-            );
-
-            Alert.alert(
-              "Delete failed",
-              "Could not delete this QR code. Please try again."
-            );
-          } finally {
-            setUpdating(false);
-          }
+    Alert.alert(
+      "Delete QR Code?",
+      `Are you sure you want to delete "${qr.name}"? This action cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
         },
-      },
-    ]
-  );
-};
+        {
+          text: "Delete",
+          style: "destructive",
+
+          onPress: async () => {
+            try {
+              setUpdating(true);
+
+              await deleteQRCode(
+                qr.id
+              );
+
+              router.replace(
+                "/app/tabs/qrcodes"
+              );
+            } catch (error) {
+              console.error(
+                "Failed to delete QR code:",
+                error
+              );
+
+              Alert.alert(
+                "Delete failed",
+                "Could not delete this QR code. Please try again."
+              );
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  /*
+   * EDIT QR
+   */
   const handleEdit = () => {
     if (!qr) {
       return;
@@ -172,26 +258,38 @@ const handleDelete = () => {
 
     router.push({
       pathname: "/app/edit-qr",
+
       params: {
         id: qr.id,
         name: qr.name,
-        destination: qr.destination,
+        destination:
+          qr.destination,
         type: qr.type,
-        destinationType: qr.destinationType,
+        destinationType:
+          qr.destinationType,
       },
     });
   };
 
+  /*
+   * LOADING
+   */
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loader}>
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View
+          style={styles.loader}
+        >
           <ActivityIndicator
             size="large"
             color={COLORS.primary}
           />
 
-          <Text style={styles.loaderText}>
+          <Text
+            style={styles.loaderText}
+          >
             Loading QR code...
           </Text>
         </View>
@@ -199,22 +297,35 @@ const handleDelete = () => {
     );
   }
 
+  /*
+   * NOT FOUND
+   */
   if (!qr) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}>
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View
+          style={
+            styles.emptyContainer
+          }
+        >
           <Ionicons
             name="qr-code-outline"
             size={50}
             color={COLORS.textMuted}
           />
 
-          <Text style={styles.emptyTitle}>
+          <Text
+            style={styles.emptyTitle}
+          >
             QR code not found
           </Text>
 
           <Pressable
-            style={styles.backToListButton}
+            style={
+              styles.backToListButton
+            }
             onPress={() =>
               router.replace(
                 "/app/tabs/qrcodes"
@@ -222,7 +333,9 @@ const handleDelete = () => {
             }
           >
             <Text
-              style={styles.backToListText}
+              style={
+                styles.backToListText
+              }
             >
               Back to QR Codes
             </Text>
@@ -232,24 +345,35 @@ const handleDelete = () => {
     );
   }
 
-  const isActive = qr.status === "ACTIVE";
+  const isActive =
+    qr.status === "ACTIVE";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
-        {/* Header */}
+        {/* HEADER */}
 
-        <View style={styles.header}>
+        <View
+          style={styles.header}
+        >
           <Pressable
             onPress={() =>
               router.replace(
                 "/app/tabs/qrcodes"
               )
             }
-            style={styles.backButton}
+            style={
+              styles.backButton
+            }
           >
             <Ionicons
               name="arrow-back"
@@ -258,13 +382,19 @@ const handleDelete = () => {
             />
           </Pressable>
 
-          <Text style={styles.headerTitle}>
+          <Text
+            style={
+              styles.headerTitle
+            }
+          >
             QR Details
           </Text>
 
           <Pressable
             onPress={handleEdit}
-            style={styles.editButton}
+            style={
+              styles.editButton
+            }
           >
             <Ionicons
               name="create-outline"
@@ -274,9 +404,13 @@ const handleDelete = () => {
           </Pressable>
         </View>
 
-        {/* Status */}
+        {/* STATUS */}
 
-        <View style={styles.statusContainer}>
+        <View
+          style={
+            styles.statusContainer
+          }
+        >
           <View
             style={[
               styles.statusIcon,
@@ -296,30 +430,46 @@ const handleDelete = () => {
             />
           </View>
 
-          <Text style={styles.statusTitle}>
+          <Text
+            style={
+              styles.statusTitle
+            }
+          >
             {isActive
               ? "QR Code Active"
               : "QR Code Paused"}
           </Text>
 
-          <Text style={styles.statusDescription}>
+          <Text
+            style={
+              styles.statusDescription
+            }
+          >
             {isActive
               ? "This QR code is currently active."
               : "This QR code is currently paused."}
           </Text>
         </View>
 
-        {/* QR */}
+        {/* QR CODE */}
 
-        <View style={styles.qrCard}>
+        <View
+          ref={qrRef}
+          collapsable={false}
+          style={styles.qrCard}
+        >
           <QRCode
             value={qr.destination}
             size={190}
-            backgroundColor={COLORS.white}
+            backgroundColor={
+              COLORS.white
+            }
             color={COLORS.black}
           />
 
-          <Text style={styles.qrName}>
+          <Text
+            style={styles.qrName}
+          >
             {qr.name}
           </Text>
 
@@ -353,14 +503,66 @@ const handleDelete = () => {
           </View>
         </View>
 
-        {/* Information */}
+        {/* DOWNLOAD */}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+        <Pressable
+          disabled={updating}
+          onPress={
+            handleDownload
+          }
+          style={({
+            pressed,
+          }) => [
+            styles.downloadButton,
+
+            pressed &&
+              !updating &&
+              styles.buttonPressed,
+          ]}
+        >
+          {updating ? (
+            <ActivityIndicator
+              color={
+                COLORS.white
+              }
+            />
+          ) : (
+            <>
+              <Ionicons
+                name="download-outline"
+                size={21}
+                color={
+                  COLORS.white
+                }
+              />
+
+              <Text
+                style={
+                  styles.downloadButtonText
+                }
+              >
+                Download QR Code
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        {/* INFORMATION */}
+
+        <View
+          style={styles.section}
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
             QR Information
           </Text>
 
-          <View style={styles.infoCard}>
+          <View
+            style={styles.infoCard}
+          >
             <InfoRow
               label="Type"
               value={`${qr.type} QR`}
@@ -373,7 +575,9 @@ const handleDelete = () => {
 
             <InfoRow
               label="Destination"
-              value={qr.destination}
+              value={
+                qr.destination
+              }
             />
 
             <InfoRow
@@ -391,21 +595,35 @@ const handleDelete = () => {
           </View>
         </View>
 
-        {/* Pause / Activate */}
+        {/* QR STATUS */}
 
-        <View style={styles.controlSection}>
-          <Text style={styles.sectionTitle}>
+        <View
+          style={
+            styles.controlSection
+          }
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
             QR Status
           </Text>
 
           <Pressable
             disabled={updating}
-            onPress={handleToggleStatus}
-            style={({ pressed }) => [
+            onPress={
+              handleToggleStatus
+            }
+            style={({
+              pressed,
+            }) => [
               styles.statusButton,
+
               isActive
                 ? styles.pauseButton
                 : styles.activateButton,
+
               pressed &&
                 !updating &&
                 styles.buttonPressed,
@@ -413,7 +631,9 @@ const handleDelete = () => {
           >
             {updating ? (
               <ActivityIndicator
-                color={COLORS.white}
+                color={
+                  COLORS.white
+                }
               />
             ) : (
               <>
@@ -424,11 +644,15 @@ const handleDelete = () => {
                       : "play-circle-outline"
                   }
                   size={22}
-                  color={COLORS.white}
+                  color={
+                    COLORS.white
+                  }
                 />
 
                 <Text
-                  style={styles.statusButtonText}
+                  style={
+                    styles.statusButtonText
+                  }
                 >
                   {isActive
                     ? "Pause QR Code"
@@ -438,65 +662,103 @@ const handleDelete = () => {
             )}
           </Pressable>
 
-          <Text style={styles.statusHelp}>
+          <Text
+            style={
+              styles.statusHelp
+            }
+          >
             {isActive
               ? "Pausing disables this QR code until you activate it again."
               : "Activating makes this QR code available again."}
           </Text>
         </View>
 
-        {/* Analytics */}
+        {/* ANALYTICS */}
 
-        <View style={styles.analyticsCard}>
-          <View style={styles.analyticsIcon}>
+        <View
+          style={
+            styles.analyticsCard
+          }
+        >
+          <View
+            style={
+              styles.analyticsIcon
+            }
+          >
             <Ionicons
               name="bar-chart-outline"
               size={22}
-              color={COLORS.primary}
+              color={
+                COLORS.primary
+              }
             />
           </View>
 
-          <View style={styles.analyticsContent}>
+          <View
+            style={
+              styles.analyticsContent
+            }
+          >
             <Text
-              style={styles.analyticsTitle}
+              style={
+                styles.analyticsTitle
+              }
             >
               Scan Analytics
             </Text>
 
             <Text
-              style={styles.analyticsText}
+              style={
+                styles.analyticsText
+              }
             >
-              {qr.scans.toLocaleString()} scans
-              so far
+              {qr.scans.toLocaleString()}{" "}
+              scans so far
             </Text>
           </View>
 
           <Ionicons
             name="chevron-forward"
             size={20}
-            color={COLORS.textMuted}
+            color={
+              COLORS.textMuted
+            }
           />
         </View>
-        <Pressable
-  disabled={updating}
-  onPress={handleDelete}
-  style={({ pressed }) => [
-    styles.deleteButton,
-    pressed &&
-      !updating &&
-      styles.buttonPressed,
-  ]}
->
-  <Ionicons
-    name="trash-outline"
-    size={21}
-    color={COLORS.danger}
-  />
 
-  <Text style={styles.deleteButtonText}>
-    Delete QR Code
-  </Text>
-</Pressable>
+        {/* DELETE */}
+
+        <Pressable
+          disabled={updating}
+          onPress={
+            handleDelete
+          }
+          style={({
+            pressed,
+          }) => [
+            styles.deleteButton,
+
+            pressed &&
+              !updating &&
+              styles.buttonPressed,
+          ]}
+        >
+          <Ionicons
+            name="trash-outline"
+            size={21}
+            color={
+              COLORS.danger
+            }
+          />
+
+          <Text
+            style={
+              styles.deleteButtonText
+            }
+          >
+            Delete QR Code
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -515,15 +777,22 @@ function InfoRow({
     <View
       style={[
         styles.infoRow,
-        !last && styles.infoRowBorder,
+        !last &&
+          styles.infoRowBorder,
       ]}
     >
-      <Text style={styles.infoLabel}>
+      <Text
+        style={
+          styles.infoLabel
+        }
+      >
         {label}
       </Text>
 
       <Text
-        style={styles.infoValue}
+        style={
+          styles.infoValue
+        }
         numberOfLines={3}
       >
         {value}
@@ -532,321 +801,458 @@ function InfoRow({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+const styles =
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        COLORS.background,
+    },
 
-  content: {
-    padding: SPACING.xl,
-    paddingBottom: SPACING.huge,
-  },
+    content: {
+      padding:
+        SPACING.xl,
+      paddingBottom:
+        SPACING.huge,
+    },
 
-  loader: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    loader: {
+      flex: 1,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  loaderText: {
-    marginTop: SPACING.md,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
+    loaderText: {
+      marginTop:
+        SPACING.md,
+      color:
+        COLORS.textSecondary,
+      fontSize: 14,
+    },
 
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: SPACING.xxl,
-  },
+    emptyContainer: {
+      flex: 1,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      padding:
+        SPACING.xxl,
+    },
 
-  emptyTitle: {
-    marginTop: SPACING.lg,
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
+    emptyTitle: {
+      marginTop:
+        SPACING.lg,
+      fontSize: 20,
+      fontWeight:
+        "700",
+      color:
+        COLORS.text,
+    },
 
-  backToListButton: {
-    marginTop: SPACING.xxl,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.xxl,
-    paddingVertical: SPACING.md,
-    borderRadius: 14,
-  },
+    backToListButton: {
+      marginTop:
+        SPACING.xxl,
+      backgroundColor:
+        COLORS.primary,
+      paddingHorizontal:
+        SPACING.xxl,
+      paddingVertical:
+        SPACING.md,
+      borderRadius: 14,
+    },
 
-  backToListText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "700",
-  },
+    backToListText: {
+      color:
+        COLORS.white,
+      fontSize: 14,
+      fontWeight:
+        "700",
+    },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+    header: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between",
+    },
 
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    backButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor:
+        COLORS.surface,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight:
+        "700",
+      color:
+        COLORS.text,
+    },
 
-  editButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    editButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor:
+        COLORS.surface,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  statusContainer: {
-    alignItems: "center",
-    marginTop: SPACING.xxxl,
-  },
+    statusContainer: {
+      alignItems:
+        "center",
+      marginTop:
+        SPACING.xxxl,
+    },
 
-  statusIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    statusIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  activeIcon: {
-    backgroundColor: COLORS.success,
-  },
+    activeIcon: {
+      backgroundColor:
+        COLORS.success,
+    },
 
-  pausedIcon: {
-    backgroundColor: COLORS.warning,
-  },
+    pausedIcon: {
+      backgroundColor:
+        COLORS.warning,
+    },
 
-  statusTitle: {
-    marginTop: SPACING.md,
-    fontSize: 24,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
+    statusTitle: {
+      marginTop:
+        SPACING.md,
+      fontSize: 24,
+      fontWeight:
+        "800",
+      color:
+        COLORS.text,
+    },
 
-  statusDescription: {
-    marginTop: SPACING.xs,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
+    statusDescription: {
+      marginTop:
+        SPACING.xs,
+      fontSize: 14,
+      color:
+        COLORS.textSecondary,
+    },
 
-  qrCard: {
-    marginTop: SPACING.xxl,
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.xxl,
-    alignItems: "center",
-  },
+    qrCard: {
+      marginTop:
+        SPACING.xxl,
+      backgroundColor:
+        COLORS.surface,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      padding:
+        SPACING.xxl,
+      alignItems:
+        "center",
+    },
 
-  qrName: {
-    marginTop: SPACING.xl,
-    fontSize: 19,
-    fontWeight: "700",
-    color: COLORS.text,
-    textAlign: "center",
-  },
+    qrName: {
+      marginTop:
+        SPACING.xl,
+      fontSize: 19,
+      fontWeight:
+        "700",
+      color:
+        COLORS.text,
+      textAlign:
+        "center",
+    },
 
-  badge: {
-    marginTop: SPACING.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
+    badge: {
+      marginTop:
+        SPACING.sm,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+    },
 
-  activeBadge: {
-    backgroundColor: "#DCFCE7",
-  },
+    activeBadge: {
+      backgroundColor:
+        "#DCFCE7",
+    },
 
-  pausedBadge: {
-    backgroundColor: "#FEF3C7",
-  },
+    pausedBadge: {
+      backgroundColor:
+        "#FEF3C7",
+    },
 
-  badgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginRight: 6,
-  },
+    badgeDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      marginRight: 6,
+    },
 
-  activeDot: {
-    backgroundColor: COLORS.success,
-  },
+    activeDot: {
+      backgroundColor:
+        COLORS.success,
+    },
 
-  pausedDot: {
-    backgroundColor: COLORS.warning,
-  },
+    pausedDot: {
+      backgroundColor:
+        COLORS.warning,
+    },
 
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
+    badgeText: {
+      fontSize: 12,
+      fontWeight:
+        "700",
+    },
 
-  activeText: {
-    color: COLORS.success,
-  },
+    activeText: {
+      color:
+        COLORS.success,
+    },
 
-  pausedText: {
-    color: COLORS.warning,
-  },
+    pausedText: {
+      color:
+        COLORS.warning,
+    },
 
-  section: {
-    marginTop: SPACING.xxl,
-  },
+    downloadButton: {
+      height: 54,
+      marginTop:
+        SPACING.xxl,
+      borderRadius: 15,
+      backgroundColor:
+        COLORS.primary,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      gap: 8,
+    },
 
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text,
-    marginBottom: SPACING.md,
-  },
+    downloadButtonText: {
+      color:
+        COLORS.white,
+      fontSize: 15,
+      fontWeight:
+        "700",
+    },
 
-  infoCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: "hidden",
-  },
+    section: {
+      marginTop:
+        SPACING.xxl,
+    },
 
-  infoRow: {
-    padding: SPACING.lg,
-  },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight:
+        "700",
+      color:
+        COLORS.text,
+      marginBottom:
+        SPACING.md,
+    },
 
-  infoRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
+    infoCard: {
+      backgroundColor:
+        COLORS.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      overflow:
+        "hidden",
+    },
 
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-  },
+    infoRow: {
+      padding:
+        SPACING.lg,
+    },
 
-  infoValue: {
-    marginTop: 5,
-    fontSize: 15,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
+    infoRowBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor:
+        COLORS.border,
+    },
 
-  controlSection: {
-    marginTop: SPACING.xxxl,
-  },
+    infoLabel: {
+      fontSize: 12,
+      fontWeight:
+        "600",
+      color:
+        COLORS.textSecondary,
+    },
 
-  statusButton: {
-    height: 54,
-    borderRadius: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
+    infoValue: {
+      marginTop: 5,
+      fontSize: 15,
+      fontWeight:
+        "600",
+      color:
+        COLORS.text,
+    },
 
-  pauseButton: {
-    backgroundColor: COLORS.warning,
-  },
+    controlSection: {
+      marginTop:
+        SPACING.xxxl,
+    },
 
-  activateButton: {
-    backgroundColor: COLORS.success,
-  },
+    statusButton: {
+      height: 54,
+      borderRadius: 15,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      gap: 8,
+    },
 
-  statusButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: "700",
-  },
+    pauseButton: {
+      backgroundColor:
+        COLORS.warning,
+    },
 
-  statusHelp: {
-    marginTop: SPACING.sm,
-    fontSize: 12,
-    lineHeight: 18,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-  },
+    activateButton: {
+      backgroundColor:
+        COLORS.success,
+    },
 
-  buttonPressed: {
-    opacity: 0.75,
-    transform: [{ scale: 0.98 }],
-  },
+    statusButtonText: {
+      color:
+        COLORS.white,
+      fontSize: 15,
+      fontWeight:
+        "700",
+    },
 
-  analyticsCard: {
-    marginTop: SPACING.xxl,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.lg,
-    flexDirection: "row",
-    alignItems: "center",
-  },
+    statusHelp: {
+      marginTop:
+        SPACING.sm,
+      fontSize: 12,
+      lineHeight: 18,
+      color:
+        COLORS.textSecondary,
+      textAlign:
+        "center",
+    },
 
-  analyticsIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: "#DBEAFE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    buttonPressed: {
+      opacity: 0.75,
+      transform: [
+        {
+          scale: 0.98,
+        },
+      ],
+    },
 
-  analyticsContent: {
-    flex: 1,
-    marginLeft: SPACING.md,
-  },
+    analyticsCard: {
+      marginTop:
+        SPACING.xxl,
+      backgroundColor:
+        COLORS.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor:
+        COLORS.border,
+      padding:
+        SPACING.lg,
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+    },
 
-  analyticsTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
+    analyticsIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      backgroundColor:
+        "#DBEAFE",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+    },
 
-  analyticsText: {
-    marginTop: 3,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  deleteButton: {
-  height: 52,
-  marginTop: SPACING.xxl,
-  borderRadius: 14,
-  borderWidth: 1,
-  borderColor: "#FECACA",
-  backgroundColor: "#FEF2F2",
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-},
+    analyticsContent: {
+      flex: 1,
+      marginLeft:
+        SPACING.md,
+    },
 
-deleteButtonText: {
-  color: COLORS.danger,
-  fontSize: 15,
-  fontWeight: "700",
-},
-});
+    analyticsTitle: {
+      fontSize: 15,
+      fontWeight:
+        "700",
+      color:
+        COLORS.text,
+    },
+
+    analyticsText: {
+      marginTop: 3,
+      fontSize: 13,
+      color:
+        COLORS.textSecondary,
+    },
+
+    deleteButton: {
+      height: 52,
+      marginTop:
+        SPACING.xxl,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor:
+        "#FECACA",
+      backgroundColor:
+        "#FEF2F2",
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "center",
+      gap: 8,
+    },
+
+    deleteButtonText: {
+      color:
+        COLORS.danger,
+      fontSize: 15,
+      fontWeight:
+        "700",
+    },
+  });
