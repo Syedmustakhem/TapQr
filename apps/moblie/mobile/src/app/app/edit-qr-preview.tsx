@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import QRCode from "react-native-qrcode-svg";
 import { useState } from "react";
+
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +15,7 @@ import {
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
-import { saveQRCode } from "../../services/qrStorage";
+import { updateQRCode } from "../../services/qrStorage";
 
 type QRType = "STATIC" | "DYNAMIC";
 
@@ -24,88 +25,86 @@ type DestinationType =
   | "INSTAGRAM"
   | "GOOGLE_REVIEW";
 
-export default function QRPreviewScreen() {
+export default function EditQRPreviewScreen() {
   const params = useLocalSearchParams<{
+    id?: string;
     name?: string;
     destination?: string;
-    qrType?: string;
+    type?: string;
     destinationType?: string;
   }>();
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const name = params.name?.toString() || "Untitled QR Code";
+  const id = params.id?.toString() || "";
+
+  const name =
+    params.name?.toString() ||
+    "Untitled QR Code";
 
   const destination =
     params.destination?.toString() ||
     "https://example.com";
 
-  const qrType: QRType =
-    params.qrType === "STATIC"
+  const type: QRType =
+    params.type === "STATIC"
       ? "STATIC"
       : "DYNAMIC";
 
   const destinationType: DestinationType =
-    isDestinationType(params.destinationType)
+    isDestinationType(
+      params.destinationType
+    )
       ? params.destinationType
       : "WEBSITE";
 
-  const handleSave = async () => {
-    if (saving) return;
+  const handleSaveChanges = async () => {
+    if (!id) {
+      setError(
+        "QR code ID is missing."
+      );
+      return;
+    }
+
+    if (saving) {
+      return;
+    }
 
     try {
       setError("");
       setSaving(true);
 
-      const newQRCode = {
-        id: `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}`,
-
+      await updateQRCode(id, {
         name: name.trim(),
-
-        type: qrType,
-
-        status: "ACTIVE" as const,
-
-        scans: 0,
-
         destination: destination.trim(),
-
+        type,
         destinationType,
-
-        createdAt: new Date().toISOString(),
-      };
-
-      await saveQRCode(newQRCode);
+      });
 
       console.log(
-        "QR Code saved successfully:",
-        newQRCode
+        "QR Code updated successfully"
       );
 
       router.replace({
         pathname: "/app/qr-details",
         params: {
-          id: newQRCode.id,
-          name: newQRCode.name,
-          type: newQRCode.type,
-          destination: newQRCode.destination,
-          destinationType:
-            newQRCode.destinationType,
-          status: newQRCode.status,
-          scans: String(newQRCode.scans),
+          id,
+          name: name.trim(),
+          destination:
+            destination.trim(),
+          type,
+          destinationType,
         },
       });
     } catch (error) {
       console.error(
-        "Failed to save QR code:",
+        "Failed to update QR code:",
         error
       );
 
       setError(
-        "Unable to save QR code. Please try again."
+        "Unable to update QR code. Please try again."
       );
     } finally {
       setSaving(false);
@@ -113,10 +112,16 @@ export default function QRPreviewScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
       >
         {/* Header */}
 
@@ -125,7 +130,8 @@ export default function QRPreviewScreen() {
             onPress={() => router.back()}
             style={({ pressed }) => [
               styles.backButton,
-              pressed && styles.buttonPressed,
+              pressed &&
+                styles.buttonPressed,
             ]}
           >
             <Ionicons
@@ -135,33 +141,44 @@ export default function QRPreviewScreen() {
             />
           </Pressable>
 
-          <Text style={styles.headerTitle}>
-            QR Preview
+          <Text
+            style={styles.headerTitle}
+          >
+            Preview Changes
           </Text>
 
-          <View style={styles.headerSpacer} />
+          <View
+            style={styles.headerSpacer}
+          />
         </View>
 
         {/* Intro */}
 
         <View style={styles.intro}>
           <Text style={styles.title}>
-            Your QR Code
+            Review your changes
           </Text>
 
           <Text style={styles.subtitle}>
-            Check everything before saving.
+            Make sure everything looks
+            correct before saving.
           </Text>
         </View>
 
-        {/* QR Preview */}
+        {/* QR */}
 
-        <View style={styles.previewCard}>
-          <View style={styles.qrContainer}>
+        <View
+          style={styles.previewCard}
+        >
+          <View
+            style={styles.qrContainer}
+          >
             <QRCode
               value={destination}
               size={190}
-              backgroundColor={COLORS.white}
+              backgroundColor={
+                COLORS.white
+              }
               color={COLORS.black}
             />
           </View>
@@ -171,8 +188,10 @@ export default function QRPreviewScreen() {
           </Text>
 
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {qrType} QR
+            <Text
+              style={styles.badgeText}
+            >
+              {type} QR
             </Text>
           </View>
         </View>
@@ -180,26 +199,38 @@ export default function QRPreviewScreen() {
         {/* Destination */}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+          <Text
+            style={styles.sectionTitle}
+          >
             Destination
           </Text>
 
-          <View style={styles.destinationCard}>
-            <View style={styles.destinationIcon}>
+          <View
+            style={styles.destinationCard}
+          >
+            <View
+              style={styles.destinationIcon}
+            >
               <Ionicons
                 name={getDestinationIcon(
                   destinationType
                 )}
                 size={22}
-                color={COLORS.primary}
+                color={
+                  COLORS.primary
+                }
               />
             </View>
 
             <View
-              style={styles.destinationContent}
+              style={
+                styles.destinationContent
+              }
             >
               <Text
-                style={styles.destinationTitle}
+                style={
+                  styles.destinationTitle
+                }
               >
                 {formatDestinationType(
                   destinationType
@@ -207,7 +238,9 @@ export default function QRPreviewScreen() {
               </Text>
 
               <Text
-                style={styles.destinationValue}
+                style={
+                  styles.destinationValue
+                }
                 numberOfLines={2}
               >
                 {destination}
@@ -216,7 +249,7 @@ export default function QRPreviewScreen() {
           </View>
         </View>
 
-        {/* Info */}
+        {/* Change information */}
 
         <View style={styles.infoBox}>
           <Ionicons
@@ -225,24 +258,30 @@ export default function QRPreviewScreen() {
             color={COLORS.primary}
           />
 
-          <Text style={styles.infoText}>
-            {qrType === "DYNAMIC"
-              ? "This dynamic QR can be updated later without printing a new QR code."
-              : "This static QR contains the destination directly and cannot be changed later."}
+          <Text
+            style={styles.infoText}
+          >
+            {type === "DYNAMIC"
+              ? "This dynamic QR will keep the same QR code while its destination is updated."
+              : "This static QR will generate a new QR value when the destination changes."}
           </Text>
         </View>
 
         {/* Error */}
 
         {error ? (
-          <View style={styles.errorBox}>
+          <View
+            style={styles.errorBox}
+          >
             <Ionicons
               name="alert-circle-outline"
               size={21}
               color={COLORS.danger}
             />
 
-            <Text style={styles.errorText}>
+            <Text
+              style={styles.errorText}
+            >
               {error}
             </Text>
           </View>
@@ -252,22 +291,28 @@ export default function QRPreviewScreen() {
 
         <View style={styles.actions}>
           <Pressable
+            disabled={saving}
+            onPress={() =>
+              router.back()
+            }
             style={({ pressed }) => [
               styles.secondaryButton,
               pressed &&
                 styles.buttonPressed,
             ]}
-            disabled={saving}
-            onPress={() => router.back()}
           >
             <Text
-              style={styles.secondaryText}
+              style={
+                styles.secondaryText
+              }
             >
-              Edit
+              Edit Again
             </Text>
           </Pressable>
 
           <Pressable
+            disabled={saving}
+            onPress={handleSaveChanges}
             style={({ pressed }) => [
               styles.primaryButton,
               pressed &&
@@ -275,8 +320,6 @@ export default function QRPreviewScreen() {
               saving &&
                 styles.primaryButtonDisabled,
             ]}
-            disabled={saving}
-            onPress={handleSave}
           >
             {saving ? (
               <ActivityIndicator
@@ -292,9 +335,11 @@ export default function QRPreviewScreen() {
                 />
 
                 <Text
-                  style={styles.primaryText}
+                  style={
+                    styles.primaryText
+                  }
                 >
-                  Save QR Code
+                  Save Changes
                 </Text>
               </>
             )}
@@ -355,29 +400,34 @@ function formatDestinationType(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
 
   content: {
     padding: SPACING.xl,
-    paddingBottom: SPACING.huge,
+    paddingBottom:
+      SPACING.huge,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
   },
 
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: COLORS.surface,
+    backgroundColor:
+      COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
   },
 
   headerTitle: {
@@ -391,8 +441,10 @@ const styles = StyleSheet.create({
   },
 
   intro: {
-    marginTop: SPACING.xxxl,
-    marginBottom: SPACING.xxl,
+    marginTop:
+      SPACING.xxxl,
+    marginBottom:
+      SPACING.xxl,
   },
 
   title: {
@@ -402,17 +454,21 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: SPACING.sm,
+    marginTop:
+      SPACING.sm,
     fontSize: 15,
     lineHeight: 22,
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
 
   previewCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor:
+      COLORS.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor:
+      COLORS.border,
     padding: SPACING.xxl,
     alignItems: "center",
   },
@@ -421,13 +477,16 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 18,
-    backgroundColor: COLORS.white,
+    backgroundColor:
+      COLORS.white,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
   },
 
   qrName: {
-    marginTop: SPACING.xl,
+    marginTop:
+      SPACING.xl,
     fontSize: 20,
     fontWeight: "700",
     color: COLORS.text,
@@ -435,11 +494,13 @@ const styles = StyleSheet.create({
   },
 
   badge: {
-    marginTop: SPACING.sm,
+    marginTop:
+      SPACING.sm,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#DBEAFE",
+    backgroundColor:
+      "#DBEAFE",
   },
 
   badgeText: {
@@ -449,21 +510,25 @@ const styles = StyleSheet.create({
   },
 
   section: {
-    marginTop: SPACING.xxl,
+    marginTop:
+      SPACING.xxl,
   },
 
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.md,
+    marginBottom:
+      SPACING.md,
   },
 
   destinationCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor:
+      COLORS.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor:
+      COLORS.border,
     padding: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",
@@ -473,10 +538,13 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 13,
-    backgroundColor: "#DBEAFE",
+    backgroundColor:
+      "#DBEAFE",
     alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.md,
+    justifyContent:
+      "center",
+    marginRight:
+      SPACING.md,
   },
 
   destinationContent: {
@@ -493,38 +561,47 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     lineHeight: 19,
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
 
   infoBox: {
-    marginTop: SPACING.xxl,
+    marginTop:
+      SPACING.xxl,
     padding: SPACING.lg,
     borderRadius: 16,
-    backgroundColor: "#EFF6FF",
+    backgroundColor:
+      "#EFF6FF",
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems:
+      "flex-start",
   },
 
   infoText: {
     flex: 1,
-    marginLeft: SPACING.sm,
+    marginLeft:
+      SPACING.sm,
     fontSize: 13,
     lineHeight: 20,
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
 
   errorBox: {
-    marginTop: SPACING.lg,
+    marginTop:
+      SPACING.lg,
     padding: SPACING.md,
     borderRadius: 12,
-    backgroundColor: "#FEF2F2",
+    backgroundColor:
+      "#FEF2F2",
     flexDirection: "row",
     alignItems: "center",
   },
 
   errorText: {
     flex: 1,
-    marginLeft: SPACING.sm,
+    marginLeft:
+      SPACING.sm,
     fontSize: 13,
     color: COLORS.danger,
   },
@@ -532,7 +609,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     gap: SPACING.md,
-    marginTop: SPACING.xxxl,
+    marginTop:
+      SPACING.xxxl,
   },
 
   secondaryButton: {
@@ -540,20 +618,25 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    borderColor:
+      COLORS.border,
+    backgroundColor:
+      COLORS.surface,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
   },
 
   primaryButton: {
     flex: 1.5,
     height: 52,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor:
+      COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
     gap: 8,
   },
 
@@ -575,6 +658,8 @@ const styles = StyleSheet.create({
 
   buttonPressed: {
     opacity: 0.75,
-    transform: [{ scale: 0.98 }],
+    transform: [
+      { scale: 0.98 },
+    ],
   },
 });

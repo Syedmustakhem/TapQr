@@ -1,8 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -10,47 +13,68 @@ import {
 
 import { COLORS } from "../../../constants/colors";
 import { SPACING } from "../../../constants/spacing";
-
-type QRCode = {
-  id: string;
-  name: string;
-  type: "STATIC" | "DYNAMIC";
-  status: "ACTIVE" | "PAUSED";
-  scans: number;
-};
-
-const MOCK_QR_CODES: QRCode[] = [
-  {
-    id: "1",
-    name: "Restaurant Menu",
-    type: "DYNAMIC",
-    status: "ACTIVE",
-    scans: 482,
-  },
-  {
-    id: "2",
-    name: "Google Reviews",
-    type: "DYNAMIC",
-    status: "ACTIVE",
-    scans: 316,
-  },
-  {
-    id: "3",
-    name: "Instagram Profile",
-    type: "STATIC",
-    status: "ACTIVE",
-    scans: 185,
-  },
-  {
-    id: "4",
-    name: "WhatsApp",
-    type: "STATIC",
-    status: "PAUSED",
-    scans: 94,
-  },
-];
+import {
+  getQRCodes,
+  QRCode,
+} from "../../../services/qrStorage";
 
 export default function QRCodesScreen() {
+  const [qrCodes, setQRCodes] = useState<QRCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadQRCodes = async () => {
+    try {
+      const data = await getQRCodes();
+      setQRCodes(data);
+    } catch (error) {
+      console.error("Failed to load QR codes:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  /*
+   * Reload every time this screen becomes active.
+   *
+   * This means:
+   * Create QR
+   * Edit QR
+   * Delete QR
+   *
+   * will all immediately appear in the list.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      loadQRCodes();
+    }, [])
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadQRCodes();
+  };
+
+  const openQRDetails = (item: QRCode) => {
+    router.push({
+      pathname: "/app/qr-details",
+      params: {
+        id: item.id,
+        name: item.name,
+        destination: item.destination,
+
+        // IMPORTANT:
+        // QR Details expects "type"
+        type: item.type,
+
+        destinationType: item.destinationType,
+        status: item.status,
+        scans: String(item.scans),
+      },
+    });
+  };
+
   const renderQRCode = ({
     item,
   }: {
@@ -62,11 +86,12 @@ export default function QRCodesScreen() {
           styles.card,
           pressed && styles.cardPressed,
         ]}
+        onPress={() => openQRDetails(item)}
       >
         <View style={styles.qrIcon}>
           <Ionicons
             name="qr-code-outline"
-            size={28}
+            size={25}
             color={COLORS.primary}
           />
         </View>
@@ -120,16 +145,42 @@ export default function QRCodesScreen() {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+        />
+
+        <Text style={styles.loadingText}>
+          Loading QR codes...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={MOCK_QR_CODES}
+        data={qrCodes}
         keyExtractor={(item) => item.id}
         renderItem={renderQRCode}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          qrCodes.length === 0 &&
+            styles.emptyContent,
+        ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
         ListHeaderComponent={
-          <>
+          <View>
             <View style={styles.header}>
               <View>
                 <Text style={styles.title}>
@@ -144,7 +195,8 @@ export default function QRCodesScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.createButton,
-                  pressed && styles.createButtonPressed,
+                  pressed &&
+                    styles.createButtonPressed,
                 ]}
                 onPress={() =>
                   router.push("/app/create-qr")
@@ -152,7 +204,7 @@ export default function QRCodesScreen() {
               >
                 <Ionicons
                   name="add"
-                  size={22}
+                  size={24}
                   color={COLORS.white}
                 />
               </Pressable>
@@ -165,7 +217,7 @@ export default function QRCodesScreen() {
                 </Text>
 
                 <Text style={styles.summaryValue}>
-                  {MOCK_QR_CODES.length}
+                  {qrCodes.length}
                 </Text>
               </View>
 
@@ -181,7 +233,45 @@ export default function QRCodesScreen() {
             <Text style={styles.sectionTitle}>
               Your QR Codes
             </Text>
-          </>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name="qr-code-outline"
+                size={42}
+                color={COLORS.primary}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              No QR codes yet
+            </Text>
+
+            <Text style={styles.emptyText}>
+              Create your first QR code to start
+              connecting customers with your
+              business.
+            </Text>
+
+            <Pressable
+              style={styles.emptyButton}
+              onPress={() =>
+                router.push("/app/create-qr")
+              }
+            >
+              <Ionicons
+                name="add"
+                size={20}
+                color={COLORS.white}
+              />
+
+              <Text style={styles.emptyButtonText}>
+                Create QR Code
+              </Text>
+            </Pressable>
+          </View>
         }
       />
     </View>
@@ -197,6 +287,23 @@ const styles = StyleSheet.create({
   content: {
     padding: SPACING.xl,
     paddingBottom: SPACING.huge,
+  },
+
+  emptyContent: {
+    flexGrow: 1,
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.background,
+  },
+
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 
   header: {
@@ -366,5 +473,54 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xxxl,
+  },
+
+  emptyIcon: {
+    width: 82,
+    height: 82,
+    borderRadius: 24,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyTitle: {
+    marginTop: SPACING.xl,
+    fontSize: 21,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  emptyText: {
+    marginTop: SPACING.sm,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    color: COLORS.textSecondary,
+  },
+
+  emptyButton: {
+    marginTop: SPACING.xl,
+    height: 50,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  emptyButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "700",
   },
 });
