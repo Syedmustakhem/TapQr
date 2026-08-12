@@ -1,115 +1,116 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import QRCode from "react-native-qrcode-svg";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import ViewShot from "react-native-view-shot";
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
-import { saveQRCode } from "../../services/qrStorage";
-
-type QRType = "STATIC" | "DYNAMIC";
-
-type DestinationType =
-  | "WEBSITE"
-  | "WHATSAPP"
-  | "INSTAGRAM"
-  | "GOOGLE_REVIEW";
 
 export default function QRPreviewScreen() {
   const params = useLocalSearchParams<{
+    id?: string;
     name?: string;
     destination?: string;
-    qrType?: string;
-    destinationType?: string;
+    qrColor?: string;
+    backgroundColor?: string;
+    frame?: string;
   }>();
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
 
-  const name = params.name?.toString() || "Untitled QR Code";
+  const qrRef = useRef<ViewShot>(null);
+
+  const name =
+    params.name?.toString() || "My QR Code";
 
   const destination =
     params.destination?.toString() ||
-    "https://example.com";
+    "https://tapqr.app";
 
-  const qrType: QRType =
-    params.qrType === "STATIC"
-      ? "STATIC"
-      : "DYNAMIC";
+  const qrColor =
+    params.qrColor?.toString() || "#111827";
 
-  const destinationType: DestinationType =
-    isDestinationType(params.destinationType)
-      ? params.destinationType
-      : "WEBSITE";
+  const backgroundColor =
+    params.backgroundColor?.toString() || "#FFFFFF";
 
-  const handleSave = async () => {
-    if (saving) return;
+  const frame =
+    params.frame?.toString() || "None";
 
+  const captureQR = async () => {
+    if (!qrRef.current) {
+      throw new Error("QR preview is not ready.");
+    }
+
+    const uri = await qrRef.current.capture?.();
+
+    if (!uri) {
+      throw new Error("Unable to capture QR code.");
+    }
+
+    return uri;
+  };
+
+  const handleShare = async () => {
     try {
-      setError("");
-      setSaving(true);
+      const uri = await captureQR();
 
-      const newQRCode = {
-        id: `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}`,
-
-        name: name.trim(),
-
-        type: qrType,
-
-        status: "ACTIVE" as const,
-
-        scans: 0,
-
-        destination: destination.trim(),
-
-        destinationType,
-
-        createdAt: new Date().toISOString(),
-      };
-
-      await saveQRCode(newQRCode);
-
-      console.log(
-        "QR Code saved successfully:",
-        newQRCode
-      );
-
-      router.replace({
-        pathname: "/app/qr-details",
-        params: {
-          id: newQRCode.id,
-          name: newQRCode.name,
-          type: newQRCode.type,
-          destination: newQRCode.destination,
-          destinationType:
-            newQRCode.destinationType,
-          status: newQRCode.status,
-          scans: String(newQRCode.scans),
-        },
+      await Share.share({
+        title: `Share ${name}`,
+        message:
+          `Scan this QR code or visit:\n${destination}\n\nQR image: ${uri}`,
       });
     } catch (error) {
-      console.error(
-        "Failed to save QR code:",
-        error
-      );
+      console.error("Share QR error:", error);
 
-      setError(
-        "Unable to save QR code. Please try again."
+      Alert.alert(
+        "Unable to share",
+        "Please try again."
+      );
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+
+      /*
+       * Frontend stage:
+       * We capture the QR image here.
+       *
+       * Gallery permission and MediaLibrary saving
+       * will be connected in the next step.
+       */
+      await captureQR();
+
+      Alert.alert(
+        "QR Ready",
+        "Your QR code has been generated successfully. Gallery saving will be connected next."
+      );
+    } catch (error) {
+      console.error("Save QR error:", error);
+
+      Alert.alert(
+        "Unable to save",
+        "Please try again."
       );
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEdit = () => {
+    router.back();
   };
 
   return (
@@ -125,7 +126,7 @@ export default function QRPreviewScreen() {
             onPress={() => router.back()}
             style={({ pressed }) => [
               styles.backButton,
-              pressed && styles.buttonPressed,
+              pressed && styles.pressed,
             ]}
           >
             <Ionicons
@@ -146,210 +147,242 @@ export default function QRPreviewScreen() {
 
         <View style={styles.intro}>
           <Text style={styles.title}>
-            Your QR Code
+            Your QR is ready
           </Text>
 
           <Text style={styles.subtitle}>
-            Check everything before saving.
+            Review your design before saving or
+            sharing it.
           </Text>
         </View>
 
-        {/* QR Preview */}
+        {/* QR Capture Area */}
 
-        <View style={styles.previewCard}>
-          <View style={styles.qrContainer}>
-            <QRCode
-              value={destination}
-              size={190}
-              backgroundColor={COLORS.white}
-              color={COLORS.black}
-            />
-          </View>
+        <ViewShot
+          ref={qrRef}
+          options={{
+            format: "png",
+            quality: 1,
+          }}
+          style={[
+            styles.captureContainer,
+            {
+              backgroundColor,
+            },
+          ]}
+        >
+          <View style={styles.qrCard}>
+            {frame === "None" ? (
+              <QRCode
+                value={destination}
+                size={240}
+                color={qrColor}
+                backgroundColor={backgroundColor}
+              />
+            ) : (
+              <View style={styles.framedQR}>
+                <QRCode
+                  value={destination}
+                  size={240}
+                  color={qrColor}
+                  backgroundColor={backgroundColor}
+                />
 
-          <Text style={styles.qrName}>
-            {name}
-          </Text>
+                <View
+                  style={[
+                    styles.frameLabel,
+                    {
+                      backgroundColor: qrColor,
+                    },
+                  ]}
+                >
+                  <Text style={styles.frameText}>
+                    {frame}
+                  </Text>
+                </View>
+              </View>
+            )}
 
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>
-              {qrType} QR
+            <Text
+              style={[
+                styles.qrName,
+                {
+                  color: qrColor,
+                },
+              ]}
+            >
+              {name}
             </Text>
           </View>
-        </View>
+        </ViewShot>
 
         {/* Destination */}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Destination
-          </Text>
-
-          <View style={styles.destinationCard}>
-            <View style={styles.destinationIcon}>
-              <Ionicons
-                name={getDestinationIcon(
-                  destinationType
-                )}
-                size={22}
-                color={COLORS.primary}
-              />
-            </View>
-
-            <View
-              style={styles.destinationContent}
-            >
-              <Text
-                style={styles.destinationTitle}
-              >
-                {formatDestinationType(
-                  destinationType
-                )}
-              </Text>
-
-              <Text
-                style={styles.destinationValue}
-                numberOfLines={2}
-              >
-                {destination}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Info */}
-
-        <View style={styles.infoBox}>
-          <Ionicons
-            name="information-circle-outline"
-            size={22}
-            color={COLORS.primary}
-          />
-
-          <Text style={styles.infoText}>
-            {qrType === "DYNAMIC"
-              ? "This dynamic QR can be updated later without printing a new QR code."
-              : "This static QR contains the destination directly and cannot be changed later."}
-          </Text>
-        </View>
-
-        {/* Error */}
-
-        {error ? (
-          <View style={styles.errorBox}>
+        <View style={styles.destinationCard}>
+          <View style={styles.destinationIcon}>
             <Ionicons
-              name="alert-circle-outline"
-              size={21}
-              color={COLORS.danger}
+              name="link-outline"
+              size={20}
+              color={qrColor}
             />
+          </View>
 
-            <Text style={styles.errorText}>
-              {error}
+          <View style={styles.destinationContent}>
+            <Text style={styles.destinationLabel}>
+              Destination
+            </Text>
+
+            <Text
+              style={styles.destinationText}
+              numberOfLines={2}
+            >
+              {destination}
             </Text>
           </View>
-        ) : null}
+        </View>
+
+        {/* Design Summary */}
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>
+            Design
+          </Text>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              QR color
+            </Text>
+
+            <View style={styles.colorValue}>
+              <View
+                style={[
+                  styles.colorDot,
+                  {
+                    backgroundColor: qrColor,
+                  },
+                ]}
+              />
+
+              <Text style={styles.summaryValue}>
+                Custom
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Background
+            </Text>
+
+            <View style={styles.colorValue}>
+              <View
+                style={[
+                  styles.colorDot,
+                  {
+                    backgroundColor:
+                      backgroundColor,
+                  },
+                ]}
+              />
+
+              <Text style={styles.summaryValue}>
+                Custom
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Frame
+            </Text>
+
+            <Text style={styles.summaryValue}>
+              {frame}
+            </Text>
+          </View>
+        </View>
+
+        {/* Edit */}
+
+        <Pressable
+          onPress={handleEdit}
+          style={({ pressed }) => [
+            styles.editButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="color-palette-outline"
+            size={19}
+            color={qrColor}
+          />
+
+          <Text
+            style={[
+              styles.editText,
+              {
+                color: qrColor,
+              },
+            ]}
+          >
+            Edit Design
+          </Text>
+        </Pressable>
 
         {/* Actions */}
 
         <View style={styles.actions}>
           <Pressable
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              pressed &&
-                styles.buttonPressed,
-            ]}
+            onPress={handleSave}
             disabled={saving}
-            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              {
+                backgroundColor: qrColor,
+              },
+              pressed && styles.pressed,
+              saving && styles.disabled,
+            ]}
           >
-            <Text
-              style={styles.secondaryText}
-            >
-              Edit
+            <Ionicons
+              name="download-outline"
+              size={20}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.primaryText}>
+              {saving ? "Preparing..." : "Save QR"}
             </Text>
           </Pressable>
 
           <Pressable
+            onPress={handleShare}
             style={({ pressed }) => [
-              styles.primaryButton,
-              pressed &&
-                styles.buttonPressed,
-              saving &&
-                styles.primaryButtonDisabled,
+              styles.secondaryButton,
+              pressed && styles.pressed,
             ]}
-            disabled={saving}
-            onPress={handleSave}
           >
-            {saving ? (
-              <ActivityIndicator
-                size="small"
-                color={COLORS.white}
-              />
-            ) : (
-              <>
-                <Ionicons
-                  name="checkmark"
-                  size={20}
-                  color={COLORS.white}
-                />
+            <Ionicons
+              name="share-social-outline"
+              size={20}
+              color={qrColor}
+            />
 
-                <Text
-                  style={styles.primaryText}
-                >
-                  Save QR Code
-                </Text>
-              </>
-            )}
+            <Text
+              style={[
+                styles.secondaryText,
+                {
+                  color: qrColor,
+                },
+              ]}
+            >
+              Share QR
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-function isDestinationType(
-  value?: string
-): value is DestinationType {
-  return (
-    value === "WEBSITE" ||
-    value === "WHATSAPP" ||
-    value === "INSTAGRAM" ||
-    value === "GOOGLE_REVIEW"
-  );
-}
-
-function getDestinationIcon(
-  type: DestinationType
-): keyof typeof Ionicons.glyphMap {
-  switch (type) {
-    case "WHATSAPP":
-      return "logo-whatsapp";
-
-    case "INSTAGRAM":
-      return "logo-instagram";
-
-    case "GOOGLE_REVIEW":
-      return "star-outline";
-
-    default:
-      return "globe-outline";
-  }
-}
-
-function formatDestinationType(
-  type: DestinationType
-) {
-  switch (type) {
-    case "WHATSAPP":
-      return "WhatsApp";
-
-    case "INSTAGRAM":
-      return "Instagram";
-
-    case "GOOGLE_REVIEW":
-      return "Google Reviews";
-
-    default:
-      return "Website";
-  }
 }
 
 const styles = StyleSheet.create({
@@ -382,7 +415,7 @@ const styles = StyleSheet.create({
 
   headerTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: COLORS.text,
   },
 
@@ -408,173 +441,191 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  previewCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.xxl,
-    alignItems: "center",
-  },
-
-  qrContainer: {
-    width: 220,
-    height: 220,
-    borderRadius: 18,
-    backgroundColor: COLORS.white,
+  captureContainer: {
+    borderRadius: 24,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },
 
+  qrCard: {
+    width: "100%",
+    minHeight: 340,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.xl,
+  },
+
+  framedQR: {
+    alignItems: "center",
+  },
+
+  frameLabel: {
+    marginTop: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+
+  frameText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
   qrName: {
-    marginTop: SPACING.xl,
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.text,
-    textAlign: "center",
-  },
-
-  badge: {
-    marginTop: SPACING.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#DBEAFE",
-  },
-
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
-
-  section: {
-    marginTop: SPACING.xxl,
-  },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.text,
-    marginBottom: SPACING.md,
+    marginTop: SPACING.lg,
+    fontSize: 16,
+    fontWeight: "800",
   },
 
   destinationCard: {
+    marginTop: SPACING.xl,
+    padding: SPACING.lg,
+    borderRadius: 17,
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",
   },
 
   destinationIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: "#DBEAFE",
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: SPACING.md,
   },
 
   destinationContent: {
     flex: 1,
+    marginLeft: SPACING.md,
   },
 
-  destinationTitle: {
+  destinationLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textSecondary,
+  },
+
+  destinationText: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.text,
+  },
+
+  summaryCard: {
+    marginTop: SPACING.lg,
+    padding: SPACING.lg,
+    borderRadius: 17,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  summaryTitle: {
     fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+
+  summaryRow: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  summaryLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+
+  summaryValue: {
+    fontSize: 13,
     fontWeight: "700",
     color: COLORS.text,
   },
 
-  destinationValue: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-  },
-
-  infoBox: {
-    marginTop: SPACING.xxl,
-    padding: SPACING.lg,
-    borderRadius: 16,
-    backgroundColor: "#EFF6FF",
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-
-  infoText: {
-    flex: 1,
-    marginLeft: SPACING.sm,
-    fontSize: 13,
-    lineHeight: 20,
-    color: COLORS.textSecondary,
-  },
-
-  errorBox: {
-    marginTop: SPACING.lg,
-    padding: SPACING.md,
-    borderRadius: 12,
-    backgroundColor: "#FEF2F2",
+  colorValue: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 7,
   },
 
-  errorText: {
-    flex: 1,
-    marginLeft: SPACING.sm,
-    fontSize: 13,
-    color: COLORS.danger,
-  },
-
-  actions: {
-    flexDirection: "row",
-    gap: SPACING.md,
-    marginTop: SPACING.xxxl,
-  },
-
-  secondaryButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
+  colorDot: {
+    width: 17,
+    height: 17,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-    alignItems: "center",
-    justifyContent: "center",
   },
 
-  primaryButton: {
-    flex: 1.5,
-    height: 52,
+  editButton: {
+    height: 48,
+    marginTop: SPACING.lg,
     borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
 
-  primaryButtonDisabled: {
-    opacity: 0.7,
+  editText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  actions: {
+    marginTop: SPACING.md,
+    gap: SPACING.md,
+  },
+
+  primaryButton: {
+    height: 54,
+    borderRadius: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  primaryText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  secondaryButton: {
+    height: 54,
+    borderRadius: 15,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
 
   secondaryText: {
     fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.text,
+    fontWeight: "800",
   },
 
-  primaryText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.white,
-  },
-
-  buttonPressed: {
+  pressed: {
     opacity: 0.75,
     transform: [{ scale: 0.98 }],
+  },
+
+  disabled: {
+    opacity: 0.6,
   },
 });
