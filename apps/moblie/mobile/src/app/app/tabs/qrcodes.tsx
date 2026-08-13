@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -12,120 +14,200 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { COLORS } from "../../../constants/colors";
 import { SPACING } from "../../../constants/spacing";
 
-type QRType = "DYNAMIC" | "STATIC";
+type QRType = "STATIC" | "DYNAMIC";
+type QRStatus = "ACTIVE" | "PAUSED";
 
 type QRCodeItem = {
   id: string;
   name: string;
-  destination: string;
   type: QRType;
+  status: QRStatus;
   scans: number;
-  active: boolean;
+  destination: string;
+  destinationType: string;
   createdAt: string;
 };
 
-const INITIAL_QR_CODES: QRCodeItem[] = [
-  {
-    id: "1",
-    name: "Restaurant Menu",
-    destination: "https://tapqr.app/menu",
-    type: "DYNAMIC",
-    scans: 428,
-    active: true,
-    createdAt: "Today",
-  },
-  {
-    id: "2",
-    name: "Google Reviews",
-    destination: "https://google.com/reviews",
-    type: "DYNAMIC",
-    scans: 312,
-    active: true,
-    createdAt: "Yesterday",
-  },
-  {
-    id: "3",
-    name: "Instagram",
-    destination: "https://instagram.com/tapqr",
-    type: "STATIC",
-    scans: 184,
-    active: true,
-    createdAt: "3 days ago",
-  },
-  {
-    id: "4",
-    name: "Business Website",
-    destination: "https://tapqr.app",
-    type: "DYNAMIC",
-    scans: 156,
-    active: false,
-    createdAt: "1 week ago",
-  },
-  {
-    id: "5",
-    name: "WhatsApp",
-    destination: "https://wa.me/919999999999",
-    type: "STATIC",
-    scans: 98,
-    active: true,
-    createdAt: "2 weeks ago",
-  },
-];
+type Filter =
+  | "ALL"
+  | "ACTIVE"
+  | "PAUSED"
+  | "DYNAMIC"
+  | "STATIC";
 
-type Filter = "ALL" | "DYNAMIC" | "STATIC" | "ACTIVE";
+const STORAGE_KEY = "@tapqr_qr_codes";
 
 export default function QRCodesScreen() {
-  const [qrCodes, setQrCodes] =
-    useState<QRCodeItem[]>(INITIAL_QR_CODES);
+  const [qrCodes, setQrCodes] = useState<QRCodeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
 
-  const filteredQRs = useMemo(() => {
+  /*
+   * LOAD QR CODES
+   */
+  const loadQRCodes = useCallback(async () => {
+    try {
+      const stored =
+        await AsyncStorage.getItem(STORAGE_KEY);
+
+      if (!stored) {
+        setQrCodes([]);
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+
+      if (Array.isArray(parsed)) {
+        setQrCodes(parsed);
+      } else {
+        setQrCodes([]);
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load QR codes:",
+        error
+      );
+
+      setQrCodes([]);
+
+      Alert.alert(
+        "Error",
+        "Could not load your QR codes."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  /*
+   * INITIAL LOAD
+   */
+  useEffect(() => {
+    loadQRCodes();
+  }, [loadQRCodes]);
+
+  /*
+   * REFRESH
+   */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadQRCodes();
+  };
+
+  /*
+   * FILTER + SEARCH
+   */
+  const filteredQRCodes = useMemo(() => {
     const query = search.trim().toLowerCase();
 
     return qrCodes.filter((qr) => {
       const matchesSearch =
         !query ||
         qr.name.toLowerCase().includes(query) ||
-        qr.destination.toLowerCase().includes(query);
+        qr.destination
+          .toLowerCase()
+          .includes(query) ||
+        qr.destinationType
+          .toLowerCase()
+          .includes(query);
 
       let matchesFilter = true;
 
-      if (filter === "DYNAMIC") {
-        matchesFilter = qr.type === "DYNAMIC";
-      }
+      switch (filter) {
+        case "ACTIVE":
+          matchesFilter = qr.status === "ACTIVE";
+          break;
 
-      if (filter === "STATIC") {
-        matchesFilter = qr.type === "STATIC";
-      }
+        case "PAUSED":
+          matchesFilter = qr.status === "PAUSED";
+          break;
 
-      if (filter === "ACTIVE") {
-        matchesFilter = qr.active;
+        case "DYNAMIC":
+          matchesFilter = qr.type === "DYNAMIC";
+          break;
+
+        case "STATIC":
+          matchesFilter = qr.type === "STATIC";
+          break;
+
+        case "ALL":
+        default:
+          matchesFilter = true;
+          break;
       }
 
       return matchesSearch && matchesFilter;
     });
   }, [qrCodes, search, filter]);
 
+  /*
+   * COUNTS
+   */
+  const totalCount = qrCodes.length;
+
   const activeCount = qrCodes.filter(
-    (qr) => qr.active
+    (qr) => qr.status === "ACTIVE"
+  ).length;
+
+  const pausedCount = qrCodes.filter(
+    (qr) => qr.status === "PAUSED"
   ).length;
 
   const totalScans = qrCodes.reduce(
-    (total, qr) => total + qr.scans,
+    (total, qr) =>
+      total + Number(qr.scans || 0),
     0
   );
 
-  const handleCreate = () => {
-    router.push("/app/create-qr");
+  /*
+   * SAVE QR CODES
+   */
+  const saveQRCodes = async (
+    updatedQRCodes: QRCodeItem[]
+  ) => {
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(updatedQRCodes)
+    );
+
+    setQrCodes(updatedQRCodes);
   };
 
-  const handleEdit = (qr: QRCodeItem) => {
+  /*
+   * OPEN QR DETAILS
+   */
+  const handleOpenDetails = (
+    qr: QRCodeItem
+  ) => {
+    router.push({
+      pathname: "/app/qr-details",
+      params: {
+        id: qr.id,
+        name: qr.name,
+        destination: qr.destination,
+        qrType: qr.type,
+        destinationType:
+          qr.destinationType,
+        status: qr.status,
+      },
+    });
+  };
+
+  /*
+   * EDIT QR
+   */
+  const handleEdit = (
+    qr: QRCodeItem
+  ) => {
     router.push({
       pathname: "/app/edit-qr",
       params: {
@@ -133,42 +215,82 @@ export default function QRCodesScreen() {
         name: qr.name,
         destination: qr.destination,
         type: qr.type,
-        destinationType: "WEBSITE",
+        destinationType:
+          qr.destinationType,
       },
     });
   };
 
-  const handleView = (qr: QRCodeItem) => {
-    router.push({
-      pathname: "/app/qr-details",
-      params: {
-        id: qr.id,
-        name: qr.name,
-        destination: qr.destination,
-        type: qr.type,
-        scans: qr.scans.toString(),
-        active: qr.active ? "true" : "false",
-      },
-    });
-  };
+  /*
+   * PAUSE / ACTIVATE
+   */
+  const handleToggleStatus = (
+    qr: QRCodeItem
+  ) => {
+    const nextStatus: QRStatus =
+      qr.status === "ACTIVE"
+        ? "PAUSED"
+        : "ACTIVE";
 
-  const handleToggleActive = (id: string) => {
-    setQrCodes((current) =>
-      current.map((qr) =>
-        qr.id === id
-          ? {
-              ...qr,
-              active: !qr.active,
+    const action =
+      nextStatus === "ACTIVE"
+        ? "activate"
+        : "pause";
+
+    Alert.alert(
+      nextStatus === "ACTIVE"
+        ? "Activate QR Code"
+        : "Pause QR Code",
+      `Are you sure you want to ${action} "${qr.name}"?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text:
+            nextStatus === "ACTIVE"
+              ? "Activate"
+              : "Pause",
+          onPress: async () => {
+            try {
+              const updated =
+                qrCodes.map((item) =>
+                  item.id === qr.id
+                    ? {
+                        ...item,
+                        status: nextStatus,
+                      }
+                    : item
+                );
+
+              await saveQRCodes(updated);
+            } catch (error) {
+              console.error(
+                "Failed to update QR status:",
+                error
+              );
+
+              Alert.alert(
+                "Update failed",
+                "Could not update the QR code status."
+              );
             }
-          : qr
-      )
+          },
+        },
+      ]
     );
   };
 
-  const handleDelete = (qr: QRCodeItem) => {
+  /*
+   * DELETE QR
+   */
+  const handleDelete = (
+    qr: QRCodeItem
+  ) => {
     Alert.alert(
-      "Delete QR Code",
-      `Are you sure you want to delete "${qr.name}"?`,
+      "Delete QR Code?",
+      `Are you sure you want to delete "${qr.name}"? This action cannot be undone.`,
       [
         {
           text: "Cancel",
@@ -177,124 +299,633 @@ export default function QRCodesScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            setQrCodes((current) =>
-              current.filter(
-                (item) => item.id !== qr.id
-              )
-            );
+          onPress: async () => {
+            try {
+              const updated =
+                qrCodes.filter(
+                  (item) =>
+                    item.id !== qr.id
+                );
+
+              await saveQRCodes(updated);
+            } catch (error) {
+              console.error(
+                "Failed to delete QR:",
+                error
+              );
+
+              Alert.alert(
+                "Delete failed",
+                "Could not delete this QR code."
+              );
+            }
           },
         },
       ]
     );
   };
 
-  const handleShare = (qr: QRCodeItem) => {
-    Alert.alert(
-      "Share QR",
-      `Sharing "${qr.name}" will be connected to the native share flow.`,
-      [
-        {
-          text: "OK",
-        },
-      ]
+  /*
+   * CREATE QR
+   */
+  const handleCreateQR = () => {
+    router.push("/app/create-qr");
+  };
+
+  /*
+   * LOADING
+   */
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View style={styles.loader}>
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+          />
+
+          <Text style={styles.loaderText}>
+            Loading QR codes...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /*
+   * FILTER BUTTON
+   */
+  const FilterButton = ({
+    value,
+    label,
+  }: {
+    value: Filter;
+    label: string;
+  }) => {
+    const selected =
+      filter === value;
+
+    return (
+      <Pressable
+        onPress={() =>
+          setFilter(value)
+        }
+        style={[
+          styles.filterButton,
+          selected &&
+            styles.filterButtonActive,
+        ]}
+      >
+        <Text
+          style={[
+            styles.filterText,
+            selected &&
+              styles.filterTextActive,
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
     );
   };
 
-  const handleDownload = (qr: QRCodeItem) => {
-    Alert.alert(
-      "Download QR",
-      `"${qr.name}" will be saved to your device when the QR export flow is connected.`,
-      [
-        {
-          text: "OK",
-        },
-      ]
-    );
-  };
+  /*
+   * QR CARD
+   */
+  const renderQRCode = ({
+    item,
+  }: {
+    item: QRCodeItem;
+  }) => {
+    const isActive =
+      item.status === "ACTIVE";
 
-  const renderHeader = () => (
-    <>
-      {/* Header */}
+    return (
+      <View style={styles.qrCard}>
+        {/* QR PREVIEW */}
+        <Pressable
+          onPress={() =>
+            handleOpenDetails(item)
+          }
+          style={styles.qrPreview}
+        >
+          <QRCode
+            value={
+              item.destination ||
+              "https://tapqr.app"
+            }
+            size={82}
+            backgroundColor={
+              COLORS.white
+            }
+            color="#111111"
+          />
+        </Pressable>
 
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>
-            My QR Codes
+        {/* DETAILS */}
+        <View style={styles.qrInfo}>
+          <View
+            style={styles.titleRow}
+          >
+            <Text
+              style={styles.qrName}
+              numberOfLines={1}
+            >
+              {item.name}
+            </Text>
+
+            <View
+              style={[
+                styles.statusBadge,
+                isActive
+                  ? styles.activeBadge
+                  : styles.pausedBadge,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  isActive
+                    ? styles.activeText
+                    : styles.pausedText,
+                ]}
+              >
+                {isActive
+                  ? "ACTIVE"
+                  : "PAUSED"}
+              </Text>
+            </View>
+          </View>
+
+          {/* TYPE */}
+          <View
+            style={styles.metaRow}
+          >
+            <View
+              style={styles.typeBadge}
+            >
+              <Ionicons
+                name={
+                  item.type ===
+                  "DYNAMIC"
+                    ? "flash-outline"
+                    : "lock-closed-outline"
+                }
+                size={13}
+                color={
+                  COLORS.primary
+                }
+              />
+
+              <Text
+                style={
+                  styles.typeText
+                }
+              >
+                {item.type}
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.scanContainer
+              }
+            >
+              <Ionicons
+                name="scan-outline"
+                size={14}
+                color={
+                  COLORS.textSecondary
+                }
+              />
+
+              <Text
+                style={
+                  styles.scanText
+                }
+              >
+                {Number(
+                  item.scans || 0
+                )}{" "}
+                scans
+              </Text>
+            </View>
+          </View>
+
+          {/* DESTINATION */}
+          <Text
+            style={
+              styles.destination
+            }
+            numberOfLines={1}
+          >
+            {item.destination}
           </Text>
 
-          <Text style={styles.subtitle}>
-            Create and manage all your QR codes.
+          {/* ACTIONS */}
+          <View
+            style={styles.actionRow}
+          >
+            <Pressable
+              onPress={() =>
+                handleOpenDetails(
+                  item
+                )
+              }
+              style={
+                styles.actionButton
+              }
+            >
+              <Ionicons
+                name="eye-outline"
+                size={16}
+                color={
+                  COLORS.text
+                }
+              />
+
+              <Text
+                style={
+                  styles.actionText
+                }
+              >
+                View
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                handleEdit(item)
+              }
+              style={
+                styles.actionButton
+              }
+            >
+              <Ionicons
+                name="create-outline"
+                size={16}
+                color={
+                  COLORS.text
+                }
+              />
+
+              <Text
+                style={
+                  styles.actionText
+                }
+              >
+                Edit
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                handleToggleStatus(
+                  item
+                )
+              }
+              style={
+                styles.actionButton
+              }
+            >
+              <Ionicons
+                name={
+                  isActive
+                    ? "pause-outline"
+                    : "play-outline"
+                }
+                size={16}
+                color={
+                  COLORS.text
+                }
+              />
+
+              <Text
+                style={
+                  styles.actionText
+                }
+              >
+                {isActive
+                  ? "Pause"
+                  : "Activate"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                handleDelete(item)
+              }
+              style={[
+                styles.actionButton,
+                styles.deleteAction,
+              ]}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={16}
+                color="#DC2626"
+              />
+
+              <Text
+                style={[
+                  styles.actionText,
+                  styles.deleteText,
+                ]}
+              >
+                Delete
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  /*
+   * EMPTY STATE
+   */
+  const renderEmpty = () => {
+    const hasSearch =
+      search.trim().length > 0;
+
+    const hasFilter =
+      filter !== "ALL";
+
+    if (
+      hasSearch ||
+      hasFilter
+    ) {
+      return (
+        <View
+          style={
+            styles.emptyContainer
+          }
+        >
+          <View
+            style={
+              styles.emptyIcon
+            }
+          >
+            <Ionicons
+              name="search-outline"
+              size={34}
+              color={
+                COLORS.primary
+              }
+            />
+          </View>
+
+          <Text
+            style={styles.emptyTitle}
+          >
+            No QR codes found
+          </Text>
+
+          <Text
+            style={
+              styles.emptySubtitle
+            }
+          >
+            Try changing your
+            search or filter.
+          </Text>
+
+          <Pressable
+            onPress={() => {
+              setSearch("");
+              setFilter("ALL");
+            }}
+            style={
+              styles.clearButton
+            }
+          >
+            <Text
+              style={
+                styles.clearButtonText
+              }
+            >
+              Clear Filters
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View
+        style={
+          styles.emptyContainer
+        }
+      >
+        <View
+          style={styles.emptyIcon}
+        >
+          <Ionicons
+            name="qr-code-outline"
+            size={38}
+            color={
+              COLORS.primary
+            }
+          />
+        </View>
+
+        <Text
+          style={styles.emptyTitle}
+        >
+          No QR codes yet
+        </Text>
+
+        <Text
+          style={styles.emptySubtitle}
+        >
+          Create your first QR
+          code to start managing
+          your TapQR links.
+        </Text>
+
+        <Pressable
+          onPress={handleCreateQR}
+          style={
+            styles.emptyCreateButton
+          }
+        >
+          <Ionicons
+            name="add"
+            size={20}
+            color={
+              COLORS.white
+            }
+          />
+
+          <Text
+            style={
+              styles.emptyCreateText
+            }
+          >
+            Create QR Code
+          </Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView
+      style={styles.container}
+    >
+      {/* HEADER */}
+      <View
+        style={styles.header}
+      >
+        <View>
+          <Text
+            style={styles.headerTitle}
+          >
+            QR Codes
+          </Text>
+
+          <Text
+            style={
+              styles.headerSubtitle
+            }
+          >
+            Manage all your QR
+            codes
           </Text>
         </View>
 
         <Pressable
-          onPress={handleCreate}
-          style={({ pressed }) => [
-            styles.headerAddButton,
-            pressed && styles.pressed,
-          ]}
+          onPress={handleCreateQR}
+          style={styles.addButton}
         >
           <Ionicons
             name="add"
-            size={25}
-            color={COLORS.white}
+            size={22}
+            color={
+              COLORS.white
+            }
           />
+
+          <Text
+            style={
+              styles.addButtonText
+            }
+          >
+            Create
+          </Text>
         </Pressable>
       </View>
 
-      {/* Overview */}
-
-      <View style={styles.overview}>
-        <View style={styles.overviewItem}>
-          <Text style={styles.overviewValue}>
-            {qrCodes.length}
+      {/* SUMMARY */}
+      <View
+        style={styles.summaryRow}
+      >
+        <View
+          style={styles.summaryCard}
+        >
+          <Text
+            style={
+              styles.summaryValue
+            }
+          >
+            {totalCount}
           </Text>
 
-          <Text style={styles.overviewLabel}>
-            Total QR
+          <Text
+            style={
+              styles.summaryLabel
+            }
+          >
+            Total
           </Text>
         </View>
 
-        <View style={styles.overviewDivider} />
-
-        <View style={styles.overviewItem}>
-          <Text style={styles.overviewValue}>
+        <View
+          style={styles.summaryCard}
+        >
+          <Text
+            style={[
+              styles.summaryValue,
+              styles.activeSummary,
+            ]}
+          >
             {activeCount}
           </Text>
 
-          <Text style={styles.overviewLabel}>
+          <Text
+            style={
+              styles.summaryLabel
+            }
+          >
             Active
           </Text>
         </View>
 
-        <View style={styles.overviewDivider} />
-
-        <View style={styles.overviewItem}>
-          <Text style={styles.overviewValue}>
-            {totalScans.toLocaleString()}
+        <View
+          style={styles.summaryCard}
+        >
+          <Text
+            style={[
+              styles.summaryValue,
+              styles.pausedSummary,
+            ]}
+          >
+            {pausedCount}
           </Text>
 
-          <Text style={styles.overviewLabel}>
+          <Text
+            style={
+              styles.summaryLabel
+            }
+          >
+            Paused
+          </Text>
+        </View>
+
+        <View
+          style={styles.summaryCard}
+        >
+          <Text
+            style={
+              styles.summaryValue
+            }
+          >
+            {totalScans}
+          </Text>
+
+          <Text
+            style={
+              styles.summaryLabel
+            }
+          >
             Scans
           </Text>
         </View>
       </View>
 
-      {/* Search */}
-
-      <View style={styles.searchContainer}>
+      {/* SEARCH */}
+      <View
+        style={
+          styles.searchContainer
+        }
+      >
         <Ionicons
           name="search-outline"
           size={20}
-          color={COLORS.textMuted}
+          color={
+            COLORS.textSecondary
+          }
         />
 
         <TextInput
           value={search}
           onChangeText={setSearch}
           placeholder="Search QR codes..."
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor={
+            COLORS.textSecondary
+          }
           style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
@@ -302,622 +933,330 @@ export default function QRCodesScreen() {
 
         {search.length > 0 && (
           <Pressable
-            onPress={() => setSearch("")}
+            onPress={() =>
+              setSearch("")
+            }
           >
             <Ionicons
               name="close-circle"
               size={20}
-              color={COLORS.textMuted}
+              color={
+                COLORS.textSecondary
+              }
             />
           </Pressable>
         )}
       </View>
 
-      {/* Filters */}
-
-      <View style={styles.filters}>
+      {/* FILTERS */}
+      <View
+        style={styles.filterContainer}
+      >
         <FilterButton
+          value="ALL"
           label="All"
-          active={filter === "ALL"}
-          onPress={() => setFilter("ALL")}
         />
 
         <FilterButton
-          label="Dynamic"
-          active={filter === "DYNAMIC"}
-          onPress={() => setFilter("DYNAMIC")}
-        />
-
-        <FilterButton
-          label="Static"
-          active={filter === "STATIC"}
-          onPress={() => setFilter("STATIC")}
-        />
-
-        <FilterButton
+          value="ACTIVE"
           label="Active"
-          active={filter === "ACTIVE"}
-          onPress={() => setFilter("ACTIVE")}
+        />
+
+        <FilterButton
+          value="PAUSED"
+          label="Paused"
+        />
+
+        <FilterButton
+          value="DYNAMIC"
+          label="Dynamic"
+        />
+
+        <FilterButton
+          value="STATIC"
+          label="Static"
         />
       </View>
 
-      {/* Section */}
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          Your QR Codes
-        </Text>
-
-        <Text style={styles.resultCount}>
-          {filteredQRs.length} results
-        </Text>
-      </View>
-    </>
-  );
-
-  const renderItem = ({
-    item,
-  }: {
-    item: QRCodeItem;
-  }) => (
-    <QRCodeCard
-      qr={item}
-      onPress={() => handleView(item)}
-      onEdit={() => handleEdit(item)}
-      onShare={() => handleShare(item)}
-      onDownload={() => handleDownload(item)}
-      onDelete={() => handleDelete(item)}
-      onToggle={() =>
-        handleToggleActive(item.id)
-      }
-    />
-  );
-
-  return (
-    <SafeAreaView style={styles.container}>
+      {/* LIST */}
       <FlatList
-        data={filteredQRs}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ListHeaderComponent={renderHeader}
+        data={filteredQRCodes}
+        keyExtractor={(item) =>
+          item.id
+        }
+        renderItem={renderQRCode}
         ListEmptyComponent={
-          <EmptyState
-            search={search}
-            onCreate={handleCreate}
-          />
+          renderEmpty
         }
         contentContainerStyle={[
           styles.listContent,
-          filteredQRs.length === 0 &&
-            styles.emptyList,
+          filteredQRCodes.length ===
+            0 &&
+            styles.emptyListContent,
         ]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={
+              refreshing
+            }
+            onRefresh={
+              handleRefresh
+            }
+            tintColor={
+              COLORS.primary
+            }
+          />
+        }
       />
 
-      {/* Floating Create Button */}
-
-      <Pressable
-        onPress={handleCreate}
-        style={({ pressed }) => [
-          styles.fab,
-          pressed && styles.fabPressed,
-        ]}
-      >
-        <Ionicons
-          name="add"
-          size={25}
-          color={COLORS.white}
-        />
-
-        <Text style={styles.fabText}>
-          Create QR
-        </Text>
-      </Pressable>
-    </SafeAreaView>
-  );
-}
-
-function FilterButton({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.filterButton,
-        active && styles.filterButtonActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text
-        style={[
-          styles.filterText,
-          active && styles.filterTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function QRCodeCard({
-  qr,
-  onPress,
-  onEdit,
-  onShare,
-  onDownload,
-  onDelete,
-  onToggle,
-}: {
-  qr: QRCodeItem;
-  onPress: () => void;
-  onEdit: () => void;
-  onShare: () => void;
-  onDownload: () => void;
-  onDelete: () => void;
-  onToggle: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.qrCard,
-        pressed && styles.cardPressed,
-      ]}
-    >
-      {/* Top */}
-
-      <View style={styles.cardTop}>
-        <View style={styles.qrPreview}>
-          <QRCode
-            value={qr.destination}
-            size={72}
-            color="#111827"
-            backgroundColor="#FFFFFF"
-          />
-        </View>
-
-        <View style={styles.qrInfo}>
-          <View style={styles.nameRow}>
-            <Text
-              style={styles.qrName}
-              numberOfLines={1}
-            >
-              {qr.name}
-            </Text>
-
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor: qr.active
-                    ? "#16A34A"
-                    : "#9CA3AF",
-                },
-              ]}
-            />
-          </View>
-
-          <Text
-            style={styles.destination}
-            numberOfLines={2}
-          >
-            {qr.destination}
-          </Text>
-
-          <View style={styles.badges}>
-            <View
-              style={[
-                styles.typeBadge,
-                qr.type === "DYNAMIC" &&
-                  styles.dynamicBadge,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.typeText,
-                  qr.type === "DYNAMIC" &&
-                    styles.dynamicText,
-                ]}
-              >
-                {qr.type === "DYNAMIC"
-                  ? "Dynamic"
-                  : "Static"}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.activeBadge,
-                !qr.active &&
-                  styles.inactiveBadge,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.activeText,
-                  !qr.active &&
-                    styles.inactiveText,
-                ]}
-              >
-                {qr.active
-                  ? "Active"
-                  : "Paused"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
+      {/* FLOATING CREATE BUTTON */}
+      {filteredQRCodes.length >
+        0 && (
         <Pressable
-          onPress={onPress}
-          hitSlop={10}
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={COLORS.textMuted}
-          />
-        </Pressable>
-      </View>
-
-      {/* Stats */}
-
-      <View style={styles.statsRow}>
-        <View style={styles.stat}>
-          <Ionicons
-            name="scan-outline"
-            size={16}
-            color={COLORS.primary}
-          />
-
-          <Text style={styles.statValue}>
-            {qr.scans.toLocaleString()}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            scans
-          </Text>
-        </View>
-
-        <View style={styles.stat}>
-          <Ionicons
-            name="time-outline"
-            size={16}
-            color={COLORS.textMuted}
-          />
-
-          <Text style={styles.statLabel}>
-            {qr.createdAt}
-          </Text>
-        </View>
-      </View>
-
-      {/* Actions */}
-
-      <View style={styles.actions}>
-        <ActionButton
-          icon="create-outline"
-          label="Edit"
-          onPress={onEdit}
-        />
-
-        <ActionButton
-          icon="share-social-outline"
-          label="Share"
-          onPress={onShare}
-        />
-
-        <ActionButton
-          icon="download-outline"
-          label="Save"
-          onPress={onDownload}
-        />
-
-        <ActionButton
-          icon={
-            qr.active
-              ? "pause-outline"
-              : "play-outline"
-          }
-          label={qr.active ? "Pause" : "Activate"}
-          onPress={onToggle}
-        />
-
-        <Pressable
-          onPress={onDelete}
+          onPress={handleCreateQR}
           style={({ pressed }) => [
-            styles.deleteButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons
-            name="trash-outline"
-            size={17}
-            color="#DC2626"
-          />
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-}
-
-function ActionButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionButton,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={17}
-        color={COLORS.textSecondary}
-      />
-
-      <Text style={styles.actionText}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function EmptyState({
-  search,
-  onCreate,
-}: {
-  search: string;
-  onCreate: () => void;
-}) {
-  return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}>
-        <Ionicons
-          name={
-            search
-              ? "search-outline"
-              : "qr-code-outline"
-          }
-          size={34}
-          color={COLORS.primary}
-        />
-      </View>
-
-      <Text style={styles.emptyTitle}>
-        {search
-          ? "No QR codes found"
-          : "Create your first QR code"}
-      </Text>
-
-      <Text style={styles.emptyText}>
-        {search
-          ? "Try a different search term or change your filter."
-          : "Create a QR code and start sharing your business with customers."}
-      </Text>
-
-      {!search && (
-        <Pressable
-          onPress={onCreate}
-          style={({ pressed }) => [
-            styles.emptyButton,
-            pressed && styles.pressed,
+            styles.fab,
+            pressed &&
+              styles.fabPressed,
           ]}
         >
           <Ionicons
             name="add"
-            size={19}
-            color={COLORS.white}
+            size={28}
+            color={
+              COLORS.white
+            }
           />
-
-          <Text style={styles.emptyButtonText}>
-            Create QR Code
-          </Text>
         </Pressable>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
+
+/*
+ * STYLES
+ */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor:
+      COLORS.background,
   },
 
-  listContent: {
-    padding: SPACING.xl,
-    paddingBottom: 120,
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  emptyList: {
-    flexGrow: 1,
+  loaderText: {
+    marginTop: SPACING.md,
+    fontSize: 14,
+    color:
+      COLORS.textSecondary,
   },
 
   header: {
+    paddingHorizontal:
+      SPACING.xl,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.xl,
+    justifyContent:
+      "space-between",
   },
 
-  title: {
+  headerTitle: {
     fontSize: 28,
     fontWeight: "800",
     color: COLORS.text,
   },
 
-  subtitle: {
-    marginTop: 5,
-    fontSize: 14,
-    color: COLORS.textSecondary,
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color:
+      COLORS.textSecondary,
   },
 
-  headerAddButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  overview: {
-    minHeight: 92,
-    borderRadius: 18,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  addButton: {
+    height: 42,
+    paddingHorizontal:
+      SPACING.md,
+    borderRadius: 12,
+    backgroundColor:
+      COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
-    marginBottom: SPACING.lg,
+    gap: 6,
   },
 
-  overviewItem: {
+  addButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.white,
+  },
+
+  summaryRow: {
+    paddingHorizontal:
+      SPACING.xl,
+    flexDirection: "row",
+    gap: 8,
+    marginBottom:
+      SPACING.md,
+  },
+
+  summaryCard: {
     flex: 1,
+    minHeight: 72,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor:
+      COLORS.surface,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
     alignItems: "center",
+    justifyContent:
+      "center",
   },
 
-  overviewValue: {
-    fontSize: 20,
+  summaryValue: {
+    fontSize: 19,
     fontWeight: "800",
     color: COLORS.text,
   },
 
-  overviewLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    color: COLORS.textSecondary,
+  activeSummary: {
+    color: "#16A34A",
   },
 
-  overviewDivider: {
-    width: 1,
-    height: 42,
-    backgroundColor: COLORS.border,
+  pausedSummary: {
+    color: "#DC2626",
+  },
+
+  summaryLabel: {
+    marginTop: 3,
+    fontSize: 10,
+    fontWeight: "600",
+    color:
+      COLORS.textSecondary,
   },
 
   searchContainer: {
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: COLORS.surface,
+    marginHorizontal:
+      SPACING.xl,
+    height: 48,
+    paddingHorizontal:
+      SPACING.md,
+    borderRadius: 14,
+    backgroundColor:
+      COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor:
+      COLORS.border,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.md,
   },
 
   searchInput: {
     flex: 1,
-    marginLeft: SPACING.sm,
+    marginLeft: 10,
     fontSize: 14,
     color: COLORS.text,
   },
 
-  filters: {
+  filterContainer: {
+    paddingHorizontal:
+      SPACING.xl,
+    paddingVertical:
+      SPACING.md,
     flexDirection: "row",
     gap: 8,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xl,
+    flexWrap: "wrap",
   },
 
   filterButton: {
-    paddingHorizontal: 14,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surface,
+    paddingHorizontal: 13,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor:
+      COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor:
+      COLORS.border,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
   },
 
   filterButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor:
+      COLORS.primary,
+    borderColor:
+      COLORS.primary,
   },
 
   filterText: {
     fontSize: 12,
     fontWeight: "700",
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
   },
 
   filterTextActive: {
     color: COLORS.white,
   },
 
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.md,
+  listContent: {
+    paddingHorizontal:
+      SPACING.xl,
+    paddingBottom: 110,
   },
 
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
-
-  resultCount: {
-    fontSize: 12,
-    color: COLORS.textMuted,
+  emptyListContent: {
+    flexGrow: 1,
   },
 
   qrCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    marginBottom:
+      SPACING.md,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-
-  cardPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.995 }],
-  },
-
-  cardTop: {
+    borderRadius: 18,
+    backgroundColor:
+      COLORS.surface,
+    borderWidth: 1,
+    borderColor:
+      COLORS.border,
     flexDirection: "row",
-    alignItems: "center",
   },
 
   qrPreview: {
-    width: 88,
-    height: 88,
-    borderRadius: 15,
-    backgroundColor: "#FFFFFF",
+    width: 94,
+    height: 94,
+    borderRadius: 14,
+    backgroundColor:
+      COLORS.white,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor:
+      COLORS.border,
   },
 
   qrInfo: {
     flex: 1,
     marginLeft: SPACING.md,
-    marginRight: SPACING.sm,
+    minWidth: 0,
   },
 
-  nameRow: {
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
   },
@@ -927,179 +1266,134 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     color: COLORS.text,
+    marginRight: 8,
   },
 
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginLeft: 6,
-  },
-
-  destination: {
-    marginTop: 5,
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textSecondary,
-  },
-
-  badges: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 8,
-  },
-
-  typeBadge: {
-    paddingHorizontal: 8,
+  statusBadge: {
+    paddingHorizontal: 7,
     paddingVertical: 4,
-    borderRadius: 7,
-    backgroundColor: "#F3F4F6",
-  },
-
-  dynamicBadge: {
-    backgroundColor: "#EEF2FF",
-  },
-
-  typeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.textSecondary,
-  },
-
-  dynamicText: {
-    color: COLORS.primary,
+    borderRadius: 999,
   },
 
   activeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 7,
-    backgroundColor: "#DCFCE7",
+    backgroundColor:
+      "#DCFCE7",
   },
 
-  inactiveBadge: {
-    backgroundColor: "#F3F4F6",
+  pausedBadge: {
+    backgroundColor:
+      "#FEE2E2",
+  },
+
+  statusText: {
+    fontSize: 9,
+    fontWeight: "900",
   },
 
   activeText: {
-    fontSize: 10,
-    fontWeight: "800",
     color: "#15803D",
   },
 
-  inactiveText: {
-    color: COLORS.textMuted,
+  pausedText: {
+    color: "#B91C1C",
   },
 
-  statsRow: {
-    minHeight: 42,
-    marginTop: SPACING.md,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 20,
-  },
-
-  stat: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-
-  statValue: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: COLORS.text,
-  },
-
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-
-  actions: {
+  metaRow: {
     marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  typeBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor:
+      "#EEF2FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  typeText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+
+  scanContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  scanText: {
+    fontSize: 11,
+    color:
+      COLORS.textSecondary,
+  },
+
+  destination: {
+    marginTop: 8,
+    fontSize: 11,
+    color:
+      COLORS.textSecondary,
+  },
+
+  actionRow: {
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
   },
 
   actionButton: {
-    flex: 1,
-    minHeight: 38,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
-    alignItems: "center",
-    justifyContent: "center",
+    minHeight: 30,
+    paddingHorizontal: 7,
+    borderRadius: 8,
+    backgroundColor:
+      COLORS.background,
     flexDirection: "row",
-    gap: 4,
+    alignItems: "center",
+    justifyContent:
+      "center",
+    gap: 3,
   },
 
   actionText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "700",
-    color: COLORS.textSecondary,
+    color: COLORS.text,
   },
 
-  deleteButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: "#FEF2F2",
-    alignItems: "center",
-    justifyContent: "center",
+  deleteAction: {
+    backgroundColor:
+      "#FEF2F2",
   },
 
-  fab: {
-    position: "absolute",
-    right: 22,
-    bottom: 22,
-    height: 54,
-    paddingHorizontal: 19,
-    borderRadius: 27,
-    backgroundColor: COLORS.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    elevation: 5,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+  deleteText: {
+    color: "#DC2626",
   },
 
-  fabText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-
-  fabPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.97 }],
-  },
-
-  emptyState: {
+  emptyContainer: {
     flex: 1,
-    minHeight: 420,
+    paddingHorizontal:
+      SPACING.xl,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: SPACING.xl,
+    justifyContent:
+      "center",
   },
 
   emptyIcon: {
     width: 76,
     height: 76,
-    borderRadius: 24,
-    backgroundColor: "#EEF2FF",
+    borderRadius: 38,
+    backgroundColor:
+      "#EEF2FF",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent:
+      "center",
   },
 
   emptyTitle: {
@@ -1110,33 +1404,83 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  emptyText: {
+  emptySubtitle: {
     marginTop: SPACING.sm,
+    maxWidth: 300,
     fontSize: 13,
     lineHeight: 20,
-    color: COLORS.textSecondary,
+    color:
+      COLORS.textSecondary,
     textAlign: "center",
   },
 
-  emptyButton: {
+  clearButton: {
+    marginTop: SPACING.lg,
+    paddingHorizontal:
+      SPACING.xl,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor:
+      COLORS.primary,
+    alignItems: "center",
+    justifyContent:
+      "center",
+  },
+
+  clearButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.white,
+  },
+
+  emptyCreateButton: {
     marginTop: SPACING.xl,
     height: 48,
-    paddingHorizontal: 20,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
+    paddingHorizontal:
+      SPACING.xl,
+    borderRadius: 13,
+    backgroundColor:
+      COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
+    justifyContent:
+      "center",
+    gap: 6,
   },
 
-  emptyButtonText: {
-    color: COLORS.white,
+  emptyCreateText: {
     fontSize: 14,
     fontWeight: "800",
+    color: COLORS.white,
   },
 
-  pressed: {
+  fab: {
+    position: "absolute",
+    right: 22,
+    bottom: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor:
+      COLORS.primary,
+    alignItems: "center",
+    justifyContent:
+      "center",
+    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+
+  fabPressed: {
     opacity: 0.75,
+    transform: [
+      {
+        scale: 0.95,
+      },
+    ],
   },
 });
