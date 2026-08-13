@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
 import {
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
@@ -14,27 +14,31 @@ import QRCode from "react-native-qrcode-svg";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 
-const COLOR_OPTIONS = [
+const QR_COLORS = [
   "#111827",
+  "#000000",
   "#2563EB",
   "#7C3AED",
   "#DB2777",
+  "#DC2626",
   "#059669",
-  "#EA580C",
 ];
 
-const BACKGROUND_OPTIONS = [
+const BACKGROUND_COLORS = [
   "#FFFFFF",
   "#F8FAFC",
-  "#EFF6FF",
-  "#F5F3FF",
+  "#F1F5F9",
+  "#FEF3C7",
+  "#DBEAFE",
+  "#FCE7F3",
+  "#DCFCE7",
 ];
 
-const FRAME_OPTIONS = [
+const FRAMES = [
   "None",
   "Scan Me",
-  "Scan Here",
   "Tap to Scan",
+  "Open Link",
 ];
 
 export default function QRDesignScreen() {
@@ -44,30 +48,45 @@ export default function QRDesignScreen() {
     destination?: string;
   }>();
 
-  const [qrColor, setQrColor] = useState("#111827");
-  const [backgroundColor, setBackgroundColor] =
-    useState("#FFFFFF");
-
-  const [frame, setFrame] = useState("None");
+  const qrId = params.id?.toString() || "";
 
   const destination =
     params.destination?.toString() ||
     "https://tapqr.app";
 
-  const qrSize = useMemo(() => {
-    return 220;
-  }, []);
+  const initialName =
+    params.name?.toString() ||
+    "My QR Code";
 
-  const handleContinue = () => {
+  const [qrName, setQrName] =
+    React.useState(initialName);
+
+  const [qrColor, setQrColor] =
+    React.useState("#111827");
+
+  const [backgroundColor, setBackgroundColor] =
+    React.useState("#FFFFFF");
+
+  const [selectedFrame, setSelectedFrame] =
+    React.useState("None");
+
+  const handleReset = () => {
+    setQrName(initialName);
+    setQrColor("#111827");
+    setBackgroundColor("#FFFFFF");
+    setSelectedFrame("None");
+  };
+
+  const handlePreview = () => {
     router.push({
       pathname: "/app/qr-preview",
       params: {
-        id: params.id || "",
-        name: params.name || "My QR Code",
+        id: qrId,
+        name: qrName,
         destination,
         qrColor,
         backgroundColor,
-        frame,
+        frame: selectedFrame,
       },
     });
   };
@@ -75,10 +94,10 @@ export default function QRDesignScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
       >
-        {/* Header */}
+        {/* HEADER */}
 
         <View style={styles.header}>
           <Pressable
@@ -96,13 +115,23 @@ export default function QRDesignScreen() {
           </Pressable>
 
           <Text style={styles.headerTitle}>
-            QR Design
+            Design Studio
           </Text>
 
-          <View style={styles.headerSpacer} />
+          <Pressable
+            onPress={handleReset}
+            style={({ pressed }) => [
+              styles.resetButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.resetText}>
+              Reset
+            </Text>
+          </Pressable>
         </View>
 
-        {/* Intro */}
+        {/* INTRO */}
 
         <View style={styles.intro}>
           <Text style={styles.title}>
@@ -110,200 +139,308 @@ export default function QRDesignScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Make your QR code match your brand.
+            Create a QR design that matches your
+            brand.
           </Text>
         </View>
 
-        {/* QR Preview */}
+        {/* LIVE PREVIEW */}
 
-        <View
-          style={[
-            styles.previewCard,
-            {
-              backgroundColor,
-            },
-          ]}
-        >
-          {frame === "None" ? (
-            <QRCode
-              value={destination}
-              size={qrSize}
-              color={qrColor}
-              backgroundColor={backgroundColor}
-            />
-          ) : (
-            <View style={styles.framedQr}>
+        <View style={styles.previewCard}>
+          <View style={styles.previewHeader}>
+            <Text style={styles.previewTitle}>
+              Live Preview
+            </Text>
+
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+
+              <Text style={styles.liveText}>
+                LIVE
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.qrArea,
+              {
+                backgroundColor,
+              },
+            ]}
+          >
+            <View style={styles.qrWrapper}>
               <QRCode
                 value={destination}
-                size={qrSize}
+                size={190}
                 color={qrColor}
                 backgroundColor={backgroundColor}
               />
+            </View>
 
+            {selectedFrame !== "None" && (
               <View
                 style={[
-                  styles.frameLabel,
+                  styles.frameBadge,
                   {
                     backgroundColor: qrColor,
                   },
                 ]}
               >
-                <Text style={styles.frameLabelText}>
-                  {frame}
+                <Text style={styles.frameText}>
+                  {selectedFrame}
                 </Text>
               </View>
-            </View>
-          )}
+            )}
 
-          <Text
-            style={[
-              styles.previewName,
-              { color: qrColor },
-            ]}
-          >
-            {params.name || "My QR Code"}
+            <Text
+              style={[
+                styles.previewName,
+                {
+                  color: qrColor,
+                },
+              ]}
+            >
+              {qrName || "My QR Code"}
+            </Text>
+          </View>
+        </View>
+
+        {/* QR NAME */}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            QR Name
           </Text>
+
+          <Text style={styles.sectionSubtitle}>
+            Give this QR code a recognizable name.
+          </Text>
+
+          <TextInput
+            value={qrName}
+            onChangeText={setQrName}
+            placeholder="Enter QR name"
+            placeholderTextColor={
+              COLORS.textSecondary
+            }
+            style={styles.input}
+            maxLength={40}
+          />
         </View>
 
-        {/* QR Color */}
+        {/* QR COLOR */}
 
-        <Text style={styles.sectionTitle}>
-          QR Color
-        </Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            QR Color
+          </Text>
 
-        <View style={styles.colorRow}>
-          {COLOR_OPTIONS.map((color) => {
-            const selected = qrColor === color;
+          <Text style={styles.sectionSubtitle}>
+            Choose the main color of your QR code.
+          </Text>
 
-            return (
-              <Pressable
-                key={color}
-                onPress={() => setQrColor(color)}
-                style={[
-                  styles.colorButton,
-                  {
-                    backgroundColor: color,
-                  },
-                  selected && styles.selectedColor,
-                ]}
-              >
-                {selected && (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
+          <View style={styles.colorGrid}>
+            {QR_COLORS.map((color) => {
+              const selected =
+                qrColor === color;
 
-        {/* Background */}
-
-        <Text style={styles.sectionTitle}>
-          Background
-        </Text>
-
-        <View style={styles.backgroundRow}>
-          {BACKGROUND_OPTIONS.map((color) => {
-            const selected =
-              backgroundColor === color;
-
-            return (
-              <Pressable
-                key={color}
-                onPress={() =>
-                  setBackgroundColor(color)
-                }
-                style={[
-                  styles.backgroundButton,
-                  {
-                    backgroundColor: color,
-                  },
-                  selected &&
-                    styles.selectedBackground,
-                ]}
-              >
-                {selected && (
-                  <Ionicons
-                    name="checkmark"
-                    size={20}
-                    color={qrColor}
-                  />
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Frame */}
-
-        <Text style={styles.sectionTitle}>
-          QR Frame
-        </Text>
-
-        <View style={styles.frameOptions}>
-          {FRAME_OPTIONS.map((option) => {
-            const selected = frame === option;
-
-            return (
-              <Pressable
-                key={option}
-                onPress={() => setFrame(option)}
-                style={[
-                  styles.frameOption,
-                  selected && {
-                    borderColor: qrColor,
-                    backgroundColor:
-                      backgroundColor === "#FFFFFF"
-                        ? "#F8FAFC"
-                        : backgroundColor,
-                  },
-                ]}
-              >
-                <Text
+              return (
+                <Pressable
+                  key={color}
+                  onPress={() =>
+                    setQrColor(color)
+                  }
                   style={[
-                    styles.frameOptionText,
+                    styles.colorOption,
+                    selected &&
+                      styles.colorOptionSelected,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.colorCircle,
+                      {
+                        backgroundColor: color,
+                      },
+                    ]}
+                  />
+
+                  {selected && (
+                    <View style={styles.check}>
+                      <Ionicons
+                        name="checkmark"
+                        size={13}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* BACKGROUND */}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Background
+          </Text>
+
+          <Text style={styles.sectionSubtitle}>
+            Select a background that keeps your
+            QR easy to scan.
+          </Text>
+
+          <View style={styles.colorGrid}>
+            {BACKGROUND_COLORS.map((color) => {
+              const selected =
+                backgroundColor === color;
+
+              return (
+                <Pressable
+                  key={color}
+                  onPress={() =>
+                    setBackgroundColor(color)
+                  }
+                  style={[
+                    styles.colorOption,
+                    selected &&
+                      styles.colorOptionSelected,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.colorCircle,
+                      {
+                        backgroundColor: color,
+                      },
+                    ]}
+                  />
+
+                  {selected && (
+                    <View
+                      style={[
+                        styles.check,
+                        {
+                          backgroundColor:
+                            qrColor,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="checkmark"
+                        size={13}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* FRAME */}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            Frame
+          </Text>
+
+          <Text style={styles.sectionSubtitle}>
+            Add a simple call-to-action below
+            your QR.
+          </Text>
+
+          <View style={styles.frameGrid}>
+            {FRAMES.map((frame) => {
+              const selected =
+                selectedFrame === frame;
+
+              return (
+                <Pressable
+                  key={frame}
+                  onPress={() =>
+                    setSelectedFrame(frame)
+                  }
+                  style={[
+                    styles.frameOption,
                     selected && {
-                      color: qrColor,
-                      fontWeight: "800",
+                      borderColor: qrColor,
+                      backgroundColor: `${qrColor}10`,
                     },
                   ]}
                 >
-                  {option}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.frameOptionText,
+                      selected && {
+                        color: qrColor,
+                        fontWeight: "800",
+                      },
+                    ]}
+                  >
+                    {frame}
+                  </Text>
+
+                  {selected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color={qrColor}
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
-        {/* Continue */}
+        {/* INFO */}
+
+        <View style={styles.infoBox}>
+          <Ionicons
+            name="information-circle-outline"
+            size={20}
+            color={COLORS.primary}
+          />
+
+          <Text style={styles.infoText}>
+            Keep strong contrast between the QR
+            code and background for reliable
+            scanning.
+          </Text>
+        </View>
+
+        {/* PREVIEW BUTTON */}
 
         <Pressable
-          onPress={handleContinue}
+          onPress={handlePreview}
           style={({ pressed }) => [
-            styles.continueButton,
-            {
-              backgroundColor: qrColor,
-            },
+            styles.previewButton,
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.continueText}>
-            Continue
+          <Text style={styles.previewButtonText}>
+            Continue to Preview
           </Text>
 
           <Ionicons
             name="arrow-forward"
             size={20}
-            color="#FFFFFF"
+            color={COLORS.white}
           />
         </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+/* ================================================= */
+/* STYLES                                            */
+/* ================================================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -339,8 +476,17 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  headerSpacer: {
-    width: 44,
+  resetButton: {
+    minWidth: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  resetText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
 
   intro: {
@@ -362,124 +508,208 @@ const styles = StyleSheet.create({
   },
 
   previewCard: {
-    minHeight: 330,
-    borderRadius: 24,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
+    overflow: "hidden",
+  },
+
+  previewHeader: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  liveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#DCFCE7",
+  },
+
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+    marginRight: 5,
+  },
+
+  liveText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#15803D",
+  },
+
+  qrArea: {
+    minHeight: 330,
     alignItems: "center",
     justifyContent: "center",
     padding: SPACING.xl,
   },
 
-  framedQr: {
-    alignItems: "center",
+  qrWrapper: {
+    padding: 13,
+    borderRadius: 17,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
 
-  frameLabel: {
-    marginTop: -2,
+  frameBadge: {
+    marginTop: 10,
     paddingHorizontal: 18,
     paddingVertical: 7,
     borderRadius: 8,
   },
 
-  frameLabelText: {
+  frameText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800",
   },
 
   previewName: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.md,
     fontSize: 15,
     fontWeight: "800",
   },
 
-  sectionTitle: {
+  section: {
     marginTop: SPACING.xxl,
-    marginBottom: SPACING.md,
+  },
+
+  sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
     color: COLORS.text,
   },
 
-  colorRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 14,
+  sectionSubtitle: {
+    marginTop: 5,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
   },
 
-  colorButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  input: {
+    height: 52,
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 14,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+
+  colorGrid: {
+    marginTop: SPACING.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+
+  colorOption: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: "transparent",
   },
 
-  selectedColor: {
-    borderColor: "#FFFFFF",
-    shadowColor: "#000000",
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
+  colorOptionSelected: {
+    borderColor: COLORS.primary,
   },
 
-  backgroundRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-
-  backgroundButton: {
-    width: 54,
-    height: 54,
+  colorCircle: {
+    width: 31,
+    height: 31,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#D1D5DB",
+  },
+
+  check: {
+    position: "absolute",
+    right: 2,
+    top: 2,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  selectedBackground: {
-    borderWidth: 2,
-  },
-
-  frameOptions: {
+  frameGrid: {
+    marginTop: SPACING.md,
     gap: 10,
   },
 
   frameOption: {
     minHeight: 50,
+    paddingHorizontal: SPACING.lg,
     borderRadius: 14,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: SPACING.lg,
+    justifyContent: "space-between",
   },
 
   frameOptionText: {
     fontSize: 14,
     color: COLORS.text,
-    fontWeight: "600",
   },
 
-  continueButton: {
+  infoBox: {
+    marginTop: SPACING.xxl,
+    padding: SPACING.lg,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  infoText: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+  },
+
+  previewButton: {
     height: 54,
+    marginTop: SPACING.xxl,
     borderRadius: 15,
-    marginTop: SPACING.xxxl,
+    backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
 
-  continueText: {
-    color: "#FFFFFF",
+  previewButtonText: {
     fontSize: 15,
     fontWeight: "800",
+    color: COLORS.white,
   },
 
   pressed: {

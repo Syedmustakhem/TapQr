@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useRef, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -11,32 +10,39 @@ import {
   Text,
   View,
 } from "react-native";
-import QRCode from "react-native-qrcode-svg";
-import ViewShot from "react-native-view-shot";
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
+import { saveQR } from "../../services/qrStorage";
+type QRType = "DYNAMIC" | "STATIC";
 
 export default function QRPreviewScreen() {
   const params = useLocalSearchParams<{
     id?: string;
     name?: string;
     destination?: string;
+    type?: string;
+    destinationType?: string;
     qrColor?: string;
     backgroundColor?: string;
     frame?: string;
   }>();
 
-  const [saving, setSaving] = useState(false);
-
-  const qrRef = useRef<ViewShot>(null);
-
   const name =
-    params.name?.toString() || "My QR Code";
+    params.name?.toString().trim() || "My QR Code";
 
   const destination =
-    params.destination?.toString() ||
+    params.destination?.toString().trim() ||
     "https://tapqr.app";
+
+  const qrType: QRType =
+    params.type === "STATIC"
+      ? "STATIC"
+      : "DYNAMIC";
+
+  const destinationType =
+    params.destinationType?.toString() ||
+    "WEBSITE";
 
   const qrColor =
     params.qrColor?.toString() || "#111827";
@@ -47,71 +53,123 @@ export default function QRPreviewScreen() {
   const frame =
     params.frame?.toString() || "None";
 
-  const captureQR = async () => {
-    if (!qrRef.current) {
-      throw new Error("QR preview is not ready.");
-    }
+  /*
+   * --------------------------------------------------
+   * EDIT
+   * --------------------------------------------------
+   */
 
-    const uri = await qrRef.current.capture?.();
-
-    if (!uri) {
-      throw new Error("Unable to capture QR code.");
-    }
-
-    return uri;
+  const handleEdit = () => {
+    router.back();
   };
+
+  /*
+   * --------------------------------------------------
+   * SHARE
+   * --------------------------------------------------
+   */
 
   const handleShare = async () => {
     try {
-      const uri = await captureQR();
-
       await Share.share({
         title: `Share ${name}`,
         message:
-          `Scan this QR code or visit:\n${destination}\n\nQR image: ${uri}`,
+          `${name}\n\n` +
+          `Destination:\n${destination}`,
       });
     } catch (error) {
       console.error("Share QR error:", error);
 
       Alert.alert(
-        "Unable to share",
-        "Please try again."
+        "Unable to Share",
+        "We couldn't share this QR code right now."
       );
     }
   };
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
+  /*
+   * --------------------------------------------------
+   * SAVE
+   * --------------------------------------------------
+   *
+   * Frontend stage:
+   * We don't save to the backend yet.
+   * That will be connected after the preview flow
+   * is completely stable.
+   */
 
-      /*
-       * Frontend stage:
-       * We capture the QR image here.
-       *
-       * Gallery permission and MediaLibrary saving
-       * will be connected in the next step.
-       */
-      await captureQR();
+ const handleSave = async () => {
+  try {
+    const qrId =
+      params.id?.toString() ||
+      `qr_${Date.now()}`;
 
-      Alert.alert(
-        "QR Ready",
-        "Your QR code has been generated successfully. Gallery saving will be connected next."
-      );
-    } catch (error) {
-      console.error("Save QR error:", error);
+    const qr = {
+      id: qrId,
+      name,
+      destination,
+      type: qrType,
+      destinationType,
+      qrColor,
+      backgroundColor,
+      frame,
+      createdAt: new Date().toISOString(),
+    };
 
-      Alert.alert(
-        "Unable to save",
-        "Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+    await saveQR(qr);
 
-  const handleEdit = () => {
-    router.back();
-  };
+    Alert.alert(
+      "QR Saved",
+      `${name} has been saved successfully.`,
+      [
+        {
+          text: "OK",
+          onPress: () =>
+            router.replace("/app/tabs"),
+        },
+      ]
+    );
+  } catch (error) {
+    console.error("Save QR error:", error);
+
+    Alert.alert(
+      "Save Failed",
+      "Unable to save this QR code. Please try again."
+    );
+  }
+};
+
+  /*
+   * --------------------------------------------------
+   * DESTINATION ICON
+   * --------------------------------------------------
+   */
+
+  const getDestinationIcon =
+    (): keyof typeof Ionicons.glyphMap => {
+      switch (destinationType) {
+        case "MENU":
+          return "restaurant-outline";
+
+        case "SOCIAL":
+          return "share-social-outline";
+
+        case "WHATSAPP":
+          return "logo-whatsapp";
+
+        case "CUSTOM":
+          return "link-outline";
+
+        default:
+          return "globe-outline";
+      }
+    };
+
+  /*
+   * --------------------------------------------------
+   * PREVIEW
+   * --------------------------------------------------
+   */
 
   return (
     <SafeAreaView style={styles.container}>
@@ -119,7 +177,7 @@ export default function QRPreviewScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* HEADER */}
 
         <View style={styles.header}>
           <Pressable
@@ -143,7 +201,7 @@ export default function QRPreviewScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* Intro */}
+        {/* INTRO */}
 
         <View style={styles.intro}>
           <Text style={styles.title}>
@@ -151,57 +209,118 @@ export default function QRPreviewScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Review your design before saving or
-            sharing it.
+            Review your QR information before saving
+            or sharing it.
           </Text>
         </View>
 
-        {/* QR Capture Area */}
+        {/* QR PREVIEW */}
 
-        <ViewShot
-          ref={qrRef}
-          options={{
-            format: "png",
-            quality: 1,
-          }}
+        <View
           style={[
-            styles.captureContainer,
+            styles.previewContainer,
             {
               backgroundColor,
             },
           ]}
         >
-          <View style={styles.qrCard}>
-            {frame === "None" ? (
-              <QRCode
-                value={destination}
-                size={240}
-                color={qrColor}
-                backgroundColor={backgroundColor}
-              />
-            ) : (
-              <View style={styles.framedQR}>
-                <QRCode
-                  value={destination}
-                  size={240}
-                  color={qrColor}
-                  backgroundColor={backgroundColor}
+          <View style={styles.previewCard}>
+            {/* QR PLACEHOLDER */}
+
+            <View
+              style={[
+                styles.qrPlaceholder,
+                {
+                  backgroundColor:
+                    backgroundColor,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.qrPattern,
+                  {
+                    borderColor: qrColor,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.qrCorner,
+                    styles.qrCornerTopLeft,
+                    {
+                      borderColor: qrColor,
+                    },
+                  ]}
                 />
 
                 <View
                   style={[
-                    styles.frameLabel,
+                    styles.qrCorner,
+                    styles.qrCornerTopRight,
+                    {
+                      borderColor: qrColor,
+                    },
+                  ]}
+                />
+
+                <View
+                  style={[
+                    styles.qrCorner,
+                    styles.qrCornerBottomLeft,
+                    {
+                      borderColor: qrColor,
+                    },
+                  ]}
+                />
+
+                <View
+                  style={[
+                    styles.qrDots,
                     {
                       backgroundColor: qrColor,
                     },
                   ]}
-                >
-                  <Text style={styles.frameText}>
-                    {frame}
-                  </Text>
-                </View>
+                />
+
+                <View
+                  style={[
+                    styles.qrDotsSmall,
+                    {
+                      backgroundColor: qrColor,
+                    },
+                  ]}
+                />
+
+                <View
+                  style={[
+                    styles.qrDotsSmallTwo,
+                    {
+                      backgroundColor: qrColor,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* FRAME */}
+
+            {frame !== "None" && (
+              <View
+                style={[
+                  styles.frameLabel,
+                  {
+                    backgroundColor: qrColor,
+                  },
+                ]}
+              >
+                <Text style={styles.frameText}>
+                  {frame}
+                </Text>
               </View>
             )}
+
+            {/* QR NAME */}
 
             <Text
               style={[
@@ -210,18 +329,48 @@ export default function QRPreviewScreen() {
                   color: qrColor,
                 },
               ]}
+              numberOfLines={2}
             >
               {name}
             </Text>
           </View>
-        </ViewShot>
+        </View>
 
-        {/* Destination */}
+        {/* QR TYPE */}
+
+        <View style={styles.typeBadgeRow}>
+          <View style={styles.typeBadge}>
+            <Ionicons
+              name={
+                qrType === "DYNAMIC"
+                  ? "flash-outline"
+                  : "lock-closed-outline"
+              }
+              size={15}
+              color={COLORS.primary}
+            />
+
+            <Text style={styles.typeBadgeText}>
+              {qrType === "DYNAMIC"
+                ? "Dynamic QR"
+                : "Static QR"}
+            </Text>
+          </View>
+        </View>
+
+        {/* DESTINATION */}
 
         <View style={styles.destinationCard}>
-          <View style={styles.destinationIcon}>
+          <View
+            style={[
+              styles.destinationIcon,
+              {
+                backgroundColor: `${qrColor}15`,
+              },
+            ]}
+          >
             <Ionicons
-              name="link-outline"
+              name={getDestinationIcon()}
               size={20}
               color={qrColor}
             />
@@ -234,19 +383,44 @@ export default function QRPreviewScreen() {
 
             <Text
               style={styles.destinationText}
-              numberOfLines={2}
+              numberOfLines={3}
             >
               {destination}
             </Text>
           </View>
         </View>
 
-        {/* Design Summary */}
+        {/* DESIGN SUMMARY */}
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>
-            Design
+            QR Details
           </Text>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              QR type
+            </Text>
+
+            <Text style={styles.summaryValue}>
+              {qrType === "DYNAMIC"
+                ? "Dynamic"
+                : "Static"}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Destination
+            </Text>
+
+            <Text
+              style={styles.summaryValue}
+              numberOfLines={1}
+            >
+              {destinationType}
+            </Text>
+          </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>
@@ -264,7 +438,7 @@ export default function QRPreviewScreen() {
               />
 
               <Text style={styles.summaryValue}>
-                Custom
+                {qrColor}
               </Text>
             </View>
           </View>
@@ -279,14 +453,13 @@ export default function QRPreviewScreen() {
                 style={[
                   styles.colorDot,
                   {
-                    backgroundColor:
-                      backgroundColor,
+                    backgroundColor,
                   },
                 ]}
               />
 
               <Text style={styles.summaryValue}>
-                Custom
+                {backgroundColor}
               </Text>
             </View>
           </View>
@@ -302,7 +475,7 @@ export default function QRPreviewScreen() {
           </View>
         </View>
 
-        {/* Edit */}
+        {/* EDIT */}
 
         <Pressable
           onPress={handleEdit}
@@ -325,35 +498,37 @@ export default function QRPreviewScreen() {
               },
             ]}
           >
-            Edit Design
+            Edit QR
           </Text>
         </Pressable>
 
-        {/* Actions */}
+        {/* ACTIONS */}
 
         <View style={styles.actions}>
+          {/* SAVE */}
+
           <Pressable
             onPress={handleSave}
-            disabled={saving}
             style={({ pressed }) => [
               styles.primaryButton,
               {
                 backgroundColor: qrColor,
               },
               pressed && styles.pressed,
-              saving && styles.disabled,
             ]}
           >
             <Ionicons
-              name="download-outline"
+              name="save-outline"
               size={20}
-              color="#FFFFFF"
+              color={COLORS.white}
             />
 
             <Text style={styles.primaryText}>
-              {saving ? "Preparing..." : "Save QR"}
+              Save QR
             </Text>
           </Pressable>
+
+          {/* SHARE */}
 
           <Pressable
             onPress={handleShare}
@@ -380,10 +555,29 @@ export default function QRPreviewScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* FRONTEND NOTE */}
+
+        <View style={styles.note}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={17}
+            color={COLORS.textSecondary}
+          />
+
+          <Text style={styles.noteText}>
+            This preview is currently running in the
+            TapQR frontend.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+/* ================================================== */
+/* STYLES                                             */
+/* ================================================== */
 
 const styles = StyleSheet.create({
   container: {
@@ -441,34 +635,110 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  captureContainer: {
+  previewContainer: {
+    minHeight: 390,
     borderRadius: 24,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
-  qrCard: {
+  previewCard: {
     width: "100%",
-    minHeight: 340,
+    minHeight: 390,
     alignItems: "center",
     justifyContent: "center",
     padding: SPACING.xl,
   },
 
-  framedQR: {
+  /*
+   * Safe visual QR placeholder.
+   *
+   * Actual machine-readable QR rendering will be
+   * connected separately after Web/native compatibility
+   * is confirmed.
+   */
+
+  qrPlaceholder: {
+    width: 250,
+    height: 250,
     alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+
+  qrPattern: {
+    width: 215,
+    height: 215,
+    borderWidth: 3,
+    position: "relative",
+    backgroundColor: "#FFFFFF",
+  },
+
+  qrCorner: {
+    position: "absolute",
+    width: 48,
+    height: 48,
+    borderWidth: 7,
+  },
+
+  qrCornerTopLeft: {
+    top: 12,
+    left: 12,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+
+  qrCornerTopRight: {
+    top: 12,
+    right: 12,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+
+  qrCornerBottomLeft: {
+    bottom: 12,
+    left: 12,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+  },
+
+  qrDots: {
+    position: "absolute",
+    width: 65,
+    height: 65,
+    right: 38,
+    bottom: 38,
+    opacity: 0.9,
+  },
+
+  qrDotsSmall: {
+    position: "absolute",
+    width: 25,
+    height: 25,
+    left: 82,
+    top: 82,
+  },
+
+  qrDotsSmallTwo: {
+    position: "absolute",
+    width: 15,
+    height: 15,
+    right: 28,
+    top: 85,
   },
 
   frameLabel: {
-    marginTop: 6,
+    marginTop: 10,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 9,
   },
 
   frameText: {
-    color: "#FFFFFF",
+    color: COLORS.white,
     fontSize: 12,
     fontWeight: "800",
   },
@@ -477,6 +747,28 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     fontSize: 16,
     fontWeight: "800",
+    textAlign: "center",
+  },
+
+  typeBadgeRow: {
+    marginTop: SPACING.md,
+    flexDirection: "row",
+  },
+
+  typeBadge: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#F5F3FF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  typeBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.primary,
   },
 
   destinationCard: {
@@ -494,7 +786,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -546,9 +837,11 @@ const styles = StyleSheet.create({
   },
 
   summaryValue: {
+    maxWidth: "60%",
     fontSize: 13,
     fontWeight: "700",
     color: COLORS.text,
+    textAlign: "right",
   },
 
   colorValue: {
@@ -598,7 +891,7 @@ const styles = StyleSheet.create({
   },
 
   primaryText: {
-    color: "#FFFFFF",
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: "800",
   },
@@ -620,12 +913,23 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
+  note: {
+    marginTop: SPACING.xl,
+    paddingHorizontal: SPACING.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  noteText: {
+    marginLeft: 7,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+
   pressed: {
     opacity: 0.75,
     transform: [{ scale: 0.98 }],
-  },
-
-  disabled: {
-    opacity: 0.6,
   },
 });

@@ -1,711 +1,1151 @@
-import React, { useRef, useState } from "react";
-
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
-  Dimensions,
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-import {
-  Ionicons,
-} from "@expo/vector-icons";
+import { COLORS } from "../../constants/colors";
+import { SPACING } from "../../constants/spacing";
 
 import {
-  router,
-} from "expo-router";
+  getQRCodes,
+  type QRCode,
+} from "../../services/qrStorage";
 
-import {
-  colors,
-} from "../../constants/colors";
+export default function HomeScreen() {
+  const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-const { width } = Dimensions.get("window");
+  /*
+   * LOAD QR CODES
+   *
+   * Important:
+   * We now use qrStorage.ts instead of
+   * reading AsyncStorage directly.
+   */
+  const loadQRCodes = useCallback(async () => {
+    try {
+      const data = await getQRCodes();
 
-type IconName =
-  React.ComponentProps<
-    typeof Ionicons
-  >["name"];
+      setQrCodes(
+        Array.isArray(data) ? data : []
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load QR codes:",
+        error
+      );
 
-type OnboardingSlide = {
-  id: string;
-  icon: IconName;
-  title: string;
-  description: string;
-  badge: string;
-};
+      setQrCodes([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-const slides: OnboardingSlide[] = [
-  {
-    id: "1",
+  /*
+   * Reload every time this screen becomes active.
+   *
+   * This is important because:
+   *
+   * QR Preview
+   *    ↓
+   * Save QR
+   *    ↓
+   * QR Management
+   *
+   * The list will automatically refresh.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      loadQRCodes();
+    }, [loadQRCodes])
+  );
 
-    icon: "qr-code-outline",
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadQRCodes();
+  };
 
-    title: "Welcome to TapQR",
-
-    description:
-      "Manage your business with powerful QR codes, simple tools, and useful insights — all from one app.",
-
-    badge: "SMART QR MANAGEMENT",
-  },
-
-  {
-    id: "2",
-
-    icon: "add-circle-outline",
-
-    title: "Create QR Codes",
-
-    description:
-      "Create QR codes for your business in just a few steps. Add your content, customize it, and get your QR ready to share.",
-
-    badge: "CREATE & CUSTOMIZE",
-  },
-
-  {
-    id: "3",
-
-    icon: "share-social-outline",
-
-    title: "Connect With Customers",
-
-    description:
-      "Put your QR codes on menus, products, posters, cards, packaging, or anywhere your customers can scan.",
-
-    badge: "SHARE EVERYWHERE",
-  },
-
-  {
-    id: "4",
-
-    icon: "analytics-outline",
-
-    title: "Track Your Performance",
-
-    description:
-      "See how your QR codes perform with scan activity, customer engagement, and useful analytics.",
-
-    badge: "POWERFUL ANALYTICS",
-  },
-
-  {
-    id: "5",
-
-    icon: "business-outline",
-
-    title: "Manage Everything",
-
-    description:
-      "Manage your QR codes, business information, activity, notifications, and account from one simple dashboard.",
-
-    badge: "ONE SIMPLE APP",
-  },
-];
-
-export default function WelcomeScreen() {
-  const [currentIndex, setCurrentIndex] =
-    useState(0);
-
-  const flatListRef =
-    useRef<FlatList>(null);
-
-  const isLastSlide =
-    currentIndex ===
-    slides.length - 1;
-
-  const handleScroll = (
-    event: NativeSyntheticEvent<NativeScrollEvent>
-  ) => {
-    const offset =
-      event.nativeEvent.contentOffset.x;
-
-    const index = Math.round(
-      offset / width
+  /*
+   * TOTAL SCANS
+   */
+  const totalScans = useMemo(() => {
+    return qrCodes.reduce(
+      (total, qr) =>
+        total + Number(qr.scans || 0),
+      0
     );
+  }, [qrCodes]);
 
-    if (
-      index !== currentIndex &&
-      index >= 0 &&
-      index < slides.length
-    ) {
-      setCurrentIndex(index);
+  /*
+   * ACTIVE QR CODES
+   */
+  const activeCount = useMemo(() => {
+    return qrCodes.filter(
+      (qr) => qr.status === "ACTIVE"
+    ).length;
+  }, [qrCodes]);
+
+  /*
+   * PAUSED QR CODES
+   */
+  const pausedCount = useMemo(() => {
+    return qrCodes.filter(
+      (qr) => qr.status === "PAUSED"
+    ).length;
+  }, [qrCodes]);
+
+  /*
+   * RECENT QR CODES
+   */
+  const recentQRCodes = useMemo(() => {
+    return [...qrCodes]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      )
+      .slice(0, 4);
+  }, [qrCodes]);
+
+  /*
+   * TOP QR
+   */
+  const topQR = useMemo(() => {
+    if (qrCodes.length === 0) {
+      return null;
     }
-  };
 
-  const handleNext = () => {
-    if (isLastSlide) {
-      router.push("/(auth)/register");
-      return;
-    }
+    return [...qrCodes].sort(
+      (a, b) =>
+        Number(b.scans || 0) -
+        Number(a.scans || 0)
+    )[0];
+  }, [qrCodes]);
 
-    const nextIndex =
-      currentIndex + 1;
+  /*
+   * LOADING
+   */
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loader}>
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+          />
 
-    flatListRef.current?.scrollToIndex({
-      index: nextIndex,
-      animated: true,
-    });
-
-    setCurrentIndex(nextIndex);
-  };
-
-  const handleSkip = () => {
-    router.push("/(auth)/login");
-  };
-
-  const handleCreateAccount = () => {
-    router.push("/(auth)/register");
-  };
-
-  const handleLogin = () => {
-    router.push("/(auth)/login");
-  };
+          <Text style={styles.loaderText}>
+            Loading QR codes...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
+      >
+        {/* HEADER */}
 
-      {/* HEADER */}
-
-      <View style={styles.header}>
-        <Text style={styles.logo}>
-          TapQR
-        </Text>
-
-        {!isLastSlide && (
-          <TouchableOpacity
-            onPress={handleSkip}
-            activeOpacity={0.7}
-            style={styles.skipButton}
-          >
-            <Text style={styles.skipText}>
-              Skip
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.logo}>
+              TapQR
             </Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
-      {/* ONBOARDING */}
+            <Text style={styles.greeting}>
+              Good morning 👋
+            </Text>
 
-      <FlatList
-        ref={flatListRef}
-        data={slides}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        renderItem={({ item }) => (
-          <View style={styles.slide}>
+            <Text style={styles.subtitle}>
+              Here's your QR overview.
+            </Text>
+          </View>
 
-            {/* ICON AREA */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.profileButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() =>
+              router.push(
+                "/app/tabs/settings"
+              )
+            }
+          >
+            <Ionicons
+              name="person-outline"
+              size={21}
+              color={COLORS.text}
+            />
+          </Pressable>
+        </View>
 
-            <View style={styles.visualContainer}>
+        {/* TOTAL SCANS */}
 
-              <View style={styles.outerCircle}>
-                <View style={styles.middleCircle}>
-                  <View style={styles.iconCircle}>
-                    <Ionicons
-                      name={item.icon}
-                      size={72}
-                      color={colors.primary}
-                    />
-                  </View>
-                </View>
-              </View>
+        <View style={styles.mainCard}>
+          <View style={styles.mainCardTop}>
+            <View>
+              <Text style={styles.mainLabel}>
+                Total Scans
+              </Text>
 
-              {/* Decorative elements */}
-
-              <View
-                style={[
-                  styles.decorCircle,
-                  styles.decorTop,
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.decorCircle,
-                  styles.decorBottom,
-                ]}
-              />
-
-              <View
-                style={[
-                  styles.decorSquare,
-                  styles.decorRight,
-                ]}
-              />
-
+              <Text style={styles.mainValue}>
+                {totalScans.toLocaleString()}
+              </Text>
             </View>
 
-            {/* CONTENT */}
+            <View style={styles.mainIcon}>
+              <Ionicons
+                name="scan-outline"
+                size={30}
+                color={COLORS.primary}
+              />
+            </View>
+          </View>
 
-            <View style={styles.content}>
+          <View style={styles.mainBottom}>
+            <View style={styles.trendBadge}>
+              <Ionicons
+                name="trending-up"
+                size={14}
+                color={COLORS.success}
+              />
 
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {item.badge}
+              <Text style={styles.trendText}>
+                Scan activity
+              </Text>
+            </View>
+
+            <Text style={styles.allTimeText}>
+              All time
+            </Text>
+          </View>
+        </View>
+
+        {/* QUICK STATS */}
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            icon="qr-code-outline"
+            title="QR Codes"
+            value={qrCodes.length}
+            subtitle="Total created"
+          />
+
+          <StatCard
+            icon="checkmark-circle-outline"
+            title="Active"
+            value={activeCount}
+            subtitle="Currently active"
+          />
+
+          <StatCard
+            icon="pause-circle-outline"
+            title="Paused"
+            value={pausedCount}
+            subtitle="Currently paused"
+          />
+
+          <StatCard
+            icon="analytics-outline"
+            title="Scans"
+            value={totalScans}
+            subtitle="All time"
+          />
+        </View>
+
+        {/* CREATE QR */}
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.createButton,
+            pressed &&
+              styles.createButtonPressed,
+          ]}
+          onPress={() =>
+            router.push(
+              "/app/create-qr"
+            )
+          }
+        >
+          <View style={styles.createIcon}>
+            <Ionicons
+              name="add"
+              size={25}
+              color={COLORS.white}
+            />
+          </View>
+
+          <View style={styles.createContent}>
+            <Text style={styles.createTitle}>
+              Create QR Code
+            </Text>
+
+            <Text style={styles.createDescription}>
+              Create a new QR code for your business
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={COLORS.white}
+          />
+        </Pressable>
+
+        {/* RECENT QR CODES */}
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>
+              Recent QR Codes
+            </Text>
+
+            <Text style={styles.sectionSubtitle}>
+              Your latest QR codes
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={() =>
+              router.push(
+                "/app/tabs/qrcodes"
+              )
+            }
+          >
+            <Text style={styles.viewAll}>
+              View all
+            </Text>
+          </Pressable>
+        </View>
+
+        {recentQRCodes.length > 0 ? (
+          <View style={styles.qrList}>
+            {recentQRCodes.map((qr) => (
+              <Pressable
+                key={qr.id}
+                style={({ pressed }) => [
+                  styles.qrCard,
+                  pressed &&
+                    styles.pressed,
+                ]}
+                onPress={() =>
+                  router.push({
+                    pathname:
+                      "/app/qr-details",
+                    params: {
+                      id: qr.id,
+                    },
+                  })
+                }
+              >
+                <View style={styles.qrIcon}>
+                  <Ionicons
+                    name="qr-code-outline"
+                    size={23}
+                    color={COLORS.primary}
+                  />
+                </View>
+
+                <View style={styles.qrContent}>
+                  <Text
+                    style={styles.qrName}
+                    numberOfLines={1}
+                  >
+                    {qr.name}
+                  </Text>
+
+                  <View style={styles.qrMeta}>
+                    <Text style={styles.qrType}>
+                      {qr.type}
+                    </Text>
+
+                    <View
+                      style={styles.metaDot}
+                    />
+
+                    <View
+                      style={styles.statusRow}
+                    >
+                      <View
+                        style={[
+                          styles.statusDot,
+                          qr.status ===
+                          "ACTIVE"
+                            ? styles.activeDot
+                            : styles.pausedDot,
+                        ]}
+                      />
+
+                      <Text
+                        style={[
+                          styles.statusText,
+                          qr.status ===
+                          "ACTIVE"
+                            ? styles.activeText
+                            : styles.pausedText,
+                        ]}
+                      >
+                        {qr.status}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.qrScans}>
+                  <Text
+                    style={styles.qrScanValue}
+                  >
+                    {Number(
+                      qr.scans || 0
+                    ).toLocaleString()}
+                  </Text>
+
+                  <Text
+                    style={styles.qrScanLabel}
+                  >
+                    scans
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name="qr-code-outline"
+                size={32}
+                color={COLORS.primary}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              No QR codes yet
+            </Text>
+
+            <Text style={styles.emptyText}>
+              Create your first QR code to
+              start building your TapQR
+              dashboard.
+            </Text>
+
+            <Pressable
+              style={styles.emptyButton}
+              onPress={() =>
+                router.push(
+                  "/app/create-qr"
+                )
+              }
+            >
+              <Text
+                style={
+                  styles.emptyButtonText
+                }
+              >
+                Create QR Code
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* TOP PERFORMER */}
+
+        {topQR && (
+          <>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text
+                  style={styles.sectionTitle}
+                >
+                  Top Performer
+                </Text>
+
+                <Text
+                  style={styles.sectionSubtitle}
+                >
+                  Your highest-scanning QR code
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.topCard}>
+              <View style={styles.topIcon}>
+                <Ionicons
+                  name="trophy-outline"
+                  size={25}
+                  color={COLORS.primary}
+                />
+              </View>
+
+              <View style={styles.topContent}>
+                <Text
+                  style={styles.topName}
+                  numberOfLines={1}
+                >
+                  {topQR.name}
+                </Text>
+
+                <Text style={styles.topType}>
+                  {topQR.type} QR
                 </Text>
               </View>
 
-              <Text style={styles.title}>
-                {item.title}
-              </Text>
+              <View style={styles.topStats}>
+                <Text
+                  style={styles.topScanValue}
+                >
+                  {Number(
+                    topQR.scans || 0
+                  ).toLocaleString()}
+                </Text>
 
-              <Text style={styles.description}>
-                {item.description}
-              </Text>
-
+                <Text
+                  style={styles.topScanLabel}
+                >
+                  scans
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
-      />
-
-      {/* DOTS */}
-
-      <View style={styles.pagination}>
-        {slides.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dot,
-
-              index === currentIndex
-                ? styles.activeDot
-                : styles.inactiveDot,
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* BOTTOM ACTION */}
-
-      <View style={styles.bottomContainer}>
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          activeOpacity={0.85}
-          onPress={handleNext}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isLastSlide
-              ? "Get Started"
-              : "Next"}
-          </Text>
-
-          <Ionicons
-            name={
-              isLastSlide
-                ? "arrow-forward"
-                : "arrow-forward-outline"
-            }
-            size={20}
-            color={colors.white}
-          />
-        </TouchableOpacity>
-
-        {isLastSlide && (
-          <>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              activeOpacity={0.8}
-              onPress={handleCreateAccount}
-            >
-              <Text style={styles.secondaryButtonText}>
-                Create Account
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.loginButton}
-              activeOpacity={0.7}
-              onPress={handleLogin}
-            >
-              <Text style={styles.loginText}>
-                I already have an account
-              </Text>
-            </TouchableOpacity>
           </>
         )}
 
-      </View>
+        {/* ANALYTICS */}
 
+        <Pressable
+          style={({ pressed }) => [
+            styles.analyticsCard,
+            pressed && styles.pressed,
+          ]}
+          onPress={() =>
+            router.push(
+              "/app/tabs/analytics"
+            )
+          }
+        >
+          <View style={styles.analyticsIcon}>
+            <Ionicons
+              name="bar-chart-outline"
+              size={25}
+              color={COLORS.primary}
+            />
+          </View>
+
+          <View style={styles.analyticsContent}>
+            <Text
+              style={styles.analyticsTitle}
+            >
+              View Analytics
+            </Text>
+
+            <Text
+              style={styles.analyticsText}
+            >
+              Track scans and QR performance
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={COLORS.textMuted}
+          />
+        </Pressable>
+
+        {/* FOOTER */}
+
+        <View style={styles.infoBox}>
+          <Ionicons
+            name="sparkles-outline"
+            size={20}
+            color={COLORS.primary}
+          />
+
+          <Text style={styles.infoText}>
+            Your TapQR dashboard is ready.
+            Real-time scan analytics will be
+            connected when the backend is added.
+          </Text>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+/* -------------------------------- */
+/* STAT CARD */
+/* -------------------------------- */
 
+function StatCard({
+  icon,
+  title,
+  value,
+  subtitle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  value: number;
+  subtitle: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={styles.statIcon}>
+        <Ionicons
+          name={icon}
+          size={19}
+          color={COLORS.primary}
+        />
+      </View>
+
+      <Text style={styles.statValue}>
+        {value.toLocaleString()}
+      </Text>
+
+      <Text style={styles.statTitle}>
+        {title}
+      </Text>
+
+      <Text style={styles.statSubtitle}>
+        {subtitle}
+      </Text>
+    </View>
+  );
+}
+
+/* -------------------------------- */
+/* STYLES */
+/* -------------------------------- */
+
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-
-    backgroundColor:
-      colors.background,
+    backgroundColor: COLORS.background,
   },
 
-  /* HEADER */
+  content: {
+    padding: SPACING.xl,
+    paddingBottom: SPACING.huge,
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loaderText: {
+    marginTop: SPACING.md,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
 
   header: {
-    height: 64,
-
-    paddingHorizontal: 24,
-
+    marginBottom: SPACING.xxl,
     flexDirection: "row",
-
-    alignItems: "center",
-
-    justifyContent:
-      "space-between",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
   },
 
   logo: {
-    fontSize: 22,
-
+    fontSize: 24,
     fontWeight: "800",
-
-    color:
-      colors.primary,
+    color: COLORS.primary,
+    marginBottom: SPACING.md,
   },
 
-  skipButton: {
-    paddingVertical: 8,
-
-    paddingHorizontal: 12,
+  greeting: {
+    fontSize: 29,
+    fontWeight: "800",
+    color: COLORS.text,
   },
 
-  skipText: {
-    fontSize: 15,
-
-    fontWeight: "600",
-
-    color:
-      colors.textSecondary,
+  subtitle: {
+    marginTop: SPACING.sm,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
   },
 
-  /* SLIDE */
-
-  slide: {
-    width,
-
-    flex: 1,
-
-    paddingHorizontal: 24,
-
-    alignItems: "center",
-  },
-
-  /* VISUAL */
-
-  visualContainer: {
-    height: 300,
-
-    width: "100%",
-
-    alignItems: "center",
-
-    justifyContent: "center",
-
-    position: "relative",
-  },
-
-  outerCircle: {
-    width: 230,
-
-    height: 230,
-
-    borderRadius: 115,
-
-    backgroundColor:
-      "#DBEAFE",
-
-    alignItems: "center",
-
-    justifyContent: "center",
-  },
-
-  middleCircle: {
-    width: 180,
-
-    height: 180,
-
-    borderRadius: 90,
-
-    backgroundColor:
-      "#EFF6FF",
-
-    alignItems: "center",
-
-    justifyContent: "center",
-  },
-
-  iconCircle: {
-    width: 125,
-
-    height: 125,
-
-    borderRadius: 63,
-
-    backgroundColor:
-      colors.surface,
-
-    alignItems: "center",
-
-    justifyContent: "center",
-
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    shadowColor: "#000",
-
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-
-    shadowOpacity: 0.08,
-
-    shadowRadius: 15,
-
-    elevation: 5,
-  },
-
-  decorCircle: {
-    position: "absolute",
-
-    borderRadius: 50,
-
-    backgroundColor:
-      colors.primary,
-  },
-
-  decorTop: {
-    width: 14,
-
-    height: 14,
-
-    top: 48,
-
-    left: "24%",
-  },
-
-  decorBottom: {
-    width: 10,
-
-    height: 10,
-
-    bottom: 42,
-
-    right: "24%",
-  },
-
-  decorSquare: {
-    position: "absolute",
-
-    width: 14,
-
-    height: 14,
-
-    borderRadius: 4,
-
-    backgroundColor:
-      "#93C5FD",
-  },
-
-  decorRight: {
-    right: "19%",
-
-    top: 95,
-
-    transform: [
-      {
-        rotate: "20deg",
-      },
-    ],
-  },
-
-  /* CONTENT */
-
-  content: {
-    width: "100%",
-
+    borderColor: COLORS.border,
     alignItems: "center",
-
-    paddingHorizontal: 8,
-  },
-
-  badge: {
-    paddingHorizontal: 12,
-
-    paddingVertical: 6,
-
-    borderRadius: 20,
-
-    backgroundColor:
-      "#DBEAFE",
-
-    marginBottom: 16,
-  },
-
-  badgeText: {
-    fontSize: 10,
-
-    fontWeight: "800",
-
-    letterSpacing: 0.8,
-
-    color:
-      colors.primary,
-  },
-
-  title: {
-    fontSize: 30,
-
-    lineHeight: 38,
-
-    fontWeight: "800",
-
-    textAlign: "center",
-
-    color:
-      colors.text,
-
-    marginBottom: 12,
-  },
-
-  description: {
-    fontSize: 16,
-
-    lineHeight: 25,
-
-    textAlign: "center",
-
-    color:
-      colors.textSecondary,
-
-    maxWidth: 480,
-  },
-
-  /* PAGINATION */
-
-  pagination: {
-    height: 36,
-
-    flexDirection: "row",
-
-    alignItems: "center",
-
     justifyContent: "center",
-
-    gap: 7,
   },
 
-  dot: {
-    height: 7,
+  pressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.98 }],
+  },
 
-    borderRadius: 4,
+  mainCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.xl,
+  },
+
+  mainCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  mainLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+
+  mainValue: {
+    marginTop: 5,
+    fontSize: 36,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  mainIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  mainBottom: {
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  trendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 9,
+    backgroundColor: "#DCFCE7",
+  },
+
+  trendText: {
+    marginLeft: 5,
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.success,
+  },
+
+  allTimeText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+
+  statsGrid: {
+    marginTop: SPACING.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.md,
+  },
+
+  statCard: {
+    width: "48%",
+    minHeight: 130,
+    padding: SPACING.lg,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  statIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  statValue: {
+    marginTop: 9,
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  statTitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  statSubtitle: {
+    marginTop: 2,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+  },
+
+  createButton: {
+    marginTop: SPACING.xxl,
+    minHeight: 82,
+    borderRadius: 18,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  createButtonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.99 }],
+  },
+
+  createIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor:
+      "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  createContent: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+
+  createTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.white,
+  },
+
+  createDescription: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.white,
+    opacity: 0.85,
+  },
+
+  sectionHeader: {
+    marginTop: SPACING.xxxl,
+    marginBottom: SPACING.md,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+
+  sectionTitle: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  sectionSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+
+  viewAll: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
+  qrList: {
+    gap: SPACING.md,
+  },
+
+  qrCard: {
+    minHeight: 82,
+    padding: SPACING.lg,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  qrIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  qrContent: {
+    flex: 1,
+    marginLeft: SPACING.md,
+    marginRight: SPACING.md,
+  },
+
+  qrName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  qrMeta: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  qrType: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+
+  metaDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginHorizontal: 7,
+    backgroundColor: COLORS.textMuted,
+  },
+
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
   },
 
   activeDot: {
-    width: 24,
-
-    backgroundColor:
-      colors.primary,
+    backgroundColor: COLORS.success,
   },
 
-  inactiveDot: {
-    width: 7,
-
-    backgroundColor:
-      colors.border,
+  pausedDot: {
+    backgroundColor: COLORS.warning,
   },
 
-  /* BOTTOM */
-
-  bottomContainer: {
-    paddingHorizontal: 24,
-
-    paddingBottom: 24,
-
-    paddingTop: 8,
-
-    gap: 10,
-  },
-
-  primaryButton: {
-    height: 56,
-
-    borderRadius: 16,
-
-    backgroundColor:
-      colors.primary,
-
-    flexDirection: "row",
-
-    alignItems: "center",
-
-    justifyContent: "center",
-
-    gap: 8,
-  },
-
-  primaryButtonText: {
-    color:
-      colors.white,
-
-    fontSize: 16,
-
+  statusText: {
+    fontSize: 10,
     fontWeight: "700",
   },
 
-  secondaryButton: {
-    height: 54,
+  activeText: {
+    color: COLORS.success,
+  },
 
-    borderRadius: 16,
+  pausedText: {
+    color: COLORS.warning,
+  },
 
-    backgroundColor:
-      colors.surface,
+  qrScans: {
+    alignItems: "flex-end",
+  },
 
+  qrScanValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  qrScanLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    color: COLORS.textMuted,
+  },
+
+  emptyCard: {
+    padding: SPACING.xxl,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-
-    borderColor:
-      colors.primary,
-
+    borderColor: COLORS.border,
     alignItems: "center",
+  },
 
+  emptyIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
     justifyContent: "center",
   },
 
-  secondaryButtonText: {
-    color:
-      colors.primary,
+  emptyTitle: {
+    marginTop: SPACING.lg,
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
 
-    fontSize: 16,
+  emptyText: {
+    marginTop: SPACING.sm,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    color: COLORS.textSecondary,
+  },
 
+  emptyButton: {
+    marginTop: SPACING.lg,
+    height: 46,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: 13,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyButtonText: {
+    fontSize: 13,
     fontWeight: "700",
+    color: COLORS.white,
   },
 
-  loginButton: {
-    height: 40,
-
+  topCard: {
+    minHeight: 84,
+    padding: SPACING.lg,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
     alignItems: "center",
+  },
 
+  topIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
     justifyContent: "center",
   },
 
-  loginText: {
-    color:
-      colors.textSecondary,
-
-    fontSize: 14,
-
-    fontWeight: "600",
+  topContent: {
+    flex: 1,
+    marginLeft: SPACING.md,
   },
 
+  topName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  topType: {
+    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+
+  topStats: {
+    alignItems: "flex-end",
+  },
+
+  topScanValue: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  topScanLabel: {
+    marginTop: 2,
+    fontSize: 10,
+    color: COLORS.textMuted,
+  },
+
+  analyticsCard: {
+    marginTop: SPACING.xxl,
+    minHeight: 76,
+    padding: SPACING.lg,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  analyticsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  analyticsContent: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+
+  analyticsTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  analyticsText: {
+    marginTop: 3,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+
+  infoBox: {
+    marginTop: SPACING.xxl,
+    padding: SPACING.lg,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  infoText: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    fontSize: 12,
+    lineHeight: 18,
+    color: COLORS.textSecondary,
+  },
 });

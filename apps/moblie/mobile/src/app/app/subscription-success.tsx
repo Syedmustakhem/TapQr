@@ -28,13 +28,22 @@ export default function SubscriptionSuccessScreen() {
       ? "Yearly"
       : "Monthly";
 
+  const goToHome = () => {
+    router.replace("/app/tabs");
+  };
+
+  const goToPlans = () => {
+    router.replace("/app/plans");
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Success Icon */}
+        {/* SUCCESS ICON */}
+
         <View style={styles.successIcon}>
           <Ionicons
             name="checkmark"
@@ -43,7 +52,8 @@ export default function SubscriptionSuccessScreen() {
           />
         </View>
 
-        {/* Title */}
+        {/* TITLE */}
+
         <Text style={styles.title}>
           You're upgraded!
         </Text>
@@ -52,7 +62,8 @@ export default function SubscriptionSuccessScreen() {
           Your TapQR {plan} plan is ready.
         </Text>
 
-        {/* Subscription Details */}
+        {/* SUBSCRIPTION DETAILS */}
+
         <View style={styles.card}>
           <View style={styles.cardRow}>
             <Text style={styles.label}>
@@ -64,6 +75,8 @@ export default function SubscriptionSuccessScreen() {
             </Text>
           </View>
 
+          <View style={styles.divider} />
+
           <View style={styles.cardRow}>
             <Text style={styles.label}>
               Billing
@@ -74,12 +87,16 @@ export default function SubscriptionSuccessScreen() {
             </Text>
           </View>
 
+          <View style={styles.divider} />
+
           <View style={styles.cardRow}>
             <Text style={styles.label}>
               Status
             </Text>
 
             <View style={styles.activeBadge}>
+              <View style={styles.activeDot} />
+
               <Text style={styles.activeText}>
                 Active
               </Text>
@@ -87,13 +104,16 @@ export default function SubscriptionSuccessScreen() {
           </View>
         </View>
 
-        {/* Information */}
+        {/* INFORMATION */}
+
         <View style={styles.infoBox}>
-          <Ionicons
-            name="information-circle-outline"
-            size={21}
-            color={COLORS.primary}
-          />
+          <View style={styles.infoIcon}>
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color={COLORS.primary}
+            />
+          </View>
 
           <Text style={styles.infoText}>
             This is currently a frontend preview.
@@ -103,9 +123,10 @@ export default function SubscriptionSuccessScreen() {
           </Text>
         </View>
 
-        {/* Dashboard Button */}
+        {/* DASHBOARD BUTTON */}
+
         <Pressable
-          onPress={() => router.replace("/app/dashboard")}
+          onPress={goToHome}
           style={({ pressed }) => [
             styles.button,
             pressed && styles.pressed,
@@ -122,9 +143,10 @@ export default function SubscriptionSuccessScreen() {
           />
         </Pressable>
 
-        {/* Plans Button */}
+        {/* VIEW PLANS */}
+
         <Pressable
-          onPress={() => router.replace("/app/plans")}
+          onPress={goToPlans}
           style={({ pressed }) => [
             styles.secondaryButton,
             pressed && styles.pressed,
@@ -135,9 +157,10 @@ export default function SubscriptionSuccessScreen() {
           </Text>
         </Pressable>
 
-        {/* Home / QR Dashboard */}
+        {/* HOME */}
+
         <Pressable
-          onPress={() => router.replace("/app/tabs")}
+          onPress={goToHome}
           style={({ pressed }) => [
             styles.homeButton,
             pressed && styles.pressed,
@@ -200,7 +223,8 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     marginTop: SPACING.xxxl,
-    padding: SPACING.xl,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
     borderRadius: 20,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -208,10 +232,15 @@ const styles = StyleSheet.create({
   },
 
   cardRow: {
-    minHeight: 48,
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
   },
 
   label: {
@@ -226,10 +255,20 @@ const styles = StyleSheet.create({
   },
 
   activeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: "#DCFCE7",
+  },
+
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+    backgroundColor: "#15803D",
   },
 
   activeText: {
@@ -246,6 +285,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
     flexDirection: "row",
     alignItems: "flex-start",
+  },
+
+  infoIcon: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   infoText: {
@@ -289,8 +335,8 @@ const styles = StyleSheet.create({
   },
 
   homeButton: {
-    marginTop: SPACING.md,
     minHeight: 44,
+    marginTop: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",

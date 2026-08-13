@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -18,31 +20,87 @@ type QRType = "DYNAMIC" | "STATIC";
 
 type DestinationType =
   | "WEBSITE"
+  | "MENU"
+  | "SOCIAL"
   | "WHATSAPP"
-  | "INSTAGRAM"
-  | "GOOGLE_REVIEW";
+  | "CUSTOM";
+
+const DESTINATIONS: {
+  type: DestinationType;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  {
+    type: "WEBSITE",
+    label: "Website",
+    icon: "globe-outline",
+  },
+  {
+    type: "MENU",
+    label: "Menu",
+    icon: "restaurant-outline",
+  },
+  {
+    type: "SOCIAL",
+    label: "Social",
+    icon: "share-social-outline",
+  },
+  {
+    type: "WHATSAPP",
+    label: "WhatsApp",
+    icon: "logo-whatsapp",
+  },
+  {
+    type: "CUSTOM",
+    label: "Custom",
+    icon: "link-outline",
+  },
+];
 
 export default function CreateQRScreen() {
   const [name, setName] = useState("");
   const [destination, setDestination] = useState("");
-  const [qrType, setQrType] =
-    useState<QRType>("DYNAMIC");
-
+  const [qrType, setQrType] = useState<QRType>("DYNAMIC");
   const [destinationType, setDestinationType] =
     useState<DestinationType>("WEBSITE");
 
-  const [error, setError] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
 
-  const handleContinue = () => {
-    setError("");
+  const nameError =
+    showErrors && name.trim().length === 0;
 
-    if (!name.trim()) {
-      setError("Please enter a QR code name.");
-      return;
+  const destinationError =
+    showErrors && destination.trim().length === 0;
+
+  const isValid = useMemo(() => {
+    return (
+      name.trim().length > 0 &&
+      destination.trim().length > 0
+    );
+  }, [name, destination]);
+
+  const getPlaceholder = () => {
+    switch (destinationType) {
+      case "MENU":
+        return "https://yourbusiness.com/menu";
+
+      case "SOCIAL":
+        return "https://instagram.com/yourbusiness";
+
+      case "WHATSAPP":
+        return "https://wa.me/919999999999";
+
+      case "CUSTOM":
+        return "Enter your destination URL";
+
+      default:
+        return "https://yourwebsite.com";
     }
+  };
 
-    if (!destination.trim()) {
-      setError("Please enter a destination.");
+  const handleCreate = () => {
+    if (!isValid) {
+      setShowErrors(true);
       return;
     }
 
@@ -51,94 +109,130 @@ export default function CreateQRScreen() {
       params: {
         name: name.trim(),
         destination: destination.trim(),
-        qrType,
+        type: qrType,
         destinationType,
       },
     });
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : undefined
+        }
       >
-        {/* Header */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HEADER */}
 
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={COLORS.text}
-            />
-          </Pressable>
+          <View style={styles.header}>
+            <Pressable
+              onPress={handleBack}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={22}
+                color={COLORS.text}
+              />
+            </Pressable>
 
-          <View style={styles.headerContent}>
-            <Text style={styles.title}>
-              Create QR Code
-            </Text>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>
+                Create QR Code
+              </Text>
 
-            <Text style={styles.subtitle}>
-              Create a QR code for your business.
-            </Text>
+              <Text style={styles.subtitle}>
+                Create a QR code for your business.
+              </Text>
+            </View>
           </View>
-        </View>
 
-        {/* QR Name */}
+          {/* QR TYPE */}
 
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            QR Code Name
-          </Text>
-
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Restaurant Menu"
-            placeholderTextColor={COLORS.textMuted}
-            style={styles.input}
-          />
-        </View>
-
-        {/* QR Type */}
-
-        <View style={styles.section}>
-          <Text style={styles.label}>
+          <Text style={styles.sectionTitle}>
             QR Type
           </Text>
 
-          <View style={styles.typeRow}>
-            <TypeCard
+          <View style={styles.typeContainer}>
+            <TypeButton
+              icon="flash-outline"
               title="Dynamic"
-              description="Change destination later"
-              icon="sync-outline"
-              selected={qrType === "DYNAMIC"}
+              description="Edit destination later"
+              active={qrType === "DYNAMIC"}
               onPress={() =>
                 setQrType("DYNAMIC")
               }
             />
 
-            <TypeCard
-              title="Static"
-              description="Destination cannot change"
+            <TypeButton
               icon="lock-closed-outline"
-              selected={qrType === "STATIC"}
+              title="Static"
+              description="Destination is permanent"
+              active={qrType === "STATIC"}
               onPress={() =>
                 setQrType("STATIC")
               }
             />
           </View>
-        </View>
 
-        {/* Destination */}
+          {/* QR NAME */}
 
-        <View style={styles.section}>
-          <Text style={styles.label}>
+          <Text style={styles.sectionTitle}>
+            QR Code Name
+          </Text>
+
+          <View
+            style={[
+              styles.inputContainer,
+              nameError && styles.inputError,
+            ]}
+          >
+            <Ionicons
+              name="pricetag-outline"
+              size={19}
+              color={
+                nameError
+                  ? "#DC2626"
+                  : COLORS.textMuted
+              }
+            />
+
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Example: Restaurant Menu"
+              placeholderTextColor={
+                COLORS.textMuted
+              }
+              style={styles.input}
+              maxLength={60}
+            />
+          </View>
+
+          {nameError && (
+            <Text style={styles.errorText}>
+              Enter a name for your QR code.
+            </Text>
+          )}
+
+          {/* DESTINATION TYPE */}
+
+          <Text style={styles.sectionTitle}>
             Destination
           </Text>
 
@@ -146,217 +240,272 @@ export default function CreateQRScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={
-              styles.destinationTypes
+              styles.destinationScroll
             }
           >
-            <DestinationButton
-              title="Website"
-              icon="globe-outline"
-              selected={
-                destinationType === "WEBSITE"
-              }
-              onPress={() =>
-                setDestinationType("WEBSITE")
-              }
-            />
-
-            <DestinationButton
-              title="WhatsApp"
-              icon="logo-whatsapp"
-              selected={
-                destinationType === "WHATSAPP"
-              }
-              onPress={() =>
-                setDestinationType("WHATSAPP")
-              }
-            />
-
-            <DestinationButton
-              title="Instagram"
-              icon="logo-instagram"
-              selected={
-                destinationType === "INSTAGRAM"
-              }
-              onPress={() =>
-                setDestinationType("INSTAGRAM")
-              }
-            />
-
-            <DestinationButton
-              title="Reviews"
-              icon="star-outline"
-              selected={
-                destinationType === "GOOGLE_REVIEW"
-              }
-              onPress={() =>
-                setDestinationType(
-                  "GOOGLE_REVIEW"
-                )
-              }
-            />
+            {DESTINATIONS.map((item) => (
+              <DestinationButton
+                key={item.type}
+                icon={item.icon}
+                label={item.label}
+                active={
+                  destinationType === item.type
+                }
+                onPress={() => {
+                  setDestinationType(
+                    item.type
+                  );
+                  setDestination("");
+                }}
+              />
+            ))}
           </ScrollView>
 
-          <TextInput
-            value={destination}
-            onChangeText={setDestination}
-            placeholder={getPlaceholder(
-              destinationType
-            )}
-            placeholderTextColor={COLORS.textMuted}
+          {/* DESTINATION INPUT */}
+
+          <View
             style={[
-              styles.input,
+              styles.inputContainer,
               styles.destinationInput,
+              destinationError &&
+                styles.inputError,
             ]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType={
-              destinationType === "WEBSITE"
-                ? "url"
-                : "default"
-            }
-          />
-        </View>
-
-        {/* Error */}
-
-        {error ? (
-          <View style={styles.errorBox}>
+          >
             <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color={COLORS.danger}
+              name={
+                destinationType ===
+                "WHATSAPP"
+                  ? "logo-whatsapp"
+                  : "link-outline"
+              }
+              size={19}
+              color={
+                destinationError
+                  ? "#DC2626"
+                  : COLORS.textMuted
+              }
             />
 
-            <Text style={styles.errorText}>
-              {error}
-            </Text>
+            <TextInput
+              value={destination}
+              onChangeText={setDestination}
+              placeholder={getPlaceholder()}
+              placeholderTextColor={
+                COLORS.textMuted
+              }
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
           </View>
-        ) : null}
 
-        {/* Info */}
+          {destinationError && (
+            <Text style={styles.errorText}>
+              Enter a destination for your QR
+              code.
+            </Text>
+          )}
 
-        <View style={styles.infoBox}>
-          <Ionicons
-            name="information-circle-outline"
-            size={22}
-            color={COLORS.primary}
-          />
+          {/* INFO */}
 
-          <Text style={styles.infoText}>
-            Dynamic QR codes can be updated later
-            without printing a new QR code.
+          <View style={styles.infoBox}>
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color={COLORS.primary}
+            />
+
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>
+                {qrType === "DYNAMIC"
+                  ? "Dynamic QR"
+                  : "Static QR"}
+              </Text>
+
+              <Text style={styles.infoText}>
+                {qrType === "DYNAMIC"
+                  ? "You can change the destination later without printing a new QR code."
+                  : "The destination is embedded directly into the QR code and cannot be changed later."}
+              </Text>
+            </View>
+          </View>
+
+          {/* PREVIEW SUMMARY */}
+
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryIcon}>
+              <Ionicons
+                name="qr-code-outline"
+                size={25}
+                color={COLORS.primary}
+              />
+            </View>
+
+            <View style={styles.summaryContent}>
+              <Text style={styles.summaryTitle}>
+                Ready to create
+              </Text>
+
+              <Text
+                style={styles.summaryText}
+                numberOfLines={2}
+              >
+                {name.trim() ||
+                  "Your QR code name"}
+              </Text>
+
+              <Text
+                style={styles.summaryDestination}
+                numberOfLines={1}
+              >
+                {destination.trim() ||
+                  "Your destination will appear here"}
+              </Text>
+            </View>
+          </View>
+
+          {/* CREATE */}
+
+          <Pressable
+            onPress={handleCreate}
+            style={({ pressed }) => [
+              styles.createButton,
+              !isValid &&
+                styles.createButtonDisabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name="qr-code-outline"
+              size={20}
+              color={COLORS.white}
+            />
+
+            <Text style={styles.createButtonText}>
+              Continue to Preview
+            </Text>
+
+            <Ionicons
+              name="arrow-forward"
+              size={19}
+              color={COLORS.white}
+            />
+          </Pressable>
+
+          <Text style={styles.footerText}>
+            You can review your QR before saving
+            it.
           </Text>
-        </View>
-
-        {/* Continue */}
-
-        <Pressable
-          onPress={handleContinue}
-          style={({ pressed }) => [
-            styles.continueButton,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <Text style={styles.continueText}>
-            Continue
-          </Text>
-
-          <Ionicons
-            name="arrow-forward"
-            size={20}
-            color={COLORS.white}
-          />
-        </Pressable>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function TypeCard({
+/* -------------------------------------------------- */
+/* TYPE BUTTON */
+/* -------------------------------------------------- */
+
+function TypeButton({
+  icon,
   title,
   description,
-  icon,
-  selected,
+  active,
   onPress,
 }: {
+  icon: keyof typeof Ionicons.glyphMap;
   title: string;
   description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  selected: boolean;
+  active: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.typeCard,
-        selected && styles.typeCardSelected,
+      style={({ pressed }) => [
+        styles.typeButton,
+        active && styles.typeButtonActive,
+        pressed && styles.pressed,
       ]}
     >
       <View
         style={[
           styles.typeIcon,
-          selected && styles.typeIconSelected,
+          active && styles.typeIconActive,
         ]}
       >
         <Ionicons
           name={icon}
-          size={21}
+          size={20}
           color={
-            selected
+            active
               ? COLORS.white
-              : COLORS.primary
+              : COLORS.textSecondary
           }
         />
       </View>
 
-      <Text style={styles.typeTitle}>
-        {title}
-      </Text>
+      <View style={styles.typeContent}>
+        <Text
+          style={[
+            styles.typeTitle,
+            active && styles.typeTitleActive,
+          ]}
+        >
+          {title}
+        </Text>
 
-      <Text style={styles.typeDescription}>
-        {description}
-      </Text>
+        <Text style={styles.typeDescription}>
+          {description}
+        </Text>
+      </View>
 
-      {selected ? (
-        <View style={styles.selectedCheck}>
-          <Ionicons
-            name="checkmark"
-            size={14}
-            color={COLORS.white}
-          />
-        </View>
-      ) : null}
+      <View
+        style={[
+          styles.radio,
+          active && styles.radioActive,
+        ]}
+      >
+        {active && (
+          <View style={styles.radioInner} />
+        )}
+      </View>
     </Pressable>
   );
 }
 
+/* -------------------------------------------------- */
+/* DESTINATION BUTTON */
+/* -------------------------------------------------- */
+
 function DestinationButton({
-  title,
   icon,
-  selected,
+  label,
+  active,
   onPress,
 }: {
-  title: string;
   icon: keyof typeof Ionicons.glyphMap;
-  selected: boolean;
+  label: string;
+  active: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
+      style={({ pressed }) => [
         styles.destinationButton,
-        selected &&
-          styles.destinationButtonSelected,
+        active &&
+          styles.destinationButtonActive,
+        pressed && styles.pressed,
       ]}
     >
       <Ionicons
         name={icon}
         size={18}
         color={
-          selected
-            ? COLORS.white
+          active
+            ? COLORS.primary
             : COLORS.textSecondary
         }
       />
@@ -364,38 +513,28 @@ function DestinationButton({
       <Text
         style={[
           styles.destinationButtonText,
-          selected &&
-            styles.destinationButtonTextSelected,
+          active &&
+            styles.destinationButtonTextActive,
         ]}
       >
-        {title}
+        {label}
       </Text>
     </Pressable>
   );
 }
 
-function getPlaceholder(
-  type: DestinationType
-) {
-  switch (type) {
-    case "WHATSAPP":
-      return "Enter WhatsApp number";
-
-    case "INSTAGRAM":
-      return "Enter Instagram profile URL";
-
-    case "GOOGLE_REVIEW":
-      return "Enter Google review URL";
-
-    default:
-      return "https://example.com";
-  }
-}
+/* -------------------------------------------------- */
+/* STYLES */
+/* -------------------------------------------------- */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  keyboard: {
+    flex: 1,
   },
 
   content: {
@@ -406,12 +545,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: SPACING.xxl,
   },
 
   backButton: {
     width: 44,
     height: 44,
-    borderRadius: 13,
+    borderRadius: 14,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -420,12 +560,12 @@ const styles = StyleSheet.create({
     marginRight: SPACING.md,
   },
 
-  headerContent: {
+  headerText: {
     flex: 1,
   },
 
   title: {
-    fontSize: 28,
+    fontSize: 27,
     fontWeight: "800",
     color: COLORS.text,
   },
@@ -436,71 +576,60 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  section: {
-    marginTop: SPACING.xxl,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-
-  input: {
-    height: 54,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingHorizontal: SPACING.lg,
-    fontSize: 15,
+  sectionTitle: {
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
+    fontSize: 17,
+    fontWeight: "800",
     color: COLORS.text,
   },
 
-  destinationInput: {
-    marginTop: SPACING.md,
-  },
-
-  typeRow: {
-    flexDirection: "row",
+  typeContainer: {
     gap: SPACING.md,
   },
 
-  typeCard: {
-    flex: 1,
-    minHeight: 145,
-    backgroundColor: COLORS.surface,
+  typeButton: {
+    minHeight: 82,
+    padding: SPACING.md,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 16,
-    padding: SPACING.lg,
-    position: "relative",
+    backgroundColor: COLORS.surface,
+    flexDirection: "row",
+    alignItems: "center",
   },
 
-  typeCardSelected: {
+  typeButtonActive: {
     borderColor: COLORS.primary,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#F5F3FF",
   },
 
   typeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#DBEAFE",
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: COLORS.background,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: SPACING.md,
   },
 
-  typeIconSelected: {
+  typeIconActive: {
     backgroundColor: COLORS.primary,
   },
 
+  typeContent: {
+    flex: 1,
+  },
+
   typeTitle: {
-    marginTop: SPACING.md,
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "800",
     color: COLORS.text,
+  },
+
+  typeTitleActive: {
+    color: COLORS.primary,
   },
 
   typeDescription: {
@@ -510,24 +639,63 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
-  selectedCheck: {
-    position: "absolute",
-    top: 12,
-    right: 12,
+  radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  destinationTypes: {
+  radioActive: {
+    borderColor: COLORS.primary,
+  },
+
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
+
+  inputContainer: {
+    minHeight: 54,
+    paddingHorizontal: SPACING.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  inputError: {
+    borderColor: "#DC2626",
+  },
+
+  input: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    paddingVertical: 0,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+
+  errorText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#DC2626",
+  },
+
+  destinationScroll: {
+    paddingBottom: 4,
     gap: SPACING.sm,
   },
 
   destinationButton: {
-    height: 42,
+    minHeight: 42,
     paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
@@ -538,35 +706,23 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
-  destinationButtonSelected: {
-    backgroundColor: COLORS.primary,
+  destinationButtonActive: {
     borderColor: COLORS.primary,
+    backgroundColor: "#F5F3FF",
   },
 
   destinationButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     color: COLORS.textSecondary,
   },
 
-  destinationButtonTextSelected: {
-    color: COLORS.white,
+  destinationButtonTextActive: {
+    color: COLORS.primary,
   },
 
-  errorBox: {
-    marginTop: SPACING.lg,
-    padding: SPACING.md,
-    borderRadius: 12,
-    backgroundColor: "#FEF2F2",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  errorText: {
-    flex: 1,
-    marginLeft: SPACING.sm,
-    fontSize: 13,
-    color: COLORS.danger,
+  destinationInput: {
+    marginTop: SPACING.sm,
   },
 
   infoBox: {
@@ -578,18 +734,73 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
 
-  infoText: {
+  infoContent: {
     flex: 1,
     marginLeft: SPACING.sm,
+  },
+
+  infoTitle: {
     fontSize: 13,
-    lineHeight: 20,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  infoText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
     color: COLORS.textSecondary,
   },
 
-  continueButton: {
-    height: 54,
+  summaryCard: {
     marginTop: SPACING.xxl,
-    borderRadius: 14,
+    padding: SPACING.lg,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  summaryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: "#F5F3FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: SPACING.md,
+  },
+
+  summaryContent: {
+    flex: 1,
+  },
+
+  summaryTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+
+  summaryText: {
+    marginTop: 3,
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+
+  summaryDestination: {
+    marginTop: 3,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+
+  createButton: {
+    minHeight: 54,
+    marginTop: SPACING.xxl,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 15,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
@@ -597,13 +808,26 @@ const styles = StyleSheet.create({
     gap: 9,
   },
 
-  continueText: {
-    fontSize: 16,
-    fontWeight: "700",
+  createButtonDisabled: {
+    opacity: 0.55,
+  },
+
+  createButtonText: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "800",
     color: COLORS.white,
   },
 
-  buttonPressed: {
+  footerText: {
+    marginTop: SPACING.md,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+
+  pressed: {
     opacity: 0.75,
     transform: [{ scale: 0.98 }],
   },
