@@ -1,14 +1,121 @@
-name : Tap Qr Backend Pipeline
+name: TapQR Backend CI/CD
 
 on:
- push:
-   branches:
-     - develop
-     - main 
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
 
-  pull_request:
-      branches:
-       - develop 
-  jobs:
-   backend-build:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: tapqr-backend
+  ECS_CLUSTER: tapqr-backend
+  ECS_SERVICE: tapqr-backend-service
+  CONTAINER_NAME: tapqr-backend
+
+jobs:
+
+  deploy:
+    name: Build and Deploy Backend
     runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configure AWS using OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::018088156597:role/GitHubActions-TapQR-Deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Generate image tag
+      - name: Generate image tag
+        id: image
+        run: |
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      # 5. Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f backend/Dockerfile \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest \
+            backend
+
+      # 6. Push Docker image
+      - name: Push Docker image
+        run: |
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+
+          docker push \
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+      # 7. Get current ECS task definition
+      - name: Get current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition tapqr-backend \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      # 8. Remove AWS-managed fields
+      - name: Clean task definition
+        run: |
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          )' task-definition.json > task-definition-clean.json
+
+          mv task-definition-clean.json task-definition.json
+
+      # 9. Update container image
+      - name: Update container image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}
+
+      # 10. Deploy to ECS
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # 11. Deployment completed
+      - name: Deployment successful
+        run: |
+          echo "======================================"
+          echo "TapQR backend deployment successful!"
+          echo "======================================"
+          echo "ECS Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "ECS Service: ${{ env.ECS_SERVICE }}"
+          echo "Image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image.outputs.tag }}"
