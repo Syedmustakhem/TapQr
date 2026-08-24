@@ -1,7 +1,11 @@
 import app from "./app";
 
+<<<<<<< Updated upstream
 const PORT = 5000;
+=======
+const PORT = process.env.PORT || 5000;
+>>>>>>> Stashed changes
 
-app.listen(PORT, () => {
-  console.log(`🚀 TapQR API IS  running on http://localhost:${PORT}`);
+app.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`🚀 TapQR API running on port ${PORT}`);
 });

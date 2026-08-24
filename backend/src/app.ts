@@ -14,29 +14,34 @@ import { errorHandler } from "./cores/middleware/errorHandler";
   import staffRoutes from "./modules/staff/routes/staff.routes";
 const app = express();
 
-// Security
 app.use(helmet());
 
-// CORS
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "TapQR API is running",
+  });
+});
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:8081",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:8081",
-    ],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
 
-// Logger
 app.use(logger);
 
-// Body Parser
 app.use(express.json());
 
-// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 app.use("/api/staff", staffRoutes);
 app.use("/api/qrcodes", qrCodeRoutes);
@@ -44,6 +49,9 @@ app.use("/api/qrcodes", qrCodeRoutes);
 app.use("/", redirectRoutes);
 >>>>>>> c8ecb89 (feat(analtics))
 // Global Error Handler (Always Last)
+=======
+
+>>>>>>> Stashed changes
 app.use(errorHandler);
 
 export default app;
