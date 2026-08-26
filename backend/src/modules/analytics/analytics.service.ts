@@ -11,7 +11,6 @@ import { QRCodeRepository } from "../qrcode/qrcode.repository";
 import { BusinessRepository } from "../business/business.repository";
 
 export class AnalyticsService {
-
   private analyticsRepository =
     new AnalyticsRepository();
 
@@ -22,14 +21,11 @@ export class AnalyticsService {
     new BusinessRepository();
 
   /**
-   * Record a QR scan.
-   *
-   * This is used by the PUBLIC QR redirect.
+   * Record QR scan
    */
   async recordScan(
     data: CreateScanEventDTO
   ) {
-
     const qrCode =
       await this.qrCodeRepository.findById(
         data.qrCodeId
@@ -63,13 +59,12 @@ export class AnalyticsService {
   }
 
   /**
-   * Get scan history for one QR code.
+   * Get QR scan history
    */
   async getQRCodeScans(
     qrCodeId: string,
     ownerId: string
   ) {
-
     const qrCode =
       await this.qrCodeRepository.findById(
         qrCodeId
@@ -82,9 +77,20 @@ export class AnalyticsService {
       );
     }
 
+    const business =
+      await this.businessRepository.findById(
+        qrCode.businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
     if (
-      qrCode.business.ownerId !==
-      ownerId
+      business.ownerId !== ownerId
     ) {
       throw new AppError(
         "Unauthorized.",
@@ -97,13 +103,12 @@ export class AnalyticsService {
   }
 
   /**
-   * Get scan count for one QR code.
+   * Get QR scan count
    */
   async getQRCodeScanCount(
     qrCodeId: string,
     ownerId: string
   ) {
-
     const qrCode =
       await this.qrCodeRepository.findById(
         qrCodeId
@@ -116,9 +121,20 @@ export class AnalyticsService {
       );
     }
 
+    const business =
+      await this.businessRepository.findById(
+        qrCode.businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
     if (
-      qrCode.business.ownerId !==
-      ownerId
+      business.ownerId !== ownerId
     ) {
       throw new AppError(
         "Unauthorized.",
@@ -137,13 +153,12 @@ export class AnalyticsService {
   }
 
   /**
-   * Get total scans for a business.
+   * Get business scan count
    */
   async getBusinessScanCount(
     businessId: string,
     ownerId: string
   ) {
-
     const business =
       await this.businessRepository.findById(
         businessId
@@ -178,13 +193,12 @@ export class AnalyticsService {
   }
 
   /**
-   * Get all business scan events.
+   * Get business scan events
    */
   async getBusinessScans(
     businessId: string,
     ownerId: string
   ) {
-
     const business =
       await this.businessRepository.findById(
         businessId
@@ -213,7 +227,7 @@ export class AnalyticsService {
   }
 
   /**
-   * Get QR scans within a date range.
+   * QR scans by date range
    */
   async getQRCodeScansByDateRange(
     qrCodeId: string,
@@ -221,7 +235,6 @@ export class AnalyticsService {
     from?: Date,
     to?: Date
   ) {
-
     const qrCode =
       await this.qrCodeRepository.findById(
         qrCodeId
@@ -234,9 +247,20 @@ export class AnalyticsService {
       );
     }
 
+    const business =
+      await this.businessRepository.findById(
+        qrCode.businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
     if (
-      qrCode.business.ownerId !==
-      ownerId
+      business.ownerId !== ownerId
     ) {
       throw new AppError(
         "Unauthorized.",
@@ -253,7 +277,7 @@ export class AnalyticsService {
   }
 
   /**
-   * Get business scans within a date range.
+   * Business scans by date range
    */
   async getBusinessScansByDateRange(
     businessId: string,
@@ -261,7 +285,6 @@ export class AnalyticsService {
     from?: Date,
     to?: Date
   ) {
-
     const business =
       await this.businessRepository.findById(
         businessId

@@ -8,7 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-<<<<<<< Updated upstream
 //
 // ENUMS
 //
@@ -24,8 +23,6 @@ enum QRStatus {
   EXPIRED
 }
 
-=======
->>>>>>> Stashed changes
 enum AuthProviderType {
   EMAIL
   PHONE
@@ -63,6 +60,10 @@ enum InvitationStatus {
   EXPIRED
 }
 
+//
+// USER
+//
+
 model User {
   id String @id @default(uuid())
 
@@ -89,6 +90,10 @@ model User {
   sentInvitations BusinessInvitation[]
 }
 
+//
+// AUTH PROVIDER
+//
+
 model AuthProvider {
   id String @id @default(uuid())
 
@@ -103,29 +108,24 @@ model AuthProvider {
 
   userId String
 
-  user User @relation(
-    fields: [userId],
-    references: [id],
-    onDelete: Cascade
-  )
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, userId])
   @@index([userId])
   @@index([provider])
 }
 
+//
+// BUSINESS
+//
+
 model Business {
   id String @id @default(uuid())
 
   ownerId String
 
-  owner User @relation(
-    fields: [ownerId],
-    references: [id],
-    onDelete: Cascade
-  )
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-<<<<<<< Updated upstream
   name String
 
   slug String @unique
@@ -134,33 +134,17 @@ model Business {
   phone String?
 
   logo String?
-=======
-  name        String
-  slug        String  @unique
-  email       String?
-  phone       String?
-  logo        String?
->>>>>>> Stashed changes
   description String?
 
   status BusinessStatus @default(ACTIVE)
 
-<<<<<<< Updated upstream
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   deletedAt DateTime?
 
-  // Relations
   members BusinessMember[]
 
-=======
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  members     BusinessMember[]
->>>>>>> Stashed changes
   invitations BusinessInvitation[]
 
   qrCodes QRCode[]
@@ -169,7 +153,6 @@ model Business {
   @@index([status])
 }
 
-<<<<<<< Updated upstream
 //
 // BUSINESS MEMBERS
 //
@@ -177,13 +160,7 @@ model Business {
 model BusinessMember {
   id String @id @default(uuid())
 
-  userId String
-=======
-model BusinessMember {
-  id String @id @default(uuid())
-
   userId     String
->>>>>>> Stashed changes
   businessId String
 
   role   BusinessMemberRole   @default(STAFF)
@@ -191,28 +168,12 @@ model BusinessMember {
 
   invitedById String?
 
-<<<<<<< Updated upstream
-  joinedAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(
-    fields: [userId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  business Business @relation(
-    fields: [businessId],
-    references: [id],
-    onDelete: Cascade
-  )
-=======
   joinedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
->>>>>>> Stashed changes
 
   @@unique([userId, businessId])
   @@index([userId])
@@ -220,7 +181,6 @@ model BusinessMember {
   @@index([invitedById])
 }
 
-<<<<<<< Updated upstream
 //
 // QR CODE
 //
@@ -230,11 +190,7 @@ model QRCode {
 
   businessId String
 
-  business Business @relation(
-    fields: [businessId],
-    references: [id],
-    onDelete: Cascade
-  )
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   name String
 
@@ -272,11 +228,7 @@ model ScanEvent {
 
   qrCodeId String
 
-  qrCode QRCode @relation(
-    fields: [qrCodeId],
-    references: [id],
-    onDelete: Cascade
-  )
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
 
   ipAddress String?
 
@@ -305,18 +257,12 @@ model ScanEvent {
 model BusinessInvitation {
   id String @id @default(uuid())
 
-  businessId String
-=======
-model BusinessInvitation {
-  id String @id @default(uuid())
-
   businessId  String
->>>>>>> Stashed changes
   invitedById String
 
   email  String
   role   BusinessMemberRole
-  status InvitationStatus   @default(PENDING)
+  status InvitationStatus @default(PENDING)
 
   token String @unique
 
@@ -326,22 +272,9 @@ model BusinessInvitation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-<<<<<<< Updated upstream
-  business Business @relation(
-    fields: [businessId],
-    references: [id],
-    onDelete: Cascade
-  )
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  invitedBy User @relation(
-    fields: [invitedById],
-    references: [id],
-    onDelete: Cascade
-  )
-=======
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  invitedBy User     @relation(fields: [invitedById], references: [id], onDelete: Cascade)
->>>>>>> Stashed changes
+  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([invitedById])

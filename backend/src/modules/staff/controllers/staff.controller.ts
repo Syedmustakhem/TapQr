@@ -1,27 +1,35 @@
-import { Request, Response, NextFunction } from "express";
+import {
+  Response,
+  NextFunction,
+} from "express";
+
+import { AuthRequest } from "../../auth/auth.types";
 
 import { StaffService } from "../services/staff.service";
 
 export class StaffController {
-  private staffService = new StaffService();
+  private staffService =
+    new StaffService();
 
   /**
    * POST /staff/invitations
    */
   async inviteStaff(
-    req: Request,
+    req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
       const result =
         await this.staffService.inviteStaff({
-          ownerId: req.user.id,
+          ownerId: req.user!.id,
           email: req.body.email,
           role: req.body.role,
         });
 
-      return res.status(201).json(result);
+      return res.status(201).json(
+        result
+      );
     } catch (error) {
       next(error);
     }
@@ -31,18 +39,26 @@ export class StaffController {
    * POST /staff/invitations/:token/accept
    */
   async acceptInvitation(
-    req: Request,
+    req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const result =
-        await this.staffService.acceptInvitation({
-          userId: req.user.id,
-          token: req.params.token,
-        });
+      const token = String(
+        req.params.token
+      );
 
-      return res.status(200).json(result);
+      const result =
+        await this.staffService.acceptInvitation(
+          {
+            userId: req.user!.id,
+            token,
+          }
+        );
+
+      return res.status(200).json(
+        result
+      );
     } catch (error) {
       next(error);
     }
@@ -52,14 +68,14 @@ export class StaffController {
    * GET /staff/members
    */
   async getMembers(
-    req: Request,
+    req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
       const members =
         await this.staffService.getMembers(
-          req.user.id
+          req.user!.id
         );
 
       return res.status(200).json({
@@ -74,20 +90,25 @@ export class StaffController {
    * PATCH /staff/members/:memberId
    */
   async updateMemberRole(
-    req: Request,
+    req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
+      const memberId = String(
+        req.params.memberId
+      );
+
       const member =
         await this.staffService.updateMemberRole(
-          req.user.id,
-          req.params.memberId,
+          req.user!.id,
+          memberId,
           req.body.role
         );
 
       return res.status(200).json({
-        message: "Member updated successfully.",
+        message:
+          "Member updated successfully.",
         member,
       });
     } catch (error) {
@@ -99,18 +120,24 @@ export class StaffController {
    * DELETE /staff/members/:memberId
    */
   async removeMember(
-    req: Request,
+    req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
+      const memberId = String(
+        req.params.memberId
+      );
+
       const result =
         await this.staffService.removeMember(
-          req.user.id,
-          req.params.memberId
+          req.user!.id,
+          memberId
         );
 
-      return res.status(200).json(result);
+      return res.status(200).json(
+        result
+      );
     } catch (error) {
       next(error);
     }

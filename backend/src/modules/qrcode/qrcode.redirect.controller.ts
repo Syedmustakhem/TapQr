@@ -1,49 +1,66 @@
-import { Request, Response } from "express";
+import {
+  Request,
+  Response,
+  NextFunction,
+} from "express";
 
 import { QRCodeService } from "./qrcode.service";
+
 import { AnalyticsService } from "../analytics/analytics.service";
 
 export class QRCodeRedirectController {
-  private qrCodeService = new QRCodeService();
+  private qrCodeService =
+    new QRCodeService();
 
   private analyticsService =
     new AnalyticsService();
 
   redirect = async (
     req: Request,
-    res: Response
+    res: Response,
+    next: NextFunction
   ) => {
-    const shortCode =
-      req.params.shortCode as string;
-
-    const qrCode =
-      await this.qrCodeService.resolveQRCode(
-        shortCode
+    try {
+      const shortCode = String(
+        req.params.shortCode
       );
 
-    const forwardedFor =
-      req.headers["x-forwarded-for"];
+      const qrCode =
+        await this.qrCodeService.resolveQRCode(
+          shortCode
+        );
 
-    const ipAddress =
-      typeof forwardedFor === "string"
-        ? forwardedFor.split(",")[0]?.trim()
-        : req.ip;
+      const forwardedFor =
+        req.headers["x-forwarded-for"];
 
-    await this.analyticsService.recordScan({
-      qrCodeId: qrCode.qrCodeId,
+      const ipAddress =
+        typeof forwardedFor === "string"
+          ? forwardedFor
+              .split(",")[0]
+              ?.trim()
+          : req.ip;
 
-      ipAddress,
+      await this.analyticsService.recordScan(
+        {
+          qrCodeId:
+            qrCode.qrCodeId,
 
-      userAgent:
-        req.headers["user-agent"],
+          ipAddress,
 
-      referrer:
-        req.headers["referer"],
-    });
+          userAgent:
+            req.headers["user-agent"],
 
-    return res.redirect(
-      302,
-      qrCode.destinationUrl
-    );
+          referrer:
+            req.headers["referer"],
+        }
+      );
+
+      return res.redirect(
+        302,
+        qrCode.destinationUrl
+      );
+    } catch (error) {
+      next(error);
+    }
   };
 }
