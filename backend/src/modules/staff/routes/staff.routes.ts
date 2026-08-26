@@ -2,9 +2,13 @@ import { Router } from "express";
 
 import { StaffController } from "../controllers/staff.controller";
 
-import { authenticate } from "../../../cores/middleware/authenticate";
+import {
+  authenticate,
+} from "../../auth/auth.middleware";
 
-import { validate } from "../../../cores/middleware/validate";
+import {
+  validate,
+} from "../../../cores/middleware/validate";
 
 import {
   inviteStaffSchema,
@@ -15,7 +19,8 @@ import {
 
 const router = Router();
 
-const staffController = new StaffController();
+const staffController =
+  new StaffController();
 
 /**
  * Invite Staff
@@ -25,7 +30,9 @@ router.post(
   "/invitations",
   authenticate,
   validate(inviteStaffSchema),
-  staffController.inviteStaff.bind(staffController)
+  staffController.inviteStaff.bind(
+    staffController
+  )
 );
 
 /**
@@ -36,7 +43,9 @@ router.post(
   "/invitations/:token/accept",
   authenticate,
   validate(acceptInvitationSchema),
-  staffController.acceptInvitation.bind(staffController)
+  staffController.acceptInvitation.bind(
+    staffController
+  )
 );
 
 /**
@@ -46,7 +55,9 @@ router.post(
 router.get(
   "/members",
   authenticate,
-  staffController.getMembers.bind(staffController)
+  staffController.getMembers.bind(
+    staffController
+  )
 );
 
 /**
@@ -57,7 +68,9 @@ router.patch(
   "/members/:memberId",
   authenticate,
   validate(updateMemberRoleSchema),
-  staffController.updateMemberRole.bind(staffController)
+  staffController.updateMemberRole.bind(
+    staffController
+  )
 );
 
 /**
@@ -68,7 +81,9 @@ router.delete(
   "/members/:memberId",
   authenticate,
   validate(removeMemberSchema),
-  staffController.removeMember.bind(staffController)
+  staffController.removeMember.bind(
+    staffController
+  )
 );
 
 export default router;

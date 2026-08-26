@@ -4,27 +4,27 @@ import {
   AnalyticsController,
 } from "./analytics.controller";
 
-// CHANGE THIS IMPORT ONLY IF YOUR AUTH MIDDLEWARE
-// HAS A DIFFERENT FILE/NAME.
-import { authenticate } from "../../cores/middleware/authenticate";
+import {
+  authenticate,
+} from "../auth/auth.middleware";
 
 const router = Router();
 
 const controller =
   new AnalyticsController();
 
-//
-// PUBLIC
-//
+/**
+ * PUBLIC
+ */
 
 router.post(
   "/scan/:qrCodeId",
   controller.recordScan
 );
 
-//
-// PROTECTED
-//
+/**
+ * PROTECTED
+ */
 
 router.get(
   "/qr/:qrCodeId",

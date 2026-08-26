@@ -4,18 +4,19 @@ import cors from "cors";
 
 import authRoutes from "./modules/auth/auth.routes";
 import businessRoutes from "./modules/business/business.routes";
-<<<<<<< HEAD
 import qrCodeRoutes from "./modules/qrcode/qrcode.routes";
-=======
 import redirectRoutes from "./modules/qrcode/redirect.routes";
->>>>>>> c8ecb89 (feat(analtics))
+import staffRoutes from "./modules/staff/routes/staff.routes";
+
 import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
-  import staffRoutes from "./modules/staff/routes/staff.routes";
+
 const app = express();
 
+// Security
 app.use(helmet());
 
+// Health check
 app.get("/health", (_req, res) => {
   res.status(200).json({
     success: true,
@@ -23,6 +24,7 @@ app.get("/health", (_req, res) => {
   });
 });
 
+// CORS
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:8081",
@@ -35,23 +37,22 @@ app.use(
   })
 );
 
+// Logger
 app.use(logger);
 
+// Body Parser
 app.use(express.json());
 
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/businesses", businessRoutes);
-<<<<<<< Updated upstream
-<<<<<<< HEAD
 app.use("/api/staff", staffRoutes);
 app.use("/api/qrcodes", qrCodeRoutes);
-=======
-app.use("/", redirectRoutes);
->>>>>>> c8ecb89 (feat(analtics))
-// Global Error Handler (Always Last)
-=======
 
->>>>>>> Stashed changes
+// Public QR redirect/scanning route
+app.use("/", redirectRoutes);
+
+// Global Error Handler — Always Last
 app.use(errorHandler);
 
 export default app;

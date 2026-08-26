@@ -1,4 +1,5 @@
 import crypto from "crypto";
+
 import { prisma } from "../../../config/prisma";
 
 import {
@@ -9,10 +10,10 @@ import {
 import { AppError } from "../../../cores/errors/AppError";
 
 import { AuthRepository } from "../../auth/auth.repository";
+
 import { BusinessRepository } from "../../business/business.repository";
 
 import { BusinessMemberRepository } from "../repositories/business-member.repository";
-import { BusinessInvitationRepository } from "../repositories/business-invitation.repository";
 
 export interface InviteStaffServiceInput {
   ownerId: string;
@@ -26,16 +27,18 @@ export interface AcceptInvitationServiceInput {
 }
 
 export class StaffService {
-  private authRepository = new AuthRepository();
+  private authRepository =
+    new AuthRepository();
 
-  private businessRepository = new BusinessRepository();
+  private businessRepository =
+    new BusinessRepository();
 
   private businessMemberRepository =
     new BusinessMemberRepository();
 
-  private businessInvitationRepository =
-    new BusinessInvitationRepository();
-
+  /**
+   * Invite Staff
+   */
   async inviteStaff(
     data: InviteStaffServiceInput
   ) {
@@ -51,10 +54,21 @@ export class StaffService {
       );
     }
 
+    const email =
+      data.email
+        .toLowerCase()
+        .trim();
+
     const existingInvitation =
-      await this.businessInvitationRepository.findPendingByBusinessAndEmail(
-        business.id,
-        data.email
+      await prisma.businessInvitation.findFirst(
+        {
+          where: {
+            businessId: business.id,
+            email,
+            status:
+              InvitationStatus.PENDING,
+          },
+        }
       );
 
     if (existingInvitation) {
@@ -66,7 +80,7 @@ export class StaffService {
 
     const existingUser =
       await this.authRepository.findUserByEmail(
-        data.email
+        email
       );
 
     if (existingUser) {
@@ -85,37 +99,58 @@ export class StaffService {
     }
 
     const token =
-      crypto.randomBytes(32).toString("hex");
+      crypto
+        .randomBytes(32)
+        .toString("hex");
 
-    const expiresAt = new Date();
+    const expiresAt =
+      new Date();
 
     expiresAt.setDate(
       expiresAt.getDate() + 7
     );
 
     const invitation =
-      await this.businessInvitationRepository.create({
-        businessId: business.id,
-        invitedById: data.ownerId,
-        email: data.email.toLowerCase().trim(),
-        role: data.role,
-        token,
-        expiresAt,
-      });
+      await prisma.businessInvitation.create(
+        {
+          data: {
+            businessId:
+              business.id,
+
+            invitedById:
+              data.ownerId,
+
+            email,
+
+            role: data.role,
+
+            token,
+
+            expiresAt,
+          },
+        }
+      );
 
     return {
-      message: "Invitation sent successfully.",
+      message:
+        "Invitation sent successfully.",
       invitation,
     };
   }
 
+  /**
+   * Accept Invitation
+   */
   async acceptInvitation(
     data: AcceptInvitationServiceInput
   ) {
-
     const invitation =
-      await this.businessInvitationRepository.findByToken(
-        data.token
+      await prisma.businessInvitation.findUnique(
+        {
+          where: {
+            token: data.token,
+          },
+        }
       );
 
     if (!invitation) {
@@ -136,7 +171,8 @@ export class StaffService {
     }
 
     if (
-      invitation.expiresAt < new Date()
+      invitation.expiresAt <
+      new Date()
     ) {
       throw new AppError(
         "Invitation has expired.",
@@ -157,7 +193,8 @@ export class StaffService {
     }
 
     if (
-      user.email !== invitation.email
+      user.email?.toLowerCase() !==
+      invitation.email.toLowerCase()
     ) {
       throw new AppError(
         "This invitation does not belong to your account.",
@@ -179,32 +216,51 @@ export class StaffService {
     }
 
     await prisma.$transaction(
-      async (tx) => {        await tx.businessMember.create({
+      async (tx) => {
+        await tx.businessMember.create({
           data: {
             userId: user.id,
-            businessId: invitation.businessId,
+
+            businessId:
+              invitation.businessId,
+
             role: invitation.role,
+
+            status:
+              "ACTIVE",
           },
         });
 
-        await tx.businessInvitation.update({
-          where: {
-            id: invitation.id,
-          },
-          data: {
-            status: InvitationStatus.ACCEPTED,
-            acceptedAt: new Date(),
-          },
-        });
+        await tx.businessInvitation.update(
+          {
+            where: {
+              id: invitation.id,
+            },
+
+            data: {
+              status:
+                InvitationStatus.ACCEPTED,
+
+              acceptedAt:
+                new Date(),
+            },
+          }
+        );
       }
     );
 
     return {
-      message: "Invitation accepted successfully.",
+      message:
+        "Invitation accepted successfully.",
     };
   }
 
-  async getMembers(ownerId: string) {
+  /**
+   * Get Business Members
+   */
+  async getMembers(
+    ownerId: string
+  ) {
     const business =
       await this.businessRepository.findByOwnerId(
         ownerId
@@ -222,6 +278,9 @@ export class StaffService {
     );
   }
 
+  /**
+   * Update Member Role
+   */
   async updateMemberRole(
     ownerId: string,
     memberId: string,
@@ -251,7 +310,10 @@ export class StaffService {
       );
     }
 
-    if (member.businessId !== business.id) {
+    if (
+      member.businessId !==
+      business.id
+    ) {
       throw new AppError(
         "Member does not belong to your business.",
         403
@@ -266,6 +328,9 @@ export class StaffService {
     );
   }
 
+  /**
+   * Remove Member
+   */
   async removeMember(
     ownerId: string,
     memberId: string
@@ -294,7 +359,10 @@ export class StaffService {
       );
     }
 
-    if (member.businessId !== business.id) {
+    if (
+      member.businessId !==
+      business.id
+    ) {
       throw new AppError(
         "Member does not belong to your business.",
         403
@@ -306,7 +374,8 @@ export class StaffService {
     );
 
     return {
-      message: "Member removed successfully.",
+      message:
+        "Member removed successfully.",
     };
   }
 }

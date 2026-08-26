@@ -7,7 +7,8 @@ import { ResponseHandler } from "../../cores/responses/ResponseHandler";
 import { QRCodeService } from "./qrcode.service";
 
 export class QRCodeController {
-  private qrCodeService = new QRCodeService();
+  private qrCodeService =
+    new QRCodeService();
 
   createQRCode = async (
     req: AuthRequest,
@@ -30,9 +31,13 @@ export class QRCodeController {
     req: AuthRequest,
     res: Response
   ) => {
+    const businessId = String(
+      req.params.businessId
+    );
+
     const result =
       await this.qrCodeService.getBusinessQRCodes(
-        req.params.businessId,
+        businessId,
         req.user!.id
       );
 
@@ -47,9 +52,13 @@ export class QRCodeController {
     req: AuthRequest,
     res: Response
   ) => {
+    const id = String(
+      req.params.id
+    );
+
     const result =
       await this.qrCodeService.getQRCodeById(
-        req.params.id,
+        id,
         req.user!.id
       );
 
@@ -64,9 +73,13 @@ export class QRCodeController {
     req: AuthRequest,
     res: Response
   ) => {
+    const id = String(
+      req.params.id
+    );
+
     const result =
       await this.qrCodeService.updateQRCode({
-        id: req.params.id,
+        id,
         ownerId: req.user!.id,
         ...req.body,
       });
@@ -82,9 +95,13 @@ export class QRCodeController {
     req: AuthRequest,
     res: Response
   ) => {
+    const id = String(
+      req.params.id
+    );
+
     const result =
       await this.qrCodeService.deleteQRCode(
-        req.params.id,
+        id,
         req.user!.id
       );
 

@@ -1,4 +1,5 @@
 import { AppError } from "../../cores/errors/AppError";
+
 import { generateShortCode } from "../../utils/generateShortCode";
 
 import {
@@ -7,18 +8,22 @@ import {
 } from "./qrcode.types";
 
 import { QRCodeRepository } from "./qrcode.repository";
+
 import { BusinessRepository } from "../business/business.repository";
 
 export class QRCodeService {
-  private qrRepository = new QRCodeRepository();
+  private qrRepository =
+    new QRCodeRepository();
 
-  private businessRepository = new BusinessRepository();
+  private businessRepository =
+    new BusinessRepository();
 
   /**
    * Create QR Code
    */
-  async createQRCode(data: CreateQRCodeDTO) {
-    // Check whether business exists
+  async createQRCode(
+    data: CreateQRCodeDTO
+  ) {
     const business =
       await this.businessRepository.findById(
         data.businessId
@@ -31,26 +36,28 @@ export class QRCodeService {
       );
     }
 
-    // Verify ownership
-    if (business.ownerId !== data.ownerId) {
+    if (
+      business.ownerId !==
+      data.ownerId
+    ) {
       throw new AppError(
         "You are not authorized to create QR Codes for this business.",
         403
       );
     }
 
-    // Generate unique short code
-    let shortCode = generateShortCode();
+    let shortCode =
+      generateShortCode();
 
     while (
       await this.qrRepository.findByShortCode(
         shortCode
       )
     ) {
-      shortCode = generateShortCode();
+      shortCode =
+        generateShortCode();
     }
 
-    // Create QR Code
     const qrCode =
       await this.qrRepository.create({
         business: {
@@ -61,7 +68,8 @@ export class QRCodeService {
 
         name: data.name,
 
-        description: data.description,
+        description:
+          data.description,
 
         destinationUrl:
           data.destinationUrl,
@@ -73,8 +81,48 @@ export class QRCodeService {
 
     return qrCode;
   }
-    /**
-   * Get All QR Codes of a Business
+
+  /**
+   * Resolve public QR code
+   */
+  async resolveQRCode(
+    shortCode: string
+  ) {
+    const qrCode =
+      await this.qrRepository.findByShortCode(
+        shortCode
+      );
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (qrCode.deletedAt) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (qrCode.status !== "ACTIVE") {
+      throw new AppError(
+        "QR Code is not active.",
+        410
+      );
+    }
+
+    return {
+      qrCodeId: qrCode.id,
+      destinationUrl:
+        qrCode.destinationUrl,
+    };
+  }
+
+  /**
+   * Get All QR Codes
    */
   async getBusinessQRCodes(
     businessId: string,
@@ -92,14 +140,16 @@ export class QRCodeService {
       );
     }
 
-    if (business.ownerId !== ownerId) {
+    if (
+      business.ownerId !== ownerId
+    ) {
       throw new AppError(
         "You are not authorized to access this business.",
         403
       );
     }
 
-    return await this.qrRepository.findByBusinessId(
+    return this.qrRepository.findByBusinessId(
       businessId
     );
   }
@@ -112,7 +162,9 @@ export class QRCodeService {
     ownerId: string
   ) {
     const qrCode =
-      await this.qrRepository.findById(id);
+      await this.qrRepository.findById(
+        id
+      );
 
     if (!qrCode) {
       throw new AppError(
@@ -133,7 +185,9 @@ export class QRCodeService {
       );
     }
 
-    if (business.ownerId !== ownerId) {
+    if (
+      business.ownerId !== ownerId
+    ) {
       throw new AppError(
         "You are not authorized to access this QR Code.",
         403
@@ -141,7 +195,9 @@ export class QRCodeService {
     }
 
     return qrCode;
-  }  /**
+  }
+
+  /**
    * Update QR Code
    */
   async updateQRCode(
@@ -171,19 +227,24 @@ export class QRCodeService {
       );
     }
 
-    if (business.ownerId !== data.ownerId) {
+    if (
+      business.ownerId !==
+      data.ownerId
+    ) {
       throw new AppError(
         "You are not authorized to update this QR Code.",
         403
       );
     }
 
-    return await this.qrRepository.update(
+    return this.qrRepository.update(
       data.id,
       {
         name: data.name,
-        description: data.description,
-        destinationUrl: data.destinationUrl,
+        description:
+          data.description,
+        destinationUrl:
+          data.destinationUrl,
         status: data.status,
       }
     );
@@ -197,7 +258,9 @@ export class QRCodeService {
     ownerId: string
   ) {
     const qrCode =
-      await this.qrRepository.findById(id);
+      await this.qrRepository.findById(
+        id
+      );
 
     if (!qrCode) {
       throw new AppError(
@@ -218,17 +281,22 @@ export class QRCodeService {
       );
     }
 
-    if (business.ownerId !== ownerId) {
+    if (
+      business.ownerId !== ownerId
+    ) {
       throw new AppError(
         "You are not authorized to delete this QR Code.",
         403
       );
     }
 
-    await this.qrRepository.softDelete(id);
+    await this.qrRepository.softDelete(
+      id
+    );
 
     return {
-      message: "QR Code deleted successfully.",
+      message:
+        "QR Code deleted successfully.",
     };
   }
 }
