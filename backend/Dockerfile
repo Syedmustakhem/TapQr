@@ -12,14 +12,12 @@ RUN apk add --no-cache openssl
 # Copy dependency manifests
 COPY package*.json ./
 
-# Copy Prisma BEFORE npm ci
-# because package.json has a postinstall:
-# "prisma generate"
+# Copy Prisma configuration and schema/migrations
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 
-# Install ALL dependencies (dev + prod)
-# needed here to compile TypeScript and run "prisma generate"
+# Install all dependencies
+# Includes Prisma CLI for generate/build
 RUN npm ci
 
 # Copy TypeScript configuration
@@ -28,7 +26,7 @@ COPY tsconfig.json ./
 # Copy application source
 COPY src ./src
 
-# Build application
+# Generate Prisma Client and build TypeScript
 RUN npm run build
 
 
@@ -42,32 +40,26 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Prisma requires OpenSSL at runtime too
+# Prisma requires OpenSSL at runtime
 RUN apk add --no-cache openssl
 
 # Copy dependency manifests
 COPY package*.json ./
 
-# Install production dependencies only.
-# --ignore-scripts skips postinstall ("prisma generate"),
-# since the "prisma" CLI is intentionally NOT installed here.
-# We still end up with @prisma/client's "prisma" as an optional
-# peer dependency pulled in by npm, so we force-remove dev-only
-# / CLI-only packages that have no business being in production.
-RUN npm ci --omit=dev --ignore-scripts \
-    && rm -rf node_modules/prisma \
-    && rm -rf node_modules/typescript \
-    && rm -rf node_modules/effect \
-    && rm -rf node_modules/fast-check \
-    && rm -rf node_modules/.bin/prisma \
-    && rm -rf node_modules/.bin/tsc
+# Install production dependencies
+# Prisma is intentionally included because it is
+# required for the separate migration task.
+RUN npm ci --omit=dev --ignore-scripts
 
-# Copy the already-generated Prisma client + query engine
-# from the builder stage instead of regenerating here
+# Copy generated Prisma Client and query engine
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
-# Copy compiled application from builder
+# Copy Prisma schema, migrations and config
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+
+# Copy compiled application
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 5000
