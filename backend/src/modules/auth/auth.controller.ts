@@ -9,14 +9,9 @@ export class AuthController {
   register = async (req: Request, res: Response) => {
     try {
       const result = await this.authService.register(req.body);
-
-      return ResponseHandler.created(
-        res,
-        "User Registered Successfully",
-        result
-      );
+      return ResponseHandler.created(res, "User Registered Successfully", result);
     } catch (error: any) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Internal Server Error",
       });
@@ -26,14 +21,9 @@ export class AuthController {
   login = async (req: Request, res: Response) => {
     try {
       const result = await this.authService.login(req.body);
-
-      return ResponseHandler.success(
-        res,
-        "Login Successful",
-        result
-      );
+      return ResponseHandler.success(res, "Login Successful", result);
     } catch (error: any) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Internal Server Error",
       });
@@ -43,14 +33,9 @@ export class AuthController {
   me = async (req: AuthRequest, res: Response) => {
     try {
       const result = await this.authService.me(req.user!.id);
-
-      return ResponseHandler.success(
-        res,
-        "User Retrieved Successfully",
-        result
-      );
+      return ResponseHandler.success(res, "User Retrieved Successfully", result);
     } catch (error: any) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Internal Server Error",
       });
@@ -60,14 +45,9 @@ export class AuthController {
   logout = async (req: Request, res: Response) => {
     try {
       const result = await this.authService.logout();
-
-      return ResponseHandler.success(
-        res,
-        "Logout Successful",
-        result
-      );
+      return ResponseHandler.success(res, "Logout Successful", result);
     } catch (error: any) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Internal Server Error",
       });
@@ -76,17 +56,78 @@ export class AuthController {
 
   refresh = async (req: Request, res: Response) => {
     try {
-      const result = await this.authService.refresh(
-        req.body.refreshToken
-      );
-
-      return ResponseHandler.success(
-        res,
-        "Access Token Refreshed Successfully",
-        result
-      );
+      const result = await this.authService.refresh(req.body.refreshToken);
+      return ResponseHandler.success(res, "Access Token Refreshed Successfully", result);
     } catch (error: any) {
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+      });
+    }
+  };
+
+  sendEmailOtp = async (req: Request, res: Response) => {
+    try {
+      const result = await this.authService.sendEmailOtp(req.body.email);
+      return ResponseHandler.success(res, result.message, result);
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+      });
+    }
+  };
+
+  verifyEmailOtp = async (req: Request, res: Response) => {
+    try {
+      const result = await this.authService.verifyEmailOtp(
+        req.body.email,
+        req.body.otp,
+        req.body.fullName
+      );
+      return ResponseHandler.success(res, "Login Successful", result);
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+      });
+    }
+  };
+
+  sendWhatsappOtp = async (req: Request, res: Response) => {
+    try {
+      const result = await this.authService.sendWhatsappOtp(req.body.phone);
+      return ResponseHandler.success(res, result.message, result);
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+      });
+    }
+  };
+
+  verifyWhatsappOtp = async (req: Request, res: Response) => {
+    try {
+      const result = await this.authService.verifyWhatsappOtp(
+        req.body.phone,
+        req.body.otp,
+        req.body.fullName
+      );
+      return ResponseHandler.success(res, "Login Successful", result);
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || "Internal Server Error",
+      });
+    }
+  };
+
+  googleLogin = async (req: Request, res: Response) => {
+    try {
+      const result = await this.authService.loginWithGoogle(req.body.idToken);
+      return ResponseHandler.success(res, "Login Successful", result);
+    } catch (error: any) {
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Internal Server Error",
       });

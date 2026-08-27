@@ -11,4 +11,19 @@ export const env = {
 
   JWT_REFRESH_EXPIRES_IN:
     process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+
+  // NEW: Google OAuth
+  GOOGLE_CLIENT_ID_WEB: process.env.GOOGLE_CLIENT_ID_WEB!,
+  GOOGLE_CLIENT_ID_ANDROID: process.env.GOOGLE_CLIENT_ID_ANDROID!,
+
+  // NEW: WhatsApp Cloud API
+  WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN!,
+  WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID!,
+  WHATSAPP_OTP_TEMPLATE_NAME: process.env.WHATSAPP_OTP_TEMPLATE_NAME!,
+  WHATSAPP_OTP_TEMPLATE_LANG: process.env.WHATSAPP_OTP_TEMPLATE_LANG || "en_US",
+  WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION || "v20.0",
+
+  // NEW: Email (Resend)
+  EMAIL_API_KEY: process.env.EMAIL_API_KEY!,
+  EMAIL_FROM: process.env.EMAIL_FROM || "onboarding@resend.dev",
 };

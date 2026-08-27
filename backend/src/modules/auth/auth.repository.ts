@@ -7,11 +7,24 @@ export interface RegisterUserRepositoryInput {
   passwordHash: string;
 }
 
-export class AuthRepository {
+export interface CreateVerifiedUserInput {
+  fullName: string;
+  email?: string;
+  phone?: string;
+  provider: "EMAIL" | "PHONE" | "GOOGLE";
+  providerUserId?: string;
+}
 
+export class AuthRepository {
   async findUserByEmail(email: string) {
     return prisma.user.findUnique({
       where: { email },
+    });
+  }
+
+  async findUserByPhone(phone: string) {
+    return prisma.user.findUnique({
+      where: { phone },
     });
   }
 
@@ -39,30 +52,101 @@ export class AuthRepository {
     });
   }
 
-  async registerUser(
-    data: RegisterUserRepositoryInput
+  async findAuthProviderByProviderUserId(
+    provider: "EMAIL" | "PHONE" | "GOOGLE",
+    providerUserId: string
   ) {
-    return prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
+    return prisma.authProvider.findFirst({
+      where: { provider, providerUserId },
+      include: { user: true },
+    });
+  }
 
-        const user = await tx.user.create({
-          data: {
-            fullName: data.fullName,
-            email: data.email,
-          },
-        });
+  async registerUser(data: RegisterUserRepositoryInput) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.create({
+        data: {
+          fullName: data.fullName,
+          email: data.email,
+        },
+      });
 
-        await tx.authProvider.create({
-          data: {
-            provider: "EMAIL",
-            passwordHash: data.passwordHash,
-            isVerified: false,
-            userId: user.id,
-          },
-        });
+      await tx.authProvider.create({
+        data: {
+          provider: "EMAIL",
+          passwordHash: data.passwordHash,
+          isVerified: false,
+          userId: user.id,
+        },
+      });
 
-        return user;
-      }
-    );
+      return user;
+    });
+  }
+
+  async createVerifiedUser(data: CreateVerifiedUserInput) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const user = await tx.user.create({
+        data: {
+          fullName: data.fullName,
+          email: data.email,
+          phone: data.phone,
+        },
+      });
+
+      await tx.authProvider.create({
+        data: {
+          provider: data.provider,
+          providerUserId: data.providerUserId,
+          isVerified: true,
+          userId: user.id,
+        },
+      });
+
+      return user;
+    });
+  }
+
+  async linkVerifiedProvider(
+    userId: string,
+    provider: "EMAIL" | "PHONE" | "GOOGLE",
+    providerUserId?: string
+  ) {
+    return prisma.authProvider.upsert({
+      where: { provider_userId: { provider, userId } },
+      create: { provider, providerUserId, userId, isVerified: true },
+      update: { isVerified: true, providerUserId },
+    });
+  }
+
+  async createOtp(data: {
+    identifier: string;
+    channel: "EMAIL" | "WHATSAPP";
+    otpHash: string;
+    expiresAt: Date;
+    maxAttempts: number;
+  }) {
+    return prisma.otpVerification.create({ data });
+  }
+
+  async findLatestOtp(identifier: string, channel: "EMAIL" | "WHATSAPP") {
+    return prisma.otpVerification.findFirst({
+      where: { identifier, channel, consumed: false },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async incrementOtpAttempts(id: string) {
+    return prisma.otpVerification.update({
+      where: { id },
+      data: { attempts: { increment: 1 } },
+    });
+  }
+
+  async consumeOtp(id: string) {
+    return prisma.otpVerification.update({
+      where: { id },
+      data: { consumed: true },
+    });
   }
 }
