@@ -8,15 +8,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// USER / AUTHENTICATION
+// ============================================================
+
 model User {
-  id              String               @id @default(uuid())
-  fullName        String
-  email           String?              @unique
-  phone           String?              @unique
-  role            UserRole             @default(OWNER)
-  isActive        Boolean              @default(true)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id       String   @id @default(uuid())
+  fullName String
+  email    String?  @unique
+  phone    String?  @unique
+  role     UserRole @default(OWNER)
+  isActive Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   authProviders   AuthProvider[]
   businesses      Business[]
   sentInvitations BusinessInvitation[]
@@ -29,24 +35,27 @@ model AuthProvider {
   passwordHash   String?
   providerUserId String?
   isVerified     Boolean          @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  userId         String
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, userId])
   @@index([userId])
   @@index([provider])
+  @@index([providerUserId])
 }
 
-// NEW: short-lived OTP records for email + WhatsApp verification.
-// Never store the raw OTP — only otpHash.
 model OtpVerification {
   id String @id @default(uuid())
 
-  identifier String // email address OR E.164 phone number
+  // Email address OR normalized E.164 phone number
+  identifier String
   channel    OtpChannel
 
+  // Never store raw OTP
   otpHash String
 
   attempts    Int @default(0)
@@ -58,103 +67,150 @@ model OtpVerification {
 
   @@index([identifier, channel])
   @@index([expiresAt])
+  @@index([consumed])
 }
 
+// ============================================================
+// BUSINESS
+// ============================================================
+
 model Business {
-  id          String               @id @default(uuid())
+  id          String         @id @default(uuid())
   ownerId     String
   name        String
-  slug        String               @unique
+  slug        String         @unique
   email       String?
   phone       String?
   logo        String?
   description String?
-  status      BusinessStatus       @default(ACTIVE)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  deletedAt   DateTime?
-  owner       User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  status      BusinessStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  profile BusinessProfile?
+
+  members BusinessMember[]
+
   invitations BusinessInvitation[]
-  members     BusinessMember[]
-  qrCodes     QRCode[]
+
+  qrCodes QRCode[]
+
+  catalogs Catalog[]
 
   @@index([ownerId])
-  @@index([status])
-}
-
-model BusinessMember {
-  id          String               @id @default(uuid())
-  userId      String
-  businessId  String
-  role        BusinessMemberRole   @default(STAFF)
-  status      BusinessMemberStatus @default(ACTIVE)
-  invitedById String?
-  joinedAt    DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  business    Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, businessId])
-  @@index([userId])
-  @@index([businessId])
-  @@index([invitedById])
-}
-
-model QRCode {
-  id             String      @id @default(cuid())
-  businessId     String
-  name           String
-  description    String?
-  type           QRType      @default(DYNAMIC)
-  destinationUrl String
-  shortCode      String      @unique
-  status         QRStatus    @default(ACTIVE)
-  scanCount      Int         @default(0)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
-  business       Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  scanEvents     ScanEvent[]
-
-  @@index([businessId])
   @@index([status])
   @@index([createdAt])
 }
 
-model ScanEvent {
-  id              String   @id @default(cuid())
-  qrCodeId        String
-  ipAddress       String?
-  country         String?
-  city            String?
-  browser         String?
-  device          String?
-  operatingSystem String?
-  referrer        String?
-  userAgent       String?
-  scannedAt       DateTime @default(now())
-  qrCode          QRCode   @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+// ============================================================
+// BUSINESS PROFILE
+// Everything a guest can see after scanning a QR.
+// ============================================================
 
-  @@index([qrCodeId])
-  @@index([scannedAt])
-  @@index([country])
+model BusinessProfile {
+  id         String @id @default(cuid())
+  businessId String @unique
+
+  tagline     String?
+  description String?
+
+  website String?
+
+  email    String?
+  phone    String?
+  whatsapp String?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String? @default("India")
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  // Example:
+  // {
+  //   "monday": {"open":"09:00","close":"21:00"},
+  //   "tuesday": {"open":"09:00","close":"21:00"}
+  // }
+  openingHours Json?
+
+  // Example:
+  // {
+  //   "instagram":"https://instagram.com/...",
+  //   "facebook":"https://facebook.com/..."
+  // }
+  socialLinks Json?
+
+  coverImage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@index([city])
+  @@index([state])
 }
 
+// ============================================================
+// BUSINESS MEMBERS / STAFF
+// ============================================================
+
+model BusinessMember {
+  id         String @id @default(uuid())
+  userId     String
+  businessId String
+
+  role   BusinessMemberRole   @default(STAFF)
+  status BusinessMemberStatus @default(ACTIVE)
+
+  invitedById String?
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
+  @@index([status])
+  @@index([invitedById])
+}
+
+// ============================================================
+// BUSINESS INVITATIONS
+// ============================================================
+
 model BusinessInvitation {
-  id          String             @id @default(uuid())
+  id          String @id @default(uuid())
   businessId  String
   invitedById String
-  email       String
-  role        BusinessMemberRole
-  status      InvitationStatus   @default(PENDING)
-  token       String             @unique
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  business    Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  invitedBy   User               @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  email  String
+  role   BusinessMemberRole
+  status InvitationStatus   @default(PENDING)
+
+  token String @unique
+
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([invitedById])
@@ -163,9 +219,399 @@ model BusinessInvitation {
   @@index([expiresAt])
 }
 
+// ============================================================
+// QR CODE
+// ============================================================
+
+model QRCode {
+  id         String  @id @default(cuid())
+  businessId String
+  catalogId  String?
+
+  name        String
+  description String?
+
+  type QRType @default(DYNAMIC)
+
+  // Used only for REDIRECT experience.
+  destinationUrl String?
+
+  // Public QR identifier.
+  shortCode String @unique
+
+  status QRStatus @default(ACTIVE)
+
+  // Determines what the guest sees.
+  //
+  // BUSINESS  -> complete business page
+  // CATALOG   -> catalog experience
+  // MENU      -> restaurant/menu experience
+  // SERVICES  -> service experience
+  // PRODUCTS  -> product experience
+  // CONTACT   -> contact experience
+  // REDIRECT  -> direct URL redirect
+  experienceType QRExperienceType @default(BUSINESS)
+
+  // Controls which sections appear
+  // on the guest page.
+  //
+  // Example:
+  // [
+  //   "PROFILE",
+  //   "CATALOG",
+  //   "OFFERS",
+  //   "CONTACT",
+  //   "LOCATION"
+  // ]
+  enabledSections Json?
+
+  scanCount Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  catalog Catalog? @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+
+  branding QRBranding?
+
+  scanEvents ScanEvent[]
+
+  @@index([businessId])
+  @@index([catalogId])
+  @@index([status])
+  @@index([experienceType])
+  @@index([createdAt])
+  @@index([businessId, status])
+}
+
+// ============================================================
+// QR BRANDING
+// ============================================================
+
+model QRBranding {
+  id       String @id @default(cuid())
+  qrCodeId String @unique
+
+  primaryColor      String?
+  secondaryColor    String?
+  backgroundColor   String?
+  qrForegroundColor String?
+  qrBackgroundColor String?
+
+  logoUrl       String?
+  coverImageUrl String?
+
+  buttonStyle String?
+  fontFamily  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// CATALOG
+//
+// One business can have multiple catalogs.
+//
+// Restaurant:
+//   Menu -> Categories -> Menu Items
+//
+// Supermarket:
+//   Products -> Categories -> Products
+//
+// Salon:
+//   Services -> Categories -> Services
+//
+// General:
+//   Catalog -> Categories -> Items
+// ============================================================
+
+model Catalog {
+  id         String @id @default(cuid())
+  businessId String
+
+  name        String
+  description String?
+
+  type CatalogType @default(GENERAL)
+
+  isActive Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  categories CatalogCategory[]
+
+  qrCodes QRCode[]
+
+  @@index([businessId])
+  @@index([businessId, isActive])
+  @@index([businessId, sortOrder])
+}
+
+// ============================================================
+// CATALOG CATEGORY
+// ============================================================
+
+model CatalogCategory {
+  id        String @id @default(cuid())
+  catalogId String
+
+  name        String
+  description String?
+  image       String?
+
+  isActive Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  catalog Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  items CatalogItem[]
+
+  @@index([catalogId])
+  @@index([catalogId, isActive])
+  @@index([catalogId, sortOrder])
+}
+
+// ============================================================
+// CATALOG ITEM
+//
+// Universal item model.
+//
+// PRODUCT     -> supermarket / retail
+// MENU_ITEM   -> restaurant
+// SERVICE     -> salon / agency / professional
+// PACKAGE     -> bundled service/product
+// OFFER       -> promotional item
+// ============================================================
+
+model CatalogItem {
+  id         String @id @default(cuid())
+  categoryId String
+
+  name        String
+  description String?
+
+  type CatalogItemType @default(PRODUCT)
+
+  price          Decimal? @db.Decimal(12, 2)
+  compareAtPrice Decimal? @db.Decimal(12, 2)
+
+  currency String @default("INR")
+
+  image   String?
+  gallery Json?
+
+  sku  String?
+  unit String?
+
+  stock Decimal? @db.Decimal(12, 3)
+
+  // Useful for services.
+  durationMinutes Int?
+
+  isAvailable Boolean @default(true)
+  isFeatured  Boolean @default(false)
+
+  sortOrder Int @default(0)
+
+  // Flexible data for industry-specific fields.
+  //
+  // Example restaurant:
+  // {
+  //   "isVeg": true,
+  //   "spicy": "medium",
+  //   "calories": 450
+  // }
+  //
+  // Example supermarket:
+  // {
+  //   "brand": "Amul",
+  //   "weight": "500g"
+  // }
+  metadata Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  category CatalogCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  variants     CatalogItemVariant[]
+  optionGroups CatalogItemOptionGroup[]
+
+  @@index([categoryId])
+  @@index([categoryId, isAvailable])
+  @@index([type])
+  @@index([sku])
+  @@index([createdAt])
+}
+
+// ============================================================
+// ITEM VARIANTS
+//
+// Examples:
+//
+// Pizza:
+//   Small  -> â‚¹149
+//   Medium -> â‚¹249
+//   Large  -> â‚¹349
+//
+// Milk:
+//   500ml -> â‚¹30
+//   1L    -> â‚¹55
+// ============================================================
+
+model CatalogItemVariant {
+  id     String @id @default(cuid())
+  itemId String
+
+  name String
+
+  price          Decimal? @db.Decimal(12, 2)
+  compareAtPrice Decimal? @db.Decimal(12, 2)
+
+  sku String?
+
+  stock Decimal? @db.Decimal(12, 3)
+
+  isAvailable Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item CatalogItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([itemId, isAvailable])
+  @@index([sku])
+}
+
+// ============================================================
+// ITEM OPTION GROUP
+//
+// Example:
+//
+// Pizza
+//   Crust
+//     Thin      +â‚¹0
+//     Cheese    +â‚¹50
+//
+//   Toppings
+//     Paneer    +â‚¹40
+//     Mushroom  +â‚¹30
+// ============================================================
+
+model CatalogItemOptionGroup {
+  id     String @id @default(cuid())
+  itemId String
+
+  name String
+
+  required Boolean @default(false)
+
+  minSelect Int @default(0)
+  maxSelect Int @default(1)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item CatalogItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  options CatalogItemOption[]
+
+  @@index([itemId])
+}
+
+// ============================================================
+// ITEM OPTIONS
+// ============================================================
+
+model CatalogItemOption {
+  id      String @id @default(cuid())
+  groupId String
+
+  name String
+
+  price Decimal @default(0) @db.Decimal(12, 2)
+
+  isAvailable Boolean @default(true)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group CatalogItemOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+}
+
+// ============================================================
+// QR SCAN ANALYTICS
+// ============================================================
+
+model ScanEvent {
+  id       String @id @default(cuid())
+  qrCodeId String
+
+  ipAddress String?
+
+  country String?
+  city    String?
+
+  browser         String?
+  device          String?
+  operatingSystem String?
+
+  referrer  String?
+  userAgent String?
+
+  scannedAt DateTime @default(now())
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([qrCodeId])
+  @@index([scannedAt])
+  @@index([country])
+  @@index([city])
+  @@index([qrCodeId, scannedAt])
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
 enum QRType {
   STATIC
   DYNAMIC
+}
+
+enum QRExperienceType {
+  BUSINESS
+  CATALOG
+  MENU
+  SERVICES
+  PRODUCTS
+  CONTACT
+  REDIRECT
 }
 
 enum QRStatus {
@@ -174,13 +620,29 @@ enum QRStatus {
   EXPIRED
 }
 
+enum CatalogType {
+  GENERAL
+  MENU
+  PRODUCTS
+  SERVICES
+  PACKAGES
+  OFFERS
+}
+
+enum CatalogItemType {
+  PRODUCT
+  MENU_ITEM
+  SERVICE
+  PACKAGE
+  OFFER
+}
+
 enum AuthProviderType {
   EMAIL
   PHONE
   GOOGLE
 }
 
-// NEW
 enum OtpChannel {
   EMAIL
   WHATSAPP
