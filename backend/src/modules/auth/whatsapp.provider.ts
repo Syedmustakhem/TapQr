@@ -26,6 +26,5 @@ export async function sendOtpWhatsapp(toPhoneE164: string, otp: string): Promise
     });
   } catch (err: any) {
     console.error("[whatsapp] send failed:", err.response?.data?.error || err.message);
-    throw new AppError("Failed to send WhatsApp OTP. Please try again shortly.", 502);
-  }
+throw new AppError("Failed to send WhatsApp OTP. Please try again shortly.", 502, "WHATSAPP_SEND_FAILED");  }
 }
