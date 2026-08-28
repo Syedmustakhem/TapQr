@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { authenticate } from "../auth/auth.middleware";
+
 import { validate } from "../../cores/middleware/validate";
 
 import {
@@ -12,33 +13,37 @@ import { QRCodeController } from "./qrcode.controller";
 
 const router = Router();
 
-const qrCodeController = new QRCodeController();
+const qrCodeController =
+  new QRCodeController();
+
+/**
+ * All routes in this file are authenticated.
+ */
+
+router.use(authenticate);
 
 /**
  * Create QR Code
  */
 router.post(
   "/",
-  authenticate,
   validate(createQRCodeSchema),
   qrCodeController.createQRCode
 );
 
 /**
- * Get All QR Codes of a Business
+ * Get business QR Codes
  */
 router.get(
   "/business/:businessId",
-  authenticate,
   qrCodeController.getBusinessQRCodes
 );
 
 /**
- * Get Single QR Code
+ * Get single QR Code
  */
 router.get(
   "/:id",
-  authenticate,
   qrCodeController.getQRCodeById
 );
 
@@ -47,7 +52,6 @@ router.get(
  */
 router.put(
   "/:id",
-  authenticate,
   validate(updateQRCodeSchema),
   qrCodeController.updateQRCode
 );
@@ -57,7 +61,6 @@ router.put(
  */
 router.delete(
   "/:id",
-  authenticate,
   qrCodeController.deleteQRCode
 );
 

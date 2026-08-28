@@ -6,12 +6,18 @@ import {
 
 const router = Router();
 
-const qrCodeRedirectController =
+const controller =
   new QRCodeRedirectController();
 
+/**
+ * Public QR redirect.
+ *
+ * Example:
+ * GET /r/ABC123
+ */
 router.get(
   "/r/:shortCode",
-  qrCodeRedirectController.redirect
+  controller.redirect
 );
 
 export default router;
