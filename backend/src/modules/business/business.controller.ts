@@ -1,85 +1,220 @@
-import { Response } from "express";
+import { Response, NextFunction } from "express";
 
-import { AuthRequest } from "../auth/auth.types";
-import { ResponseHandler } from "../../cores/responses/ResponseHandler";
 import { BusinessService } from "./business.service";
+import { BusinessAuthRequest } from "./business.types";
+
+import {
+  createBusinessSchema,
+  updateBusinessProfileSchema,
+  updateBusinessSchema,
+} from "./business.validation";
 
 export class BusinessController {
-  private businessService = new BusinessService();
-getMyBusiness = async (
-  req: AuthRequest,
-  res: Response
-) => {
+  private service = new BusinessService();
 
-  try {
-
-    const result =
-      await this.businessService.getMyBusiness(
-        req.user!.id
-      );
-
-    return ResponseHandler.success(
-      res,
-      "Business Retrieved Successfully",
-      result
-    );
-
-  } catch (error: any) {
-
-    return res.status(500).json({
-      success: false,
-      message:
-        error.message ||
-        "Internal Server Error. please try again",
-    });
-
-  }
-
-};
-deleteBusiness = async (
-  req: AuthRequest,
-  res: Response
-) => {
-  try {
-    const result =
-      await this.businessService.deleteBusiness(
-        req.user!.id
-      );
-
-    return ResponseHandler.success(
-      res,
-      "Business Deleted Successfully",
-      result
-    );
-  } catch (error: any) {
-    return res.status(500).json({
-      success: false,
-      message:
-        error.message ||
-        "Internal Server Error",
-    });
-  }
-};
-  createBusiness = async (
-    req: AuthRequest,
-    res: Response
+  create = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
   ) => {
     try {
-      const result = await this.businessService.createBusiness({
-        ownerId: req.user!.id,
-        ...req.body,
-      });
+      const userId = req.user?.id;
 
-      return ResponseHandler.created(
-        res,
-        "Business Created Successfully",
-        result
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const data = createBusinessSchema.parse(
+        req.body
       );
-    } catch (error: any) {
-      return res.status(500).json({
-        success: false,
-        message: error.message || "Internal Server Error",
+
+      const business =
+        await this.service.create(
+          userId,
+          data
+        );
+
+      return res.status(201).json({
+        success: true,
+        message: "Business created successfully.",
+        data: business,
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getMine = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const businesses =
+        await this.service.getMyBusinesses(
+          userId
+        );
+
+      return res.status(200).json({
+        success: true,
+        message: "Businesses retrieved successfully.",
+        data: businesses,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getById = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const business =
+        await this.service.getById(
+          userId,
+          String(req.params.id)
+        );
+
+      return res.status(200).json({
+        success: true,
+        message: "Business retrieved successfully.",
+        data: business,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  update = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const data = updateBusinessSchema.parse(
+        req.body
+      );
+
+      const business =
+        await this.service.update(
+          userId,
+       String(req.params.id),
+          data
+        );
+
+      return res.status(200).json({
+        success: true,
+        message: "Business updated successfully.",
+        data: business,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateProfile = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const data =
+        updateBusinessProfileSchema.parse(
+          req.body
+        );
+
+      const profile =
+        await this.service.updateProfile(
+          userId,
+          String(req.params.id),
+          data
+        );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Business profile updated successfully.",
+        data: profile,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  delete = async (
+    req: BusinessAuthRequest,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const result =
+        await this.service.delete(
+          userId,
+          String(req.params.id),
+        );
+
+      return res.status(200).json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      next(error);
     }
   };
 }

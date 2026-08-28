@@ -1,64 +1,59 @@
 import { z } from "zod";
-import { BusinessMemberRole } from "@prisma/client";
+
+import {
+  BusinessMemberRole,
+} from "@prisma/client";
 
 /**
- * POST /staff/invitations
+ * Invite staff.
  */
-export const inviteStaffSchema = z.object({
-  body: z.object({
+export const inviteStaffSchema =
+  z.object({
     email: z
       .string()
       .trim()
-      .email("Invalid email address"),
+      .email(
+        "Invalid email address."
+      ),
 
-    role: z.nativeEnum(BusinessMemberRole),
-  }),
-});
+    role: z.enum([
+      BusinessMemberRole.MANAGER,
+      BusinessMemberRole.STAFF,
+    ]),
+  });
 
 /**
- * POST /staff/invitations/:token/accept
+ * Accept invitation.
+ *
+ * The token is normally taken from the
+ * URL parameter, but we keep this schema
+ * compatible with the existing route
+ * validation middleware.
  */
-export const acceptInvitationSchema = z.object({
-  params: z.object({
+export const acceptInvitationSchema =
+  z.object({
     token: z
       .string()
-      .min(1, "Invitation token is required"),
-  }),
-});
+      .trim()
+      .min(
+        32,
+        "Invalid invitation token."
+      ),
+  });
 
 /**
- * PATCH /staff/members/:memberId
+ * Update member role.
  */
-export const updateMemberRoleSchema = z.object({
-  params: z.object({
-    memberId: z
-      .string()
-      .uuid("Invalid member id"),
-  }),
-
-  body: z.object({
-    role: z.nativeEnum(BusinessMemberRole),
-  }),
-});
+export const updateMemberRoleSchema =
+  z.object({
+    role: z.enum([
+      BusinessMemberRole.MANAGER,
+      BusinessMemberRole.STAFF,
+    ]),
+  });
 
 /**
- * DELETE /staff/members/:memberId
+ * Remove member.
  */
-export const removeMemberSchema = z.object({
-  params: z.object({
-    memberId: z
-      .string()
-      .uuid("Invalid member id"),
-  }),
-});
-
-/**
- * GET /staff/members/:memberId (optional)
- */
-export const memberIdSchema = z.object({
-  params: z.object({
-    memberId: z
-      .string()
-      .uuid("Invalid member id"),
-  }),
-});
+export const removeMemberSchema =
+  z.object({}).strict();

@@ -3,13 +3,11 @@ import {
   NextFunction,
 } from "express";
 
+import { StaffService } from "../services/staff.service";
 import { AuthRequest } from "../../auth/auth.types";
 
-import { StaffService } from "../services/staff.service";
-
 export class StaffController {
-  private staffService =
-    new StaffService();
+  private staffService = new StaffService();
 
   /**
    * POST /staff/invitations
@@ -20,16 +18,27 @@ export class StaffController {
     next: NextFunction
   ) {
     try {
+      const ownerId = req.user?.id;
+
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
       const result =
         await this.staffService.inviteStaff({
-          ownerId: req.user!.id,
+          ownerId,
           email: req.body.email,
           role: req.body.role,
         });
 
-      return res.status(201).json(
-        result
-      );
+      return res.status(201).json({
+        success: true,
+        ...result,
+      });
     } catch (error) {
       next(error);
     }
@@ -44,21 +53,28 @@ export class StaffController {
     next: NextFunction
   ) {
     try {
-      const token = String(
-        req.params.token
-      );
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const token = String(req.params.token);
 
       const result =
-        await this.staffService.acceptInvitation(
-          {
-            userId: req.user!.id,
-            token,
-          }
-        );
+        await this.staffService.acceptInvitation({
+          userId,
+          token,
+        });
 
-      return res.status(200).json(
-        result
-      );
+      return res.status(200).json({
+        success: true,
+        ...result,
+      });
     } catch (error) {
       next(error);
     }
@@ -73,12 +89,23 @@ export class StaffController {
     next: NextFunction
   ) {
     try {
+      const ownerId = req.user?.id;
+
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
       const members =
         await this.staffService.getMembers(
-          req.user!.id
+          ownerId
         );
 
       return res.status(200).json({
+        success: true,
         members,
       });
     } catch (error) {
@@ -95,18 +122,28 @@ export class StaffController {
     next: NextFunction
   ) {
     try {
-      const memberId = String(
-        req.params.memberId
-      );
+      const ownerId = req.user?.id;
+
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const memberId =
+        String(req.params.memberId);
 
       const member =
         await this.staffService.updateMemberRole(
-          req.user!.id,
+          ownerId,
           memberId,
           req.body.role
         );
 
       return res.status(200).json({
+        success: true,
         message:
           "Member updated successfully.",
         member,
@@ -125,19 +162,29 @@ export class StaffController {
     next: NextFunction
   ) {
     try {
-      const memberId = String(
-        req.params.memberId
-      );
+      const ownerId = req.user?.id;
+
+      if (!ownerId) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication required.",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const memberId =
+        String(req.params.memberId);
 
       const result =
         await this.staffService.removeMember(
-          req.user!.id,
+          ownerId,
           memberId
         );
 
-      return res.status(200).json(
-        result
-      );
+      return res.status(200).json({
+        success: true,
+        ...result,
+      });
     } catch (error) {
       next(error);
     }
