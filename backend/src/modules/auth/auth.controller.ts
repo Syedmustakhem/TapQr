@@ -128,9 +128,10 @@ export class AuthController {
       return ResponseHandler.success(res, "Login Successful", result);
     } catch (error: any) {
       return res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.message || "Internal Server Error",
-      });
+  success: false,
+  message: error.message || "Internal Server Error",
+  code: error.code || "INTERNAL_ERROR",
+});
     }
   };
 }

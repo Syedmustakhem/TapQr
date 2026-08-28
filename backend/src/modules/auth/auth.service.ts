@@ -32,7 +32,7 @@ export class AuthService {
     const existingUser = await this.authRepository.findUserByEmail(data.email);
 
     if (existingUser) {
-      throw new AppError("Email already exists", 409);
+      throw new AppError("Email already exists", 409, "EMAIL_EXISTS");
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
@@ -53,7 +53,7 @@ export class AuthService {
     const user = await this.authRepository.findUserByEmail(data.email);
 
     if (!user) {
-      throw new AppError("Invalid Email or Password", 401);
+      throw new AppError("Invalid Email or Password", 401, "INVALID_CREDENTIALS");
     }
 
     const authProvider = await this.authRepository.findAuthProviderByUserId(
@@ -61,7 +61,7 @@ export class AuthService {
     );
 
     if (!authProvider || !authProvider.passwordHash) {
-      throw new AppError("Invalid Email or Password", 401);
+      throw new AppError("Invalid Email or Password", 401, "INVALID_CREDENTIALS");
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -70,7 +70,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new AppError("Invalid Email or Password", 401);
+      throw new AppError("Invalid Email or Password", 401, "INVALID_CREDENTIALS");
     }
 
     const accessToken = generateAccessToken(user.id, user.role);
@@ -95,7 +95,7 @@ export class AuthService {
     const user = await this.authRepository.findUserById(userId);
 
     if (!user) {
-      throw new AppError("User not found", 404);
+      throw new AppError("User not found", 404, "USER_NOT_FOUND");
     }
 
     return user;
@@ -110,20 +110,21 @@ export class AuthService {
       const user = await this.authRepository.findUserById(decoded.id);
 
       if (!user) {
-        throw new AppError("User not found", 404);
+        throw new AppError("User not found", 404, "USER_NOT_FOUND");
       }
 
       return {
         accessToken: generateAccessToken(user.id, user.role),
       };
     } catch {
-      throw new AppError("Invalid Refresh Token", 401);
+      throw new AppError("Invalid Refresh Token", 401, "INVALID_REFRESH_TOKEN");
     }
   }
 
   async sendEmailOtp(rawEmail: string) {
     const email = normalizeEmail(rawEmail);
-    await this.issueOtp(email, "EMAIL");
+    const existingUser = await this.authRepository.findUserByEmail(email);
+    await this.issueOtp(email, "EMAIL", existingUser?.fullName);
     return { message: "OTP sent to email" };
   }
 
@@ -135,7 +136,11 @@ export class AuthService {
 
     if (!user) {
       if (!fullName?.trim()) {
-        throw new AppError("fullName is required to complete signup.", 400);
+        throw new AppError(
+          "fullName is required to complete signup.",
+          400,
+          "FULL_NAME_REQUIRED"
+        );
       }
       user = await this.authRepository.createVerifiedUser({
         fullName: fullName.trim(),
@@ -163,7 +168,11 @@ export class AuthService {
 
     if (!user) {
       if (!fullName?.trim()) {
-        throw new AppError("fullName is required to complete signup.", 400);
+        throw new AppError(
+          "fullName is required to complete signup.",
+          400,
+          "FULL_NAME_REQUIRED"
+        );
       }
       user = await this.authRepository.createVerifiedUser({
         fullName: fullName.trim(),
@@ -205,7 +214,11 @@ export class AuthService {
     return this.issueSession(user);
   }
 
-  private async issueOtp(identifier: string, channel: OtpChannel) {
+  private async issueOtp(
+    identifier: string,
+    channel: OtpChannel,
+    emailDisplayName?: string
+  ) {
     const recent = await this.authRepository.findLatestOtp(identifier, channel);
     if (recent) {
       const secondsSinceLast = (Date.now() - recent.createdAt.getTime()) / 1000;
@@ -213,7 +226,8 @@ export class AuthService {
         const wait = Math.ceil(OTP_RESEND_COOLDOWN_SECONDS - secondsSinceLast);
         throw new AppError(
           `Please wait ${wait}s before requesting another code.`,
-          429
+          429,
+          "OTP_COOLDOWN"
         );
       }
     }
@@ -231,7 +245,7 @@ export class AuthService {
     });
 
     if (channel === "EMAIL") {
-      await sendOtpEmail(identifier, otp);
+      await sendOtpEmail(identifier, otp, emailDisplayName || "there");
     } else {
       await sendOtpWhatsapp(identifier, otp);
     }
@@ -243,23 +257,25 @@ export class AuthService {
     if (!record) {
       throw new AppError(
         "No pending verification found. Please request a new code.",
-        400
+        400,
+        "OTP_NOT_FOUND"
       );
     }
     if (record.expiresAt < new Date()) {
-      throw new AppError("Code expired. Please request a new one.", 400);
+      throw new AppError("Code expired. Please request a new one.", 400, "OTP_EXPIRED");
     }
     if (record.attempts >= record.maxAttempts) {
       throw new AppError(
         "Too many incorrect attempts. Please request a new code.",
-        429
+        429,
+        "OTP_LOCKED"
       );
     }
 
     const isValid = await compareOtp(otp, record.otpHash);
     if (!isValid) {
       await this.authRepository.incrementOtpAttempts(record.id);
-      throw new AppError("Incorrect code.", 400);
+      throw new AppError("Incorrect code.", 400, "OTP_INVALID");
     }
 
     await this.authRepository.consumeOtp(record.id);
