@@ -1,191 +1,70 @@
 import {
-  Request,
   Response,
   NextFunction,
 } from "express";
 
-import { AnalyticsService } from "./analytics.service";
+import {
+  AnalyticsAuthRequest,
+} from "./analytics.types";
+
+import {
+  analyticsQuerySchema,
+} from "./analytics.validation";
+
+import {
+  AnalyticsService,
+} from "./analytics.service";
 
 export class AnalyticsController {
-  private analyticsService =
+
+  private service =
     new AnalyticsService();
 
-  /**
-   * PUBLIC
-   * Record QR scan
-   */
-  recordScan = async (
-    req: Request,
+  getBusinessOverview = async (
+    req: AnalyticsAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const qrCodeId = String(
-        req.params.qrCodeId
-      );
+      const userId =
+        req.user?.id;
 
-      const scan =
-        await this.analyticsService.recordScan(
-          {
-            qrCodeId,
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
 
-            ipAddress: req.ip,
+          message:
+            "Authentication required.",
 
-            userAgent:
-              req.get("user-agent") ||
-              undefined,
+          code:
+            "UNAUTHORIZED",
+        });
+      }
 
-            referrer:
-              req.get("referer") ||
-              undefined,
-
-            browser:
-              req.get("sec-ch-ua") ||
-              undefined,
-
-            device:
-              req.get("sec-ch-ua-mobile") ||
-              undefined,
-
-            operatingSystem:
-              req.get(
-                "sec-ch-ua-platform"
-              ) || undefined,
-          }
+      const query =
+        analyticsQuerySchema.parse(
+          req.query
         );
-
-      return res.status(201).json({
-        success: true,
-        data: scan,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  /**
-   * OWNER
-   * Get QR scan history
-   */
-  getQRCodeScans = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const qrCodeId = String(
-        req.params.qrCodeId
-      );
-
-      const ownerId =
-        (req as any).user.id;
-
-      const scans =
-        await this.analyticsService.getQRCodeScans(
-          qrCodeId,
-          ownerId
-        );
-
-      return res.status(200).json({
-        success: true,
-        data: scans,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  /**
-   * OWNER
-   * Get QR scan count
-   */
-  getQRCodeScanCount = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const qrCodeId = String(
-        req.params.qrCodeId
-      );
-
-      const ownerId =
-        (req as any).user.id;
 
       const result =
-        await this.analyticsService.getQRCodeScanCount(
-          qrCodeId,
-          ownerId
+        await this.service.getBusinessOverview(
+          userId,
+
+String(req.params.businessId),
+          query.days,
+
+          query.qrCodeId
         );
 
       return res.status(200).json({
         success: true,
+
+        message:
+          "Analytics retrieved successfully.",
+
         data: result,
       });
-    } catch (error) {
-      next(error);
-    }
-  };
 
-  /**
-   * OWNER
-   * Get business scans
-   */
-  getBusinessScans = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const businessId = String(
-        req.params.businessId
-      );
-
-      const ownerId =
-        (req as any).user.id;
-
-      const scans =
-        await this.analyticsService.getBusinessScans(
-          businessId,
-          ownerId
-        );
-
-      return res.status(200).json({
-        success: true,
-        data: scans,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  /**
-   * OWNER
-   * Get business scan count
-   */
-  getBusinessScanCount = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const businessId = String(
-        req.params.businessId
-      );
-
-      const ownerId =
-        (req as any).user.id;
-
-      const result =
-        await this.analyticsService.getBusinessScanCount(
-          businessId,
-          ownerId
-        );
-
-      return res.status(200).json({
-        success: true,
-        data: result,
-      });
     } catch (error) {
       next(error);
     }

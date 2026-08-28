@@ -1,316 +1,400 @@
-import { AppError } from "../../cores/errors/AppError";
-
-import { AnalyticsRepository } from "./analytics.repository";
+import {
+  AppError,
+} from "../../cores/errors/AppError";
 
 import {
-  CreateScanEventDTO,
+  prisma,
+} from "../../config/prisma";
+
+import {
+  AnalyticsRepository,
+} from "./analytics.repository";
+
+import {
+  RecordScanInput,
 } from "./analytics.types";
 
-import { QRCodeRepository } from "../qrcode/qrcode.repository";
-
-import { BusinessRepository } from "../business/business.repository";
-
 export class AnalyticsService {
-  private analyticsRepository =
+
+  private repository =
     new AnalyticsRepository();
 
-  private qrCodeRepository =
-    new QRCodeRepository();
-
-  private businessRepository =
-    new BusinessRepository();
-
   /**
-   * Record QR scan
+   * Called by the public QR redirect flow.
    */
   async recordScan(
-    data: CreateScanEventDTO
+    data: RecordScanInput
   ) {
-    const qrCode =
-      await this.qrCodeRepository.findById(
-        data.qrCodeId
-      );
-
-    if (!qrCode) {
+    if (!data.qrCodeId) {
       throw new AppError(
-        "QR Code not found.",
-        404
+        "QR Code ID is required.",
+        400,
+        "QR_ID_REQUIRED"
       );
     }
 
-    if (qrCode.deletedAt) {
-      throw new AppError(
-        "QR Code not found.",
-        404
-      );
-    }
-
-    if (qrCode.status !== "ACTIVE") {
-      throw new AppError(
-        "QR Code is not active.",
-        410
-      );
-    }
-
-    return this.analyticsRepository
-      .createScanEventAndIncrementCount(
+    try {
+      return await this.repository.recordScan(
         data
       );
+    } catch (error: any) {
+      console.error(
+        "[Analytics] Failed to record scan:",
+        error
+      );
+
+      /*
+       * Scan tracking should never break
+       * the customer's QR experience.
+       *
+       * The QR redirect should continue even
+       * if analytics storage temporarily fails.
+       */
+      return null;
+    }
   }
 
-  /**
-   * Get QR scan history
-   */
-  async getQRCodeScans(
-    qrCodeId: string,
-    ownerId: string
-  ) {
-    const qrCode =
-      await this.qrCodeRepository.findById(
-        qrCodeId
-      );
-
-    if (!qrCode) {
-      throw new AppError(
-        "QR Code not found.",
-        404
-      );
-    }
-
-    const business =
-      await this.businessRepository.findById(
-        qrCode.businessId
-      );
-
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404
-      );
-    }
-
-    if (
-      business.ownerId !== ownerId
-    ) {
-      throw new AppError(
-        "Unauthorized.",
-        403
-      );
-    }
-
-    return this.analyticsRepository
-      .findByQRCodeId(qrCodeId);
-  }
-
-  /**
-   * Get QR scan count
-   */
-  async getQRCodeScanCount(
-    qrCodeId: string,
-    ownerId: string
-  ) {
-    const qrCode =
-      await this.qrCodeRepository.findById(
-        qrCodeId
-      );
-
-    if (!qrCode) {
-      throw new AppError(
-        "QR Code not found.",
-        404
-      );
-    }
-
-    const business =
-      await this.businessRepository.findById(
-        qrCode.businessId
-      );
-
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404
-      );
-    }
-
-    if (
-      business.ownerId !== ownerId
-    ) {
-      throw new AppError(
-        "Unauthorized.",
-        403
-      );
-    }
-
-    const total =
-      await this.analyticsRepository
-        .countByQRCodeId(qrCodeId);
-
-    return {
-      qrCodeId,
-      totalScans: total,
-    };
-  }
-
-  /**
-   * Get business scan count
-   */
-  async getBusinessScanCount(
+  async getBusinessOverview(
+    userId: string,
     businessId: string,
-    ownerId: string
+    days = 30,
+    qrCodeId?: string
   ) {
     const business =
-      await this.businessRepository.findById(
-        businessId
-      );
+      await prisma.business.findUnique({
+        where: {
+          id: businessId,
+        },
+
+        select: {
+          id: true,
+
+          ownerId: true,
+
+          status: true,
+        },
+      });
 
     if (!business) {
       throw new AppError(
         "Business not found.",
-        404
+        404,
+        "BUSINESS_NOT_FOUND"
       );
     }
 
     if (
-      business.ownerId !== ownerId
+      business.ownerId !== userId
     ) {
       throw new AppError(
-        "Unauthorized.",
-        403
+        "You do not have access to this business.",
+        403,
+        "BUSINESS_ACCESS_DENIED"
       );
     }
 
-    const total =
-      await this.analyticsRepository
-        .countByBusinessId(
-          businessId
-        );
-
-    return {
-      businessId,
-      totalScans: total,
-    };
-  }
-
-  /**
-   * Get business scan events
-   */
-  async getBusinessScans(
-    businessId: string,
-    ownerId: string
-  ) {
-    const business =
-      await this.businessRepository.findById(
-        businessId
+    const safeDays =
+      Math.min(
+        Math.max(
+          Math.floor(days),
+          1
+        ),
+        365
       );
 
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404
-      );
-    }
+    const endDate =
+      new Date();
 
-    if (
-      business.ownerId !== ownerId
-    ) {
-      throw new AppError(
-        "Unauthorized.",
-        403
-      );
-    }
+    const startDate =
+      new Date(endDate);
 
-    return this.analyticsRepository
-      .findByBusinessId(
-        businessId
-      );
-  }
+    startDate.setUTCDate(
+      startDate.getUTCDate() -
+        safeDays
+    );
 
-  /**
-   * QR scans by date range
-   */
-  async getQRCodeScansByDateRange(
-    qrCodeId: string,
-    ownerId: string,
-    from?: Date,
-    to?: Date
-  ) {
-    const qrCode =
-      await this.qrCodeRepository.findById(
-        qrCodeId
-      );
+    const previousEndDate =
+      new Date(startDate);
 
-    if (!qrCode) {
-      throw new AppError(
-        "QR Code not found.",
-        404
-      );
-    }
+    const previousStartDate =
+      new Date(startDate);
 
-    const business =
-      await this.businessRepository.findById(
-        qrCode.businessId
-      );
+    previousStartDate.setUTCDate(
+      previousStartDate.getUTCDate() -
+        safeDays
+    );
 
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404
-      );
-    }
-
-    if (
-      business.ownerId !== ownerId
-    ) {
-      throw new AppError(
-        "Unauthorized.",
-        403
-      );
-    }
-
-    return this.analyticsRepository
-      .findByQRCodeIdAndDateRange(
-        qrCodeId,
-        from,
-        to
-      );
-  }
-
-  /**
-   * Business scans by date range
-   */
-  async getBusinessScansByDateRange(
-    businessId: string,
-    ownerId: string,
-    from?: Date,
-    to?: Date
-  ) {
-    const business =
-      await this.businessRepository.findById(
-        businessId
-      );
-
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404
-      );
-    }
-
-    if (
-      business.ownerId !== ownerId
-    ) {
-      throw new AppError(
-        "Unauthorized.",
-        403
-      );
-    }
-
-    return this.analyticsRepository
-      .findByBusinessIdAndDateRange(
+    const qrCodes =
+      await this.repository.getBusinessQrCodes(
         businessId,
-        from,
-        to
+        qrCodeId
       );
+
+    if (
+      qrCodeId &&
+      qrCodes.length === 0
+    ) {
+      throw new AppError(
+        "QR Code not found.",
+        404,
+        "QR_NOT_FOUND"
+      );
+    }
+
+    const qrCodeIds =
+      qrCodes.map(
+        (qr) => qr.id
+      );
+
+    const [
+      totalScans,
+      previousPeriodScans,
+      dailyScans,
+      cities,
+      countries,
+      devices,
+      browsers,
+      operatingSystems,
+      recentScans,
+    ] = await Promise.all([
+      this.repository.countScans(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.countScans(
+        qrCodeIds,
+        previousStartDate,
+        previousEndDate
+      ),
+
+      this.repository.getDailyScans(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getCities(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getCountries(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getDevices(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getBrowsers(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getOperatingSystems(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getRecentScans(
+        qrCodeIds
+      ),
+    ]);
+
+    const percentageChange =
+      previousPeriodScans === 0
+        ? totalScans > 0
+          ? 100
+          : 0
+        : Number(
+            (
+              (
+                (totalScans -
+                  previousPeriodScans) /
+                previousPeriodScans
+              ) * 100
+            ).toFixed(1)
+          );
+
+    return {
+      period: {
+        days: safeDays,
+
+        startDate,
+
+        endDate,
+      },
+
+      overview: {
+        totalScans,
+
+        previousPeriodScans,
+
+        percentageChange,
+
+        activeQrCodes:
+          qrCodes.filter(
+            (qr) =>
+              qr.status === "ACTIVE"
+          ).length,
+      },
+
+      scansByDay:
+        this.buildDailySeries(
+          dailyScans,
+          startDate,
+          endDate
+        ),
+
+      qrPerformance:
+        qrCodes.map(
+          (qr) => ({
+            id: qr.id,
+
+            name: qr.name,
+
+            shortCode:
+              qr.shortCode,
+
+            scanCount:
+              qr.scanCount,
+          })
+        ),
+
+      locations: {
+        cities:
+          cities.map(
+            (item) => ({
+              name: item.city,
+
+              scans:
+                item._count._all,
+            })
+          ),
+
+        countries:
+          countries.map(
+            (item) => ({
+              name:
+                item.country,
+
+              scans:
+                item._count._all,
+            })
+          ),
+      },
+
+      technology: {
+        devices:
+          devices.map(
+            (item) => ({
+              name:
+                item.device,
+
+              scans:
+                item._count._all,
+            })
+          ),
+
+        browsers:
+          browsers.map(
+            (item) => ({
+              name:
+                item.browser,
+
+              scans:
+                item._count._all,
+            })
+          ),
+
+        operatingSystems:
+          operatingSystems.map(
+            (item) => ({
+              name:
+                item.operatingSystem,
+
+              scans:
+                item._count._all,
+            })
+          ),
+      },
+
+      recentScans,
+    };
+  }
+
+  private buildDailySeries(
+    rows: Array<{
+      date: Date;
+      scans: bigint;
+    }>,
+    startDate: Date,
+    endDate: Date
+  ) {
+    const result =
+      new Map<
+        string,
+        number
+      >();
+
+    const cursor =
+      new Date(startDate);
+
+    cursor.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    while (
+      cursor < endDate
+    ) {
+      const key =
+        cursor
+          .toISOString()
+          .slice(0, 10);
+
+      result.set(
+        key,
+        0
+      );
+
+      cursor.setUTCDate(
+        cursor.getUTCDate() + 1
+      );
+    }
+
+    for (
+      const row of rows
+    ) {
+      const key =
+        row.date
+          .toISOString()
+          .slice(0, 10);
+
+      result.set(
+        key,
+        Number(row.scans)
+      );
+    }
+
+    return Array.from(
+      result.entries()
+    ).map(
+      ([date, scans]) => ({
+        date,
+        scans,
+      })
+    );
   }
 }

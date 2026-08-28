@@ -1,10 +1,10 @@
 import { Router } from "express";
 
-import { StaffController } from "../controllers/staff.controller";
-
 import {
-  authenticate,
-} from "../../auth/auth.middleware";
+  StaffController,
+} from "../controllers/staff.controller";
+
+import { authenticate } from "../../auth/auth.middleware";
 
 import {
   validate,
@@ -12,18 +12,19 @@ import {
 
 import {
   inviteStaffSchema,
-  acceptInvitationSchema,
   updateMemberRoleSchema,
   removeMemberSchema,
 } from "../validations/staff.validation";
 
-const router = Router();
+const router =
+  Router();
 
 const staffController =
   new StaffController();
 
 /**
  * Invite Staff
+ *
  * POST /staff/invitations
  */
 router.post(
@@ -37,12 +38,12 @@ router.post(
 
 /**
  * Accept Invitation
+ *
  * POST /staff/invitations/:token/accept
  */
 router.post(
   "/invitations/:token/accept",
   authenticate,
-  validate(acceptInvitationSchema),
   staffController.acceptInvitation.bind(
     staffController
   )
@@ -50,6 +51,7 @@ router.post(
 
 /**
  * Get Business Members
+ *
  * GET /staff/members
  */
 router.get(
@@ -62,6 +64,7 @@ router.get(
 
 /**
  * Update Member Role
+ *
  * PATCH /staff/members/:memberId
  */
 router.patch(
@@ -75,6 +78,7 @@ router.patch(
 
 /**
  * Remove Member
+ *
  * DELETE /staff/members/:memberId
  */
 router.delete(

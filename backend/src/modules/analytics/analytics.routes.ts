@@ -1,53 +1,29 @@
 import { Router } from "express";
 
-import {
-  AnalyticsController,
-} from "./analytics.controller";
-
-import {
-  authenticate,
-} from "../auth/auth.middleware";
+import { AnalyticsController } from "./analytics.controller";
+import { authenticate } from "../auth/auth.middleware";
 
 const router = Router();
 
-const controller =
-  new AnalyticsController();
+const controller = new AnalyticsController();
 
 /**
- * PUBLIC
+ * All analytics endpoints require authentication.
  */
-
-router.post(
-  "/scan/:qrCodeId",
-  controller.recordScan
-);
+router.use(authenticate);
 
 /**
- * PROTECTED
+ * Business analytics
+ *
+ * GET /api/analytics/business/:businessId
+ *
+ * Optional:
+ * ?days=30
+ * ?days=30&qrCodeId=xxxx
  */
-
-router.get(
-  "/qr/:qrCodeId",
-  authenticate,
-  controller.getQRCodeScans
-);
-
-router.get(
-  "/qr/:qrCodeId/count",
-  authenticate,
-  controller.getQRCodeScanCount
-);
-
 router.get(
   "/business/:businessId",
-  authenticate,
-  controller.getBusinessScans
-);
-
-router.get(
-  "/business/:businessId/count",
-  authenticate,
-  controller.getBusinessScanCount
+  controller.getBusinessOverview
 );
 
 export default router;
