@@ -2,6 +2,29 @@ import { z } from "zod";
 
 const authModeSchema = z.enum(["register", "login"]);
 
+const E164_REGEX = /^\+[1-9]\d{6,14}$/;
+
+export const identifyAccountSchema = z
+  .object({
+    email: z
+      .email("Invalid email address")
+      .optional(),
+
+    phone: z
+      .string()
+      .regex(
+        E164_REGEX,
+        "Phone must be in E.164 format, e.g. +14155551234"
+      )
+      .optional(),
+  })
+  .refine(
+    (data) => !!data.email || !!data.phone,
+    {
+      message: "Email or phone is required",
+    }
+  );
+
 export const registerSchema = z.object({
   fullName: z
     .string()
@@ -15,7 +38,9 @@ export const registerSchema = z.object({
 });
 
 export const refreshSchema = z.object({
-  refreshToken: z.string().min(1, "Refresh token is required"),
+  refreshToken: z
+    .string()
+    .min(1, "Refresh token is required"),
 });
 
 export const loginSchema = z.object({
@@ -26,15 +51,8 @@ export const loginSchema = z.object({
     .min(8, "Password must be at least 8 characters"),
 });
 
-/*
-|--------------------------------------------------------------------------
-| EMAIL OTP
-|--------------------------------------------------------------------------
-*/
-
 export const sendEmailOtpSchema = z.object({
   email: z.email("Invalid email address"),
-
   mode: authModeSchema,
 });
 
@@ -52,14 +70,6 @@ export const verifyEmailOtpSchema = z.object({
     .min(3, "Full name must be at least 3 characters")
     .optional(),
 });
-
-/*
-|--------------------------------------------------------------------------
-| WHATSAPP OTP
-|--------------------------------------------------------------------------
-*/
-
-const E164_REGEX = /^\+[1-9]\d{6,14}$/;
 
 export const sendWhatsappOtpSchema = z.object({
   phone: z
@@ -91,12 +101,6 @@ export const verifyWhatsappOtpSchema = z.object({
     .min(3, "Full name must be at least 3 characters")
     .optional(),
 });
-
-/*
-|--------------------------------------------------------------------------
-| GOOGLE
-|--------------------------------------------------------------------------
-*/
 
 export const googleLoginSchema = z.object({
   idToken: z

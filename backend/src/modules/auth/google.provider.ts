@@ -13,12 +13,8 @@ export interface GoogleProfile {
 }
 
 /**
- * Verify a Google ID token issued for either:
- *
- * 1. TapQR Web
- * 2. TapQR Android App
- *
- * The backend is shared by both clients.
+ * Verify a Google ID token issued for an approved
+ * TapQR Web or Android OAuth client.
  */
 export async function verifyGoogleIdToken(
   idToken: string
@@ -31,10 +27,6 @@ export async function verifyGoogleIdToken(
     );
   }
 
-  /**
-   * Both clients are allowed to authenticate
-   * against the same TapQR backend.
-   */
   const allowedClientIds = [
     env.GOOGLE_CLIENT_ID_WEB,
     env.GOOGLE_CLIENT_ID_ANDROID,
@@ -45,7 +37,7 @@ export async function verifyGoogleIdToken(
 
   if (allowedClientIds.length === 0) {
     console.error(
-      "TapQR: No Google Client IDs configured."
+      "TapQR: No Google OAuth client IDs configured."
     );
 
     throw new AppError(
@@ -57,7 +49,7 @@ export async function verifyGoogleIdToken(
 
   try {
     const ticket = await client.verifyIdToken({
-      idToken,
+      idToken: idToken.trim(),
       audience: allowedClientIds,
     });
 
@@ -87,7 +79,7 @@ export async function verifyGoogleIdToken(
       );
     }
 
-    if (!payload.email_verified) {
+    if (payload.email_verified !== true) {
       throw new AppError(
         "Google account email is not verified",
         401,
@@ -97,29 +89,26 @@ export async function verifyGoogleIdToken(
 
     return {
       googleId: payload.sub,
-
-      email: payload.email,
-
+      email: payload.email.toLowerCase().trim(),
       name:
-        payload.name ||
+        payload.name?.trim() ||
         payload.email.split("@")[0],
-
-      avatarUrl:
-        payload.picture || null,
+      avatarUrl: payload.picture || null,
     };
-  } catch (error: any) {
-    console.error(
-      "TapQR Google token verification failed:",
-      error?.message || error
-    );
-
-    /**
-     * Don't replace our own AppErrors with
-     * "Invalid Google token".
-     */
+  } catch (error: unknown) {
     if (error instanceof AppError) {
       throw error;
     }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    console.error(
+      "TapQR Google token verification failed:",
+      message
+    );
 
     throw new AppError(
       "Invalid Google token",

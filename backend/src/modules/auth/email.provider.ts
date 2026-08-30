@@ -266,9 +266,16 @@ export async function sendOtpEmail(
     {
       from: env.EMAIL_FROM,
       to: toEmail,
-      subject: `${otp} is your TapQR verification code`,
-      html: renderOtpEmailHtml(otp, userName),
-      text: buildOtpEmailText(otp, userName),
+
+      template: {
+        id: "3d683be8-012e-4227-aa1e-6229b7002c94",
+
+        variables: {
+          USER_NAME: userName,
+          OTP: otp,
+          EXPIRY_MINUTES: "10",
+        },
+      },
     },
     {
       headers: {
