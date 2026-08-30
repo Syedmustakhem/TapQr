@@ -1,11 +1,23 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-import { AuthRepository } from "./auth.repository";
-import { RegisterUserDTO, LoginUserDTO } from "./auth.types";
+import {
+  AuthRepository,
+} from "./auth.repository";
 
-import { AppError } from "../../cores/errors/AppError";
-import { env } from "../../config/env";
+import {
+  RegisterUserDTO,
+  LoginUserDTO,
+} from "./auth.types";
+
+import {
+  AppError,
+} from "../../cores/errors/AppError";
+
+import {
+  env,
+} from "../../config/env";
+
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -19,33 +31,105 @@ import {
   normalizePhone,
 } from "./otp.util";
 
-import { sendOtpEmail } from "./email.provider";
-import { sendOtpWhatsapp } from "./whatsapp.provider";
-import { verifyGoogleIdToken } from "./google.provider";
+import {
+  sendOtpEmail,
+} from "./email.provider";
 
-const OTP_TTL_MINUTES = 5;
+import {
+  sendOtpWhatsapp,
+} from "./whatsapp.provider";
+
+import {
+  verifyGoogleIdToken,
+} from "./google.provider";
+
+const OTP_TTL_MINUTES =10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
-type OtpChannel = "EMAIL" | "WHATSAPP";
-type AuthMode = "register" | "login";
+type OtpChannel =
+  | "EMAIL"
+  | "WHATSAPP";
+
+type AuthMode =
+  | "register"
+  | "login";
 
 export class AuthService {
-  private authRepository = new AuthRepository();
+  private authRepository =
+    new AuthRepository();
 
   /*
   |--------------------------------------------------------------------------
-  | OLD PASSWORD REGISTRATION
+  | ACCOUNT IDENTIFICATION
   |--------------------------------------------------------------------------
-  | Kept for now so we don't break existing backend routes.
-  | We can remove this later after OTP authentication is fully tested.
   */
 
-  async register(data: RegisterUserDTO) {
-    const email = normalizeEmail(data.email);
+  async identifyAccount(params: {
+    email?: string;
+    phone?: string;
+  }) {
+    if (
+      !params.email &&
+      !params.phone
+    ) {
+      throw new AppError(
+        "Email or phone is required",
+        400,
+        "IDENTIFIER_REQUIRED"
+      );
+    }
+
+    if (params.email) {
+      const email =
+        normalizeEmail(
+          params.email
+        );
+
+      const user =
+        await this.authRepository
+          .findUserByEmail(email);
+
+      return {
+        exists: !!user,
+        method: "email" as const,
+        email,
+      };
+    }
+
+    const phone =
+      normalizePhone(
+        params.phone!
+      );
+
+    const user =
+      await this.authRepository
+        .findUserByPhone(phone);
+
+    return {
+      exists: !!user,
+      method: "phone" as const,
+      phone,
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | PASSWORD REGISTER
+  |--------------------------------------------------------------------------
+  */
+
+  async register(
+    data: RegisterUserDTO
+  ) {
+    const email =
+      normalizeEmail(
+        data.email
+      );
 
     const existingUser =
-      await this.authRepository.findUserByEmail(email);
+      await this.authRepository
+        .findUserByEmail(email);
 
     if (existingUser) {
       throw new AppError(
@@ -55,36 +139,45 @@ export class AuthService {
       );
     }
 
-    const passwordHash = await bcrypt.hash(
-      data.password,
-      10
-    );
+    const passwordHash =
+      await bcrypt.hash(
+        data.password,
+        10
+      );
 
     const user =
-      await this.authRepository.registerUser({
-        fullName: data.fullName.trim(),
-        email,
-        passwordHash,
-      });
+      await this.authRepository
+        .registerUser({
+          fullName:
+            data.fullName.trim(),
+          email,
+          passwordHash,
+        });
 
     return {
-      message: "User Registered Successfully",
+      message:
+        "User Registered Successfully",
       user,
     };
   }
 
   /*
   |--------------------------------------------------------------------------
-  | OLD PASSWORD LOGIN
+  | PASSWORD LOGIN
   |--------------------------------------------------------------------------
-  | Kept for compatibility for now.
   */
 
-  async login(data: LoginUserDTO) {
-    const email = normalizeEmail(data.email);
+  async login(
+    data: LoginUserDTO
+  ) {
+    const email =
+      normalizeEmail(
+        data.email
+      );
 
     const user =
-      await this.authRepository.findUserByEmail(email);
+      await this.authRepository
+        .findUserByEmail(email);
 
     if (!user) {
       throw new AppError(
@@ -95,9 +188,10 @@ export class AuthService {
     }
 
     const authProvider =
-      await this.authRepository.findAuthProviderByUserId(
-        user.id
-      );
+      await this.authRepository
+        .findAuthProviderByUserId(
+          user.id
+        );
 
     if (
       !authProvider ||
@@ -124,7 +218,9 @@ export class AuthService {
       );
     }
 
-    return this.issueSession(user);
+    return this.issueSession(
+      user
+    );
   }
 
   /*
@@ -136,7 +232,8 @@ export class AuthService {
   async logout() {
     return {
       success: true,
-      message: "Logout successful",
+      message:
+        "Logout successful",
     };
   }
 
@@ -146,9 +243,12 @@ export class AuthService {
   |--------------------------------------------------------------------------
   */
 
-  async me(userId: string) {
+  async me(
+    userId: string
+  ) {
     const user =
-      await this.authRepository.findUserById(userId);
+      await this.authRepository
+        .findUserById(userId);
 
     if (!user) {
       throw new AppError(
@@ -167,19 +267,23 @@ export class AuthService {
   |--------------------------------------------------------------------------
   */
 
-  async refresh(refreshToken: string) {
+  async refresh(
+    refreshToken: string
+  ) {
     try {
-      const decoded = jwt.verify(
-        refreshToken,
-        env.JWT_REFRESH_SECRET
-      ) as {
-        id: string;
-      };
+      const decoded =
+        jwt.verify(
+          refreshToken,
+          env.JWT_REFRESH_SECRET
+        ) as {
+          id: string;
+        };
 
       const user =
-        await this.authRepository.findUserById(
-          decoded.id
-        );
+        await this.authRepository
+          .findUserById(
+            decoded.id
+          );
 
       if (!user) {
         throw new AppError(
@@ -190,10 +294,11 @@ export class AuthService {
       }
 
       return {
-        accessToken: generateAccessToken(
-          user.id,
-          user.role
-        ),
+        accessToken:
+          generateAccessToken(
+            user.id,
+            user.role
+          ),
       };
     } catch {
       throw new AppError(
@@ -208,33 +313,24 @@ export class AuthService {
   |--------------------------------------------------------------------------
   | EMAIL OTP - SEND
   |--------------------------------------------------------------------------
-  |
-  | REGISTER:
-  |   Email must NOT already exist.
-  |
-  | LOGIN:
-  |   Email MUST already exist.
-  |
   */
 
   async sendEmailOtp(
     rawEmail: string,
     mode: AuthMode
   ) {
-    const email = normalizeEmail(rawEmail);
-
-    const existingUser =
-      await this.authRepository.findUserByEmail(
-        email
+    const email =
+      normalizeEmail(
+        rawEmail
       );
 
-    /*
-    |--------------------------------------------------------------------------
-    | REGISTER
-    |--------------------------------------------------------------------------
-    */
+    const existingUser =
+      await this.authRepository
+        .findUserByEmail(email);
 
-    if (mode === "register") {
+    if (
+      mode === "register"
+    ) {
       if (existingUser) {
         throw new AppError(
           "An account with this email already exists. Please login instead.",
@@ -249,15 +345,10 @@ export class AuthService {
       );
 
       return {
-        message: "OTP sent to email",
+        message:
+          "OTP sent to email",
       };
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOGIN
-    |--------------------------------------------------------------------------
-    */
 
     if (!existingUser) {
       throw new AppError(
@@ -274,7 +365,8 @@ export class AuthService {
     );
 
     return {
-      message: "OTP sent to email",
+      message:
+        "OTP sent to email",
     };
   }
 
@@ -290,27 +382,18 @@ export class AuthService {
     mode: AuthMode,
     fullName?: string
   ) {
-    const email = normalizeEmail(rawEmail);
-
-    const existingUser =
-      await this.authRepository.findUserByEmail(
-        email
+    const email =
+      normalizeEmail(
+        rawEmail
       );
 
-    /*
-    |--------------------------------------------------------------------------
-    | REGISTER
-    |--------------------------------------------------------------------------
-    */
+    const existingUser =
+      await this.authRepository
+        .findUserByEmail(email);
 
-    if (mode === "register") {
-      /*
-       * Check again here.
-       *
-       * This is important because someone could register
-       * the email between SEND OTP and VERIFY OTP.
-       */
-
+    if (
+      mode === "register"
+    ) {
       if (existingUser) {
         throw new AppError(
           "An account with this email already exists. Please login instead.",
@@ -334,20 +417,19 @@ export class AuthService {
       }
 
       const user =
-        await this.authRepository.createVerifiedUser({
-          fullName: fullName.trim(),
-          email,
-          provider: "EMAIL",
-        });
+        await this.authRepository
+          .createVerifiedUser({
+            fullName:
+              fullName.trim(),
+            email,
+            provider:
+              "EMAIL",
+          });
 
-      return this.issueSession(user);
+      return this.issueSession(
+        user
+      );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOGIN
-    |--------------------------------------------------------------------------
-    */
 
     if (!existingUser) {
       throw new AppError(
@@ -363,16 +445,11 @@ export class AuthService {
       otp
     );
 
-    /*
-     * Existing account.
-     *
-     * Mark/link the email provider as verified.
-     */
-
-    await this.authRepository.linkVerifiedProvider(
-      existingUser.id,
-      "EMAIL"
-    );
+    await this.authRepository
+      .linkVerifiedProvider(
+        existingUser.id,
+        "EMAIL"
+      );
 
     return this.issueSession(
       existingUser
@@ -389,20 +466,18 @@ export class AuthService {
     rawPhone: string,
     mode: AuthMode
   ) {
-    const phone = normalizePhone(rawPhone);
-
-    const existingUser =
-      await this.authRepository.findUserByPhone(
-        phone
+    const phone =
+      normalizePhone(
+        rawPhone
       );
 
-    /*
-    |--------------------------------------------------------------------------
-    | REGISTER
-    |--------------------------------------------------------------------------
-    */
+    const existingUser =
+      await this.authRepository
+        .findUserByPhone(phone);
 
-    if (mode === "register") {
+    if (
+      mode === "register"
+    ) {
       if (existingUser) {
         throw new AppError(
           "An account with this WhatsApp number already exists. Please login instead.",
@@ -417,15 +492,10 @@ export class AuthService {
       );
 
       return {
-        message: "OTP sent via WhatsApp",
+        message:
+          "OTP sent via WhatsApp",
       };
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOGIN
-    |--------------------------------------------------------------------------
-    */
 
     if (!existingUser) {
       throw new AppError(
@@ -441,7 +511,8 @@ export class AuthService {
     );
 
     return {
-      message: "OTP sent via WhatsApp",
+      message:
+        "OTP sent via WhatsApp",
     };
   }
 
@@ -457,25 +528,18 @@ export class AuthService {
     mode: AuthMode,
     fullName?: string
   ) {
-    const phone = normalizePhone(rawPhone);
-
-    const existingUser =
-      await this.authRepository.findUserByPhone(
-        phone
+    const phone =
+      normalizePhone(
+        rawPhone
       );
 
-    /*
-    |--------------------------------------------------------------------------
-    | REGISTER
-    |--------------------------------------------------------------------------
-    */
+    const existingUser =
+      await this.authRepository
+        .findUserByPhone(phone);
 
-    if (mode === "register") {
-      /*
-       * Check again during verification.
-       * Prevents race-condition duplicate registration.
-       */
-
+    if (
+      mode === "register"
+    ) {
       if (existingUser) {
         throw new AppError(
           "An account with this WhatsApp number already exists. Please login instead.",
@@ -499,20 +563,19 @@ export class AuthService {
       }
 
       const user =
-        await this.authRepository.createVerifiedUser({
-          fullName: fullName.trim(),
-          phone,
-          provider: "PHONE",
-        });
+        await this.authRepository
+          .createVerifiedUser({
+            fullName:
+              fullName.trim(),
+            phone,
+            provider:
+              "PHONE",
+          });
 
-      return this.issueSession(user);
+      return this.issueSession(
+        user
+      );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOGIN
-    |--------------------------------------------------------------------------
-    */
 
     if (!existingUser) {
       throw new AppError(
@@ -528,10 +591,11 @@ export class AuthService {
       otp
     );
 
-    await this.authRepository.linkVerifiedProvider(
-      existingUser.id,
-      "PHONE"
-    );
+    await this.authRepository
+      .linkVerifiedProvider(
+        existingUser.id,
+        "PHONE"
+      );
 
     return this.issueSession(
       existingUser
@@ -542,14 +606,6 @@ export class AuthService {
   |--------------------------------------------------------------------------
   | GOOGLE AUTHENTICATION
   |--------------------------------------------------------------------------
-  |
-  | REGISTER:
-  |   Existing email -> reject.
-  |
-  | LOGIN:
-  |   Existing account -> login.
-  |   Missing account -> reject.
-  |
   */
 
   async loginWithGoogle(
@@ -571,19 +627,10 @@ export class AuthService {
           googleId
         );
 
-    /*
-    |--------------------------------------------------------------------------
-    | GOOGLE PROVIDER ALREADY LINKED
-    |--------------------------------------------------------------------------
-    */
-
     if (existingProvider) {
-      /*
-       * If this is REGISTER, don't silently turn
-       * registration into login.
-       */
-
-      if (mode === "register") {
+      if (
+        mode === "register"
+      ) {
         throw new AppError(
           "This Google account is already registered. Please login instead.",
           409,
@@ -597,17 +644,12 @@ export class AuthService {
     }
 
     const existingUser =
-      await this.authRepository.findUserByEmail(
-        email
-      );
+      await this.authRepository
+        .findUserByEmail(email);
 
-    /*
-    |--------------------------------------------------------------------------
-    | GOOGLE REGISTER
-    |--------------------------------------------------------------------------
-    */
-
-    if (mode === "register") {
+    if (
+      mode === "register"
+    ) {
       if (existingUser) {
         throw new AppError(
           "An account with this email already exists. Please login instead.",
@@ -617,21 +659,21 @@ export class AuthService {
       }
 
       const user =
-        await this.authRepository.createVerifiedUser({
-          fullName: name.trim(),
-          email,
-          provider: "GOOGLE",
-          providerUserId: googleId,
-        });
+        await this.authRepository
+          .createVerifiedUser({
+            fullName:
+              name.trim(),
+            email,
+            provider:
+              "GOOGLE",
+            providerUserId:
+              googleId,
+          });
 
-      return this.issueSession(user);
+      return this.issueSession(
+        user
+      );
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | GOOGLE LOGIN
-    |--------------------------------------------------------------------------
-    */
 
     if (!existingUser) {
       throw new AppError(
@@ -641,16 +683,12 @@ export class AuthService {
       );
     }
 
-    /*
-     * The email already belongs to a TapQR user.
-     * Link the Google provider to that account.
-     */
-
-    await this.authRepository.linkVerifiedProvider(
-      existingUser.id,
-      "GOOGLE",
-      googleId
-    );
+    await this.authRepository
+      .linkVerifiedProvider(
+        existingUser.id,
+        "GOOGLE",
+        googleId
+      );
 
     return this.issueSession(
       existingUser
@@ -669,10 +707,11 @@ export class AuthService {
     emailDisplayName?: string
   ) {
     const recent =
-      await this.authRepository.findLatestOtp(
-        identifier,
-        channel
-      );
+      await this.authRepository
+        .findLatestOtp(
+          identifier,
+          channel
+        );
 
     if (recent) {
       const secondsSinceLast =
@@ -684,10 +723,11 @@ export class AuthService {
         secondsSinceLast <
         OTP_RESEND_COOLDOWN_SECONDS
       ) {
-        const wait = Math.ceil(
-          OTP_RESEND_COOLDOWN_SECONDS -
-            secondsSinceLast
-        );
+        const wait =
+          Math.ceil(
+            OTP_RESEND_COOLDOWN_SECONDS -
+              secondsSinceLast
+          );
 
         throw new AppError(
           `Please wait ${wait}s before requesting another code.`,
@@ -697,7 +737,8 @@ export class AuthService {
       }
     }
 
-    const otp = generateOtp(6);
+    const otp =
+      generateOtp(6);
 
     const otpHash =
       await hashOtp(otp);
@@ -705,23 +746,29 @@ export class AuthService {
     const expiresAt =
       new Date(
         Date.now() +
-          OTP_TTL_MINUTES * 60 * 1000
+          OTP_TTL_MINUTES *
+            60 *
+            1000
       );
 
-    await this.authRepository.createOtp({
-      identifier,
-      channel,
-      otpHash,
-      expiresAt,
-      maxAttempts:
-        OTP_MAX_ATTEMPTS,
-    });
+    await this.authRepository
+      .createOtp({
+        identifier,
+        channel,
+        otpHash,
+        expiresAt,
+        maxAttempts:
+          OTP_MAX_ATTEMPTS,
+      });
 
-    if (channel === "EMAIL") {
+    if (
+      channel === "EMAIL"
+    ) {
       await sendOtpEmail(
         identifier,
         otp,
-        emailDisplayName || "there"
+        emailDisplayName ||
+          "there"
       );
     } else {
       await sendOtpWhatsapp(
@@ -743,10 +790,11 @@ export class AuthService {
     otp: string
   ) {
     const record =
-      await this.authRepository.findLatestOtp(
-        identifier,
-        channel
-      );
+      await this.authRepository
+        .findLatestOtp(
+          identifier,
+          channel
+        );
 
     if (!record) {
       throw new AppError(
@@ -785,9 +833,10 @@ export class AuthService {
       );
 
     if (!isValid) {
-      await this.authRepository.incrementOtpAttempts(
-        record.id
-      );
+      await this.authRepository
+        .incrementOtpAttempts(
+          record.id
+        );
 
       throw new AppError(
         "Incorrect code.",
@@ -796,9 +845,10 @@ export class AuthService {
       );
     }
 
-    await this.authRepository.consumeOtp(
-      record.id
-    );
+    await this.authRepository
+      .consumeOtp(
+        record.id
+      );
   }
 
   /*
@@ -807,13 +857,15 @@ export class AuthService {
   |--------------------------------------------------------------------------
   */
 
-  private issueSession(user: {
-    id: string;
-    role: string;
-    fullName: string;
-    email: string | null;
-    phone: string | null;
-  }) {
+  private issueSession(
+    user: {
+      id: string;
+      role: string;
+      fullName: string;
+      email: string | null;
+      phone: string | null;
+    }
+  ) {
     const accessToken =
       generateAccessToken(
         user.id,
@@ -828,8 +880,11 @@ export class AuthService {
     return {
       message:
         "Authentication Successful",
+
       accessToken,
+
       refreshToken,
+
       user,
     };
   }

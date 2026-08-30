@@ -5,7 +5,6 @@ import { authenticate } from "./auth.middleware";
 
 import { validate } from "../../cores/middleware/validate";
 import { authLimiter } from "../../cores/middleware/rateLimiter";
-
 import {
   registerSchema,
   loginSchema,
@@ -15,6 +14,7 @@ import {
   sendWhatsappOtpSchema,
   verifyWhatsappOtpSchema,
   googleLoginSchema,
+  identifyAccountSchema,
 } from "./auth.validation";
 
 const router = Router();
@@ -26,6 +26,12 @@ const authController = new AuthController();
 | Public Routes — password-based (existing)
 |--------------------------------------------------------------------------
 */
+router.post(
+  "/identify",
+  authLimiter,
+  validate(identifyAccountSchema),
+  authController.identify
+);
 
 router.post(
   "/register",

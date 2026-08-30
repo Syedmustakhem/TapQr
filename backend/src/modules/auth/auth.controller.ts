@@ -10,13 +10,54 @@ export class AuthController {
 
   /*
   |--------------------------------------------------------------------------
+  | ACCOUNT IDENTIFICATION
+  |--------------------------------------------------------------------------
+  */
+
+  identify = async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const result =
+        await this.authService.identifyAccount({
+          email: req.body.email,
+          phone: req.body.phone,
+        });
+
+      return ResponseHandler.success(
+        res,
+        "Account identified successfully",
+        result
+      );
+    } catch (error: any) {
+      return res.status(
+        error.statusCode || 500
+      ).json({
+        success: false,
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
+      });
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
   | PASSWORD REGISTER
   |--------------------------------------------------------------------------
   */
 
-  register = async (req: Request, res: Response) => {
+  register = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
-      const result = await this.authService.register(req.body);
+      const result =
+        await this.authService.register(req.body);
 
       return ResponseHandler.created(
         res,
@@ -24,10 +65,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -38,9 +85,13 @@ export class AuthController {
   |--------------------------------------------------------------------------
   */
 
-  login = async (req: Request, res: Response) => {
+  login = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
-      const result = await this.authService.login(req.body);
+      const result =
+        await this.authService.login(req.body);
 
       return ResponseHandler.success(
         res,
@@ -48,10 +99,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -62,19 +119,24 @@ export class AuthController {
   |--------------------------------------------------------------------------
   */
 
-  me = async (req: AuthRequest, res: Response) => {
+  me = async (
+    req: AuthRequest,
+    res: Response
+  ) => {
     try {
       if (!req.user?.id) {
         return res.status(401).json({
           success: false,
-          message: "Authentication required",
+          message:
+            "Authentication required",
           code: "UNAUTHORIZED",
         });
       }
 
-      const result = await this.authService.me(
-        req.user.id
-      );
+      const result =
+        await this.authService.me(
+          req.user.id
+        );
 
       return ResponseHandler.success(
         res,
@@ -82,10 +144,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -96,9 +164,13 @@ export class AuthController {
   |--------------------------------------------------------------------------
   */
 
-  logout = async (_req: Request, res: Response) => {
+  logout = async (
+    _req: Request,
+    res: Response
+  ) => {
     try {
-      const result = await this.authService.logout();
+      const result =
+        await this.authService.logout();
 
       return ResponseHandler.success(
         res,
@@ -106,10 +178,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -120,11 +198,15 @@ export class AuthController {
   |--------------------------------------------------------------------------
   */
 
-  refresh = async (req: Request, res: Response) => {
+  refresh = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
-      const result = await this.authService.refresh(
-        req.body.refreshToken
-      );
+      const result =
+        await this.authService.refresh(
+          req.body.refreshToken
+        );
 
       return ResponseHandler.success(
         res,
@@ -132,10 +214,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -144,22 +232,12 @@ export class AuthController {
   |--------------------------------------------------------------------------
   | EMAIL OTP - SEND
   |--------------------------------------------------------------------------
-  |
-  | REGISTER:
-  | {
-  |   email: "...",
-  |   mode: "register"
-  | }
-  |
-  | LOGIN:
-  | {
-  |   email: "...",
-  |   mode: "login"
-  | }
-  |
   */
 
-  sendEmailOtp = async (req: Request, res: Response) => {
+  sendEmailOtp = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
       const result =
         await this.authService.sendEmailOtp(
@@ -173,10 +251,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -185,25 +269,12 @@ export class AuthController {
   |--------------------------------------------------------------------------
   | EMAIL OTP - VERIFY
   |--------------------------------------------------------------------------
-  |
-  | REGISTER:
-  | {
-  |   email: "...",
-  |   otp: "123456",
-  |   mode: "register",
-  |   fullName: "..."
-  | }
-  |
-  | LOGIN:
-  | {
-  |   email: "...",
-  |   otp: "123456",
-  |   mode: "login"
-  | }
-  |
   */
 
-  verifyEmailOtp = async (req: Request, res: Response) => {
+  verifyEmailOtp = async (
+    req: Request,
+    res: Response
+  ) => {
     try {
       const result =
         await this.authService.verifyEmailOtp(
@@ -219,10 +290,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -250,10 +327,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -283,10 +366,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };
@@ -295,19 +384,6 @@ export class AuthController {
   |--------------------------------------------------------------------------
   | GOOGLE AUTHENTICATION
   |--------------------------------------------------------------------------
-  |
-  | REGISTER:
-  | {
-  |   idToken: "...",
-  |   mode: "register"
-  | }
-  |
-  | LOGIN:
-  | {
-  |   idToken: "...",
-  |   mode: "login"
-  | }
-  |
   */
 
   googleLogin = async (
@@ -327,10 +403,16 @@ export class AuthController {
         result
       );
     } catch (error: any) {
-      return res.status(error.statusCode || 500).json({
+      return res.status(
+        error.statusCode || 500
+      ).json({
         success: false,
-        message: error.message || "Internal Server Error",
-        code: error.code || "INTERNAL_ERROR",
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
       });
     }
   };

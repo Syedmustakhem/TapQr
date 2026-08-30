@@ -4,11 +4,11 @@
   "description": "TapQR Backend API",
   "main": "dist/server.js",
   "scripts": {
-  "dev": "ts-node-dev --respawn src/server.ts",
-  "build": "prisma generate && tsc",
-  "start": "node dist/server.js",
-  "db:seed": "ts-node prisma/seed.ts"
-},
+    "dev": "ts-node-dev --respawn src/server.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/server.js",
+    "db:seed": "ts-node prisma/seed.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -25,6 +25,7 @@
     "jsonwebtoken": "^9.0.3",
     "ms": "^2.1.0",
     "prisma": "^6.16.2",
+    "resend": "^6.25.0",
     "slugify": "^1.6.9",
     "zod": "^4.4.3"
   },
