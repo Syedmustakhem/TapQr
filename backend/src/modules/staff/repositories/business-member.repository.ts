@@ -133,8 +133,8 @@ export class BusinessMemberRepository {
       },
 
       orderBy: {
-        joinedAt: "desc",
-      },
+  createdAt: "desc",
+},
     });
   }
 

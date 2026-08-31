@@ -27,6 +27,8 @@ model User {
   businesses      Business[]
   sentInvitations BusinessInvitation[]
   memberships     BusinessMember[]
+
+  invitedMembers BusinessMember[] @relation("InvitedBy")
 }
 
 model AuthProvider {
@@ -95,11 +97,15 @@ model Business {
 
   members BusinessMember[]
 
+  whatsappAccounts WhatsAppBusinessAccount[]
+
   invitations BusinessInvitation[]
 
-  qrCodes QRCode[]
-
-  catalogs Catalog[]
+  qrCodes          QRCode[]
+  whatsappContacts WhatsAppContact[]
+  conversations    Conversation[]
+  whatsappMessages WhatsAppMessage[]
+  catalogs         Catalog[]
 
   @@index([ownerId])
   @@index([status])
@@ -168,21 +174,23 @@ model BusinessMember {
   userId     String
   businessId String
 
+  assignedConversations Conversation[] @relation("ConversationAssignedMember")
+
   role   BusinessMemberRole   @default(STAFF)
   status BusinessMemberStatus @default(ACTIVE)
 
   invitedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  joinedAt  DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  invitedBy User? @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
   @@unique([userId, businessId])
-  @@index([userId])
   @@index([businessId])
+  @@index([role])
   @@index([status])
   @@index([invitedById])
 }
@@ -277,7 +285,8 @@ model QRCode {
 
   branding QRBranding?
 
-  scanEvents ScanEvent[]
+  scanEvents    ScanEvent[]
+  conversations Conversation[]
 
   @@index([businessId])
   @@index([catalogId])
@@ -593,6 +602,190 @@ model ScanEvent {
   @@index([country])
   @@index([city])
   @@index([qrCodeId, scannedAt])
+}
+
+// ============================================================
+// WHATSAPP BUSINESS SUPPORT
+// ============================================================
+
+model WhatsAppContact {
+  id String @id @default(cuid())
+
+  businessId String
+
+  phoneNumber String
+  profileName String?
+  displayName String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSeenAt DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  conversations Conversation[]
+
+  @@unique([businessId, phoneNumber])
+  @@index([businessId])
+  @@index([phoneNumber])
+  @@index([lastSeenAt])
+}
+
+// ============================================================
+// WHATSAPP CONVERSATION
+// ============================================================
+
+model Conversation {
+  id String @id @default(cuid())
+
+  businessId String
+  contactId  String
+
+  // QR that started/created the conversation
+  qrCodeId String?
+
+  status ConversationStatus @default(OPEN)
+
+  priority ConversationPriority @default(NORMAL)
+
+  assignedToId String?
+
+  assignedTo    BusinessMember? @relation("ConversationAssignedMember", fields: [assignedToId], references: [id], onDelete: SetNull)
+  lastMessageAt DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  contact WhatsAppContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  qrCode QRCode? @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+
+  messages WhatsAppMessage[]
+
+  @@index([businessId])
+  @@index([contactId])
+  @@index([qrCodeId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([lastMessageAt])
+}
+
+model WhatsAppBusinessAccount {
+  id String @id @default(cuid())
+
+  businessId String
+
+  phoneNumberId     String
+  businessAccountId String?
+
+  displayPhoneNumber String?
+  verifiedName       String?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([phoneNumberId])
+  @@index([businessId])
+  @@index([businessAccountId])
+}
+
+// ============================================================
+// WHATSAPP MESSAGE
+// ============================================================
+
+model WhatsAppMessage {
+  id String @id @default(cuid())
+
+  businessId     String
+  conversationId String
+
+  // Meta WhatsApp message ID
+  whatsappMessageId String? @unique
+
+  direction WhatsAppMessageDirection
+
+  type WhatsAppMessageType @default(TEXT)
+
+  text String?
+
+  // Meta media ID / URL if applicable
+  mediaId  String?
+  mediaUrl String?
+
+  status WhatsAppMessageStatus @default(PENDING)
+
+  errorCode    String?
+  errorMessage String?
+
+  // Useful for templates
+  templateName String?
+
+  // Raw Meta payload when needed for debugging
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([conversationId])
+  @@index([status])
+  @@index([direction])
+  @@index([createdAt])
+  @@index([whatsappMessageId])
+}
+
+// ============================================================
+// ENUMS FOR WHATSAPP
+// ============================================================
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum ConversationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum WhatsAppMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WhatsAppMessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+  CONTACT
+  TEMPLATE
+  INTERACTIVE
+  UNKNOWN
+}
+
+enum WhatsAppMessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
 }
 
 // ============================================================
