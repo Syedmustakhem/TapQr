@@ -18,7 +18,7 @@ import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 
 const app = express();
-
+app.set("trust proxy", 1);
 /**
  * Security
  */
