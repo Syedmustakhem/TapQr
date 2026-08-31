@@ -3,68 +3,56 @@ import axios from "axios";
 import { env } from "../../config/env";
 import { AppError } from "../../cores/errors/AppError";
 
-/**
- * Resend production template.
- *
- * This template must be published in Resend.
- */
-const RESEND_TEMPLATE_ID =
-  "3d683be8-012e-4227-aa1e-6229b7002c94";
-
 const RESEND_API_URL =
   "https://api.resend.com/emails";
+
+const OTP_TEMPLATE_ID =
+  "3d683be8-012e-4227-aa1e-6229b7002c94";
 
 export async function sendOtpEmail(
   toEmail: string,
   otp: string,
-  userName: string = "there"
+  userName = "there"
 ): Promise<void> {
-  if (
-    !env.EMAIL_API_KEY
-  ) {
+  /*
+   * Configuration checks
+   */
+  if (!env.EMAIL_API_KEY?.trim()) {
+    console.error(
+      "[EMAIL] EMAIL_API_KEY is missing"
+    );
+
     throw new AppError(
-      "Email service is not configured.",
+      "Email authentication is not configured.",
       500,
-      "EMAIL_API_KEY_MISSING"
+      "EMAIL_NOT_CONFIGURED"
     );
   }
 
-  if (
-    !env.EMAIL_FROM
-  ) {
+  if (!env.EMAIL_FROM?.trim()) {
+    console.error(
+      "[EMAIL] EMAIL_FROM is missing"
+    );
+
     throw new AppError(
       "Email sender is not configured.",
       500,
-      "EMAIL_FROM_MISSING"
+      "EMAIL_FROM_NOT_CONFIGURED"
     );
   }
 
-  const normalizedEmail =
-    toEmail
-      .trim()
-      .toLowerCase();
-
   const payload = {
-    from:
-      env.EMAIL_FROM,
+    from: env.EMAIL_FROM,
 
-    to: [
-      normalizedEmail,
-    ],
+    to: [toEmail],
 
     template: {
-      id:
-        RESEND_TEMPLATE_ID,
+      id: OTP_TEMPLATE_ID,
 
       variables: {
-        USER_NAME:
-          userName,
-
-        OTP:
-          otp,
-
-        EXPIRY_MINUTES:
-          "10",
+        USER_NAME: userName,
+        OTP: otp,
+        EXPIRY_MINUTES: "10",
       },
     },
   };
@@ -73,10 +61,10 @@ export async function sendOtpEmail(
     const response =
       await axios.post(
         RESEND_API_URL,
-
         payload,
-
         {
+          timeout: 15000,
+
           headers: {
             Authorization:
               `Bearer ${env.EMAIL_API_KEY}`,
@@ -84,73 +72,36 @@ export async function sendOtpEmail(
             "Content-Type":
               "application/json",
           },
-
-          timeout: 15000,
-
-          validateStatus:
-            () => true,
         }
       );
-
-    if (
-      response.status < 200 ||
-      response.status >= 300
-    ) {
-      console.error(
-        "[TapQR][Email] Resend rejected OTP:",
-        {
-          status:
-            response.status,
-
-          data:
-            response.data,
-        }
-      );
-
-      throw new AppError(
-        "Email OTP could not be sent.",
-        502,
-        "EMAIL_SEND_FAILED"
-      );
-    }
 
     console.log(
-      "[TapQR][Email] OTP accepted by Resend:",
+      "[EMAIL] OTP sent successfully",
       {
-        status:
-          response.status,
-
-        id:
+        to: toEmail,
+        resendId:
           response.data?.id,
       }
     );
-  } catch (
-    error: any
-  ) {
-    if (
-      error instanceof AppError
-    ) {
-      throw error;
-    }
-
+  } catch (error: any) {
     console.error(
-      "[TapQR][Email] Resend API error:",
+      "[EMAIL] Resend API error",
       {
-        message:
-          error?.message,
-
         status:
           error?.response?.status,
 
         data:
           error?.response?.data,
+
+        message:
+          error?.message,
       }
     );
 
     throw new AppError(
-      "Email OTP service is temporarily unavailable.",
+      "Failed to send email OTP. Please try again shortly.",
       502,
-      "EMAIL_SERVICE_UNAVAILABLE"
+      "EMAIL_SEND_FAILED"
     );
   }
 }
