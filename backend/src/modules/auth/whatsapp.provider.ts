@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 import { env } from "../../config/env";
 import { AppError } from "../../cores/errors/AppError";
@@ -8,8 +8,11 @@ export async function sendOtpWhatsapp(
   otp: string
 ): Promise<void> {
   /*
+   * -------------------------------------------------------
    * Validate configuration
+   * -------------------------------------------------------
    */
+
   if (!env.WHATSAPP_ACCESS_TOKEN?.trim()) {
     console.error(
       "[WHATSAPP] WHATSAPP_ACCESS_TOKEN is missing"
@@ -47,17 +50,39 @@ export async function sendOtpWhatsapp(
   }
 
   /*
-   * E.164 -> digits only
+   * -------------------------------------------------------
+   * Validate phone number
+   *
+   * Input must already be E.164:
    *
    * +919121657235
-   * becomes
-   * 919121657235
+   * +14155552671
+   * +447911123456
    *
-   * This works internationally.
+   * Meta API receives digits only.
+   * -------------------------------------------------------
    */
-  const phone = toPhoneE164.replace(/\D/g, "");
 
-  if (!phone) {
+  const normalizedPhone =
+    toPhoneE164
+      .trim()
+      .replace(/[\s().-]/g, "");
+
+  if (
+    !/^\+[1-9]\d{6,14}$/.test(
+      normalizedPhone
+    )
+  ) {
+    console.error(
+      "[WHATSAPP] Invalid E.164 phone number",
+      {
+        phone:
+          normalizedPhone
+            ? `${normalizedPhone.slice(0, 4)}******${normalizedPhone.slice(-2)}`
+            : "empty",
+      }
+    );
+
     throw new AppError(
       "Invalid WhatsApp phone number.",
       400,
@@ -66,22 +91,45 @@ export async function sendOtpWhatsapp(
   }
 
   /*
-   * Meta Graph API
+   * Meta expects the number without "+"
+   *
+   * +919121657235
+   * ->
+   * 919121657235
    */
+
+  const phone =
+    normalizedPhone.slice(1);
+
+  /*
+   * -------------------------------------------------------
+   * Meta Graph API
+   * -------------------------------------------------------
+   */
+
+  const apiVersion =
+    env.WHATSAPP_API_VERSION?.trim() ||
+    "v19.0";
+
   const url =
     `https://graph.facebook.com/` +
-    `${env.WHATSAPP_API_VERSION}/` +
+    `${apiVersion}/` +
     `${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
   /*
-   * Authentication template
+   * -------------------------------------------------------
+   * WhatsApp Authentication Template
    *
-   * Your current template:
+   * Template:
    * freshlaa_otp_verification
    *
    * Language:
    * en
+   *
+   * OTP is supplied as body parameter #1.
+   * -------------------------------------------------------
    */
+
   const payload = {
     messaging_product: "whatsapp",
 
@@ -97,7 +145,8 @@ export async function sendOtpWhatsapp(
 
       language: {
         code:
-          env.WHATSAPP_OTP_TEMPLATE_LANG,
+          env.WHATSAPP_OTP_TEMPLATE_LANG ||
+          "en",
       },
 
       components: [
@@ -130,6 +179,9 @@ export async function sendOtpWhatsapp(
 
             "Content-Type":
               "application/json",
+
+            Accept:
+              "application/json",
           },
         }
       );
@@ -145,17 +197,33 @@ export async function sendOtpWhatsapp(
 
         status:
           response.status,
+
+        template:
+          env.WHATSAPP_OTP_TEMPLATE_NAME,
+
+        apiVersion,
       }
     );
-  } catch (error: any) {
+  } catch (error) {
+    const axiosError =
+      error as AxiosError<{
+        error?: {
+          type?: string;
+          message?: string;
+          code?: number;
+          error_subcode?: number;
+          error_data?: unknown;
+        };
+      }>;
+
     const metaError =
-      error?.response?.data?.error;
+      axiosError.response?.data?.error;
 
     console.error(
       "[WHATSAPP] Meta API error",
       {
         status:
-          error?.response?.status,
+          axiosError.response?.status,
 
         type:
           metaError?.type,
@@ -174,6 +242,11 @@ export async function sendOtpWhatsapp(
 
         phone:
           `${phone.slice(0, 3)}******${phone.slice(-2)}`,
+
+        template:
+          env.WHATSAPP_OTP_TEMPLATE_NAME,
+
+        apiVersion,
       }
     );
 

@@ -24,27 +24,32 @@ export const env = {
     process.env.GOOGLE_CLIENT_ID_ANDROID!,
 
   // WhatsApp
-  WHATSAPP_ACCESS_TOKEN:
-    process.env.WHATSAPP_ACCESS_TOKEN!,
+ // WhatsApp Cloud API
+WHATSAPP_ACCESS_TOKEN:
+  process.env.WHATSAPP_ACCESS_TOKEN!,
 
-  WHATSAPP_PHONE_NUMBER_ID:
-    process.env.WHATSAPP_PHONE_NUMBER_ID!,
+WHATSAPP_PHONE_NUMBER_ID:
+  process.env.WHATSAPP_PHONE_NUMBER_ID!,
 
-  WHATSAPP_OTP_TEMPLATE_NAME:
-    process.env.WHATSAPP_OTP_TEMPLATE_NAME!,
+WHATSAPP_OTP_TEMPLATE_NAME:
+  process.env.WHATSAPP_OTP_TEMPLATE_NAME!,
 
-  WHATSAPP_OTP_TEMPLATE_LANG:
-    process.env.WHATSAPP_OTP_TEMPLATE_LANG ||
-    "en",
+WHATSAPP_OTP_TEMPLATE_LANG:
+  process.env.WHATSAPP_OTP_TEMPLATE_LANG ||
+  "en",
 
-  WHATSAPP_API_VERSION:
-    process.env.WHATSAPP_API_VERSION ||
-    "v19.0",
+WHATSAPP_API_VERSION:
+  process.env.WHATSAPP_API_VERSION ||
+  "v19.0",
 
   // Resend
-  EMAIL_API_KEY:
-    process.env.EMAIL_API_KEY!,
+  // Email / Resend
+EMAIL_API_KEY: process.env.EMAIL_API_KEY!,
 
-  EMAIL_FROM:
-    process.env.EMAIL_FROM!,
+EMAIL_FROM:
+  process.env.EMAIL_FROM ||
+  "noreply@tapqr.shop",
+
+RESEND_TEMPLATE_ID:
+  process.env.RESEND_TEMPLATE_ID!,
 };
