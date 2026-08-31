@@ -42,6 +42,9 @@ WHATSAPP_API_VERSION:
   process.env.WHATSAPP_API_VERSION ||
   "v19.0",
 
+ WHATSAPP_WEBHOOK_VERIFY_TOKEN:
+  process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!, 
+
   // Resend
   // Email / Resend
 EMAIL_API_KEY: process.env.EMAIL_API_KEY!,

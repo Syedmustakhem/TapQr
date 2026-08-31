@@ -16,7 +16,7 @@ import optionGroupRoutes from "./modules/catalog/option-group.routes";
 import optionRoutes from "./modules/catalog/option.routes";
 import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
-
+import whatsappWebhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
 const app = express();
 app.set("trust proxy", 1);
 /**
@@ -141,6 +141,11 @@ app.use(
   redirectRoutes
 );
 
+
+app.use(
+  "/api/whatsapp/webhook",
+  whatsappWebhookRoutes
+);
 /**
  * Global error handler
  *
