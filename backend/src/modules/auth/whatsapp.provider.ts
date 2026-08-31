@@ -3,6 +3,17 @@ import axios, { AxiosError } from "axios";
 import { env } from "../../config/env";
 import { AppError } from "../../cores/errors/AppError";
 
+type MetaErrorResponse = {
+  error?: {
+    type?: string;
+    message?: string;
+    code?: number;
+    error_subcode?: number;
+    error_data?: unknown;
+    fbtrace_id?: string;
+  };
+};
+
 export async function sendOtpWhatsapp(
   toPhoneE164: string,
   otp: string
@@ -13,7 +24,24 @@ export async function sendOtpWhatsapp(
    * -------------------------------------------------------
    */
 
-  if (!env.WHATSAPP_ACCESS_TOKEN?.trim()) {
+  const accessToken =
+    env.WHATSAPP_ACCESS_TOKEN?.trim();
+
+  const phoneNumberId =
+    env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+
+  const templateName =
+    env.WHATSAPP_OTP_TEMPLATE_NAME?.trim();
+
+  const templateLanguage =
+    env.WHATSAPP_OTP_TEMPLATE_LANG?.trim() ||
+    "en";
+
+  const apiVersion =
+    env.WHATSAPP_API_VERSION?.trim() ||
+    "v19.0";
+
+  if (!accessToken) {
     console.error(
       "[WHATSAPP] WHATSAPP_ACCESS_TOKEN is missing"
     );
@@ -25,7 +53,7 @@ export async function sendOtpWhatsapp(
     );
   }
 
-  if (!env.WHATSAPP_PHONE_NUMBER_ID?.trim()) {
+  if (!phoneNumberId) {
     console.error(
       "[WHATSAPP] WHATSAPP_PHONE_NUMBER_ID is missing"
     );
@@ -37,7 +65,7 @@ export async function sendOtpWhatsapp(
     );
   }
 
-  if (!env.WHATSAPP_OTP_TEMPLATE_NAME?.trim()) {
+  if (!templateName) {
     console.error(
       "[WHATSAPP] WHATSAPP_OTP_TEMPLATE_NAME is missing"
     );
@@ -51,35 +79,47 @@ export async function sendOtpWhatsapp(
 
   /*
    * -------------------------------------------------------
-   * Validate phone number
+   * Validate OTP
+   * -------------------------------------------------------
+   */
+
+  const normalizedOtp = String(otp).trim();
+
+  if (!/^\d{6}$/.test(normalizedOtp)) {
+    console.error("[WHATSAPP] Invalid OTP");
+
+    throw new AppError(
+      "Invalid verification code.",
+      400,
+      "INVALID_OTP"
+    );
+  }
+
+  /*
+   * -------------------------------------------------------
+   * Validate international phone number
    *
-   * Input must already be E.164:
-   *
+   * Expected:
    * +919121657235
    * +14155552671
    * +447911123456
    *
-   * Meta API receives digits only.
+   * E.164:
+   * + followed by 7-15 digits
    * -------------------------------------------------------
    */
 
-  const normalizedPhone =
-    toPhoneE164
-      .trim()
-      .replace(/[\s().-]/g, "");
+  const normalizedPhone = toPhoneE164
+    .trim()
+    .replace(/[\s().-]/g, "");
 
-  if (
-    !/^\+[1-9]\d{6,14}$/.test(
-      normalizedPhone
-    )
-  ) {
+  if (!/^\+[1-9]\d{6,14}$/.test(normalizedPhone)) {
     console.error(
       "[WHATSAPP] Invalid E.164 phone number",
       {
-        phone:
-          normalizedPhone
-            ? `${normalizedPhone.slice(0, 4)}******${normalizedPhone.slice(-2)}`
-            : "empty",
+        phone: normalizedPhone
+          ? `${normalizedPhone.slice(0, 4)}******${normalizedPhone.slice(-2)}`
+          : "empty",
       }
     );
 
@@ -91,7 +131,7 @@ export async function sendOtpWhatsapp(
   }
 
   /*
-   * Meta expects the number without "+"
+   * Meta expects digits only.
    *
    * +919121657235
    * ->
@@ -107,14 +147,9 @@ export async function sendOtpWhatsapp(
    * -------------------------------------------------------
    */
 
-  const apiVersion =
-    env.WHATSAPP_API_VERSION?.trim() ||
-    "v19.0";
-
   const url =
-    `https://graph.facebook.com/` +
-    `${apiVersion}/` +
-    `${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    `https://graph.facebook.com/${apiVersion}/` +
+    `${phoneNumberId}/messages`;
 
   /*
    * -------------------------------------------------------
@@ -123,10 +158,20 @@ export async function sendOtpWhatsapp(
    * Template:
    * freshlaa_otp_verification
    *
-   * Language:
-   * en
+   * Your Meta template contains:
    *
-   * OTP is supplied as body parameter #1.
+   * BODY
+   * {{1}}
+   *
+   * BUTTON
+   * Copy Code / URL style button
+   *
+   * The Meta logs showed:
+   *
+   * "Button at index 0 of type Url requires a parameter"
+   *
+   * Therefore we explicitly provide the button
+   * parameter as well as the body parameter.
    * -------------------------------------------------------
    */
 
@@ -140,13 +185,10 @@ export async function sendOtpWhatsapp(
     type: "template",
 
     template: {
-      name:
-        env.WHATSAPP_OTP_TEMPLATE_NAME,
+      name: templateName,
 
       language: {
-        code:
-          env.WHATSAPP_OTP_TEMPLATE_LANG ||
-          "en",
+        code: templateLanguage,
       },
 
       components: [
@@ -156,14 +198,34 @@ export async function sendOtpWhatsapp(
           parameters: [
             {
               type: "text",
+              text: normalizedOtp,
+            },
+          ],
+        },
 
-              text: otp,
+        {
+          type: "button",
+
+          sub_type: "url",
+
+          index: "0",
+
+          parameters: [
+            {
+              type: "text",
+              text: normalizedOtp,
             },
           ],
         },
       ],
     },
   };
+
+  /*
+   * -------------------------------------------------------
+   * Send
+   * -------------------------------------------------------
+   */
 
   try {
     const response =
@@ -175,7 +237,7 @@ export async function sendOtpWhatsapp(
 
           headers: {
             Authorization:
-              `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+              `Bearer ${accessToken}`,
 
             "Content-Type":
               "application/json",
@@ -186,35 +248,32 @@ export async function sendOtpWhatsapp(
         }
       );
 
+    const messageId =
+      response.data?.messages?.[0]?.id;
+
     console.log(
       "[WHATSAPP] OTP sent successfully",
       {
         phone:
           `${phone.slice(0, 3)}******${phone.slice(-2)}`,
 
-        messageId:
-          response.data?.messages?.[0]?.id,
+        messageId,
 
         status:
           response.status,
 
         template:
-          env.WHATSAPP_OTP_TEMPLATE_NAME,
+          templateName,
+
+        language:
+          templateLanguage,
 
         apiVersion,
       }
     );
   } catch (error) {
     const axiosError =
-      error as AxiosError<{
-        error?: {
-          type?: string;
-          message?: string;
-          code?: number;
-          error_subcode?: number;
-          error_data?: unknown;
-        };
-      }>;
+      error as AxiosError<MetaErrorResponse>;
 
     const metaError =
       axiosError.response?.data?.error;
@@ -240,11 +299,17 @@ export async function sendOtpWhatsapp(
         details:
           metaError?.error_data,
 
+        fbtraceId:
+          metaError?.fbtrace_id,
+
         phone:
           `${phone.slice(0, 3)}******${phone.slice(-2)}`,
 
         template:
-          env.WHATSAPP_OTP_TEMPLATE_NAME,
+          templateName,
+
+        language:
+          templateLanguage,
 
         apiVersion,
       }
