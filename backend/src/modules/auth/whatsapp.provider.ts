@@ -3,105 +3,93 @@ import axios from "axios";
 import { env } from "../../config/env";
 import { AppError } from "../../cores/errors/AppError";
 
-/**
- * Send an OTP through WhatsApp Cloud API.
- *
- * IMPORTANT:
- *
- * The phone number must already be normalized
- * into E.164 format:
- *
- * +14155552671
- * +919985478967
- * +447911123456
- *
- * We intentionally do not hard-code any country.
- */
 export async function sendOtpWhatsapp(
   toPhoneE164: string,
   otp: string
 ): Promise<void> {
-  if (
-    !env.WHATSAPP_ACCESS_TOKEN
-  ) {
+  /*
+   * Validate configuration
+   */
+  if (!env.WHATSAPP_ACCESS_TOKEN?.trim()) {
+    console.error(
+      "[WHATSAPP] WHATSAPP_ACCESS_TOKEN is missing"
+    );
+
     throw new AppError(
       "WhatsApp authentication is not configured.",
       500,
-      "WHATSAPP_ACCESS_TOKEN_MISSING"
+      "WHATSAPP_NOT_CONFIGURED"
     );
   }
 
-  if (
-    !env.WHATSAPP_PHONE_NUMBER_ID
-  ) {
+  if (!env.WHATSAPP_PHONE_NUMBER_ID?.trim()) {
+    console.error(
+      "[WHATSAPP] WHATSAPP_PHONE_NUMBER_ID is missing"
+    );
+
     throw new AppError(
       "WhatsApp phone number is not configured.",
       500,
-      "WHATSAPP_PHONE_NUMBER_ID_MISSING"
+      "WHATSAPP_PHONE_NUMBER_NOT_CONFIGURED"
     );
   }
 
-  if (
-    !env.WHATSAPP_OTP_TEMPLATE_NAME
-  ) {
+  if (!env.WHATSAPP_OTP_TEMPLATE_NAME?.trim()) {
+    console.error(
+      "[WHATSAPP] WHATSAPP_OTP_TEMPLATE_NAME is missing"
+    );
+
     throw new AppError(
       "WhatsApp OTP template is not configured.",
       500,
-      "WHATSAPP_TEMPLATE_MISSING"
+      "WHATSAPP_TEMPLATE_NOT_CONFIGURED"
     );
   }
 
-  if (
-    !env.WHATSAPP_OTP_TEMPLATE_LANG
-  ) {
-    throw new AppError(
-      "WhatsApp OTP template language is not configured.",
-      500,
-      "WHATSAPP_TEMPLATE_LANGUAGE_MISSING"
-    );
-  }
-
-  /**
-   * E.164 validation.
+  /*
+   * E.164 -> digits only
    *
-   * This supports international numbers.
+   * +919121657235
+   * becomes
+   * 919121657235
+   *
+   * This works internationally.
    */
-  if (
-    !/^\+[1-9]\d{6,14}$/.test(
-      toPhoneE164
-    )
-  ) {
+  const phone = toPhoneE164.replace(/\D/g, "");
+
+  if (!phone) {
     throw new AppError(
-      "Invalid international phone number.",
+      "Invalid WhatsApp phone number.",
       400,
-      "INVALID_PHONE_NUMBER"
+      "INVALID_WHATSAPP_PHONE"
     );
   }
 
-  /**
-   * Meta expects the phone number
-   * without the "+" in the `to` field.
+  /*
+   * Meta Graph API
    */
-  const recipient =
-    toPhoneE164.substring(1);
-
   const url =
     `https://graph.facebook.com/` +
     `${env.WHATSAPP_API_VERSION}/` +
-    `${env.WHATSAPP_PHONE_NUMBER_ID}` +
-    `/messages`;
+    `${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
+  /*
+   * Authentication template
+   *
+   * Your current template:
+   * freshlaa_otp_verification
+   *
+   * Language:
+   * en
+   */
   const payload = {
-    messaging_product:
-      "whatsapp",
+    messaging_product: "whatsapp",
 
-    recipient_type:
-      "individual",
+    recipient_type: "individual",
 
-    to: recipient,
+    to: phone,
 
-    type:
-      "template",
+    type: "template",
 
     template: {
       name:
@@ -119,6 +107,7 @@ export async function sendOtpWhatsapp(
           parameters: [
             {
               type: "text",
+
               text: otp,
             },
           ],
@@ -133,6 +122,8 @@ export async function sendOtpWhatsapp(
         url,
         payload,
         {
+          timeout: 15000,
+
           headers: {
             Authorization:
               `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
@@ -140,73 +131,56 @@ export async function sendOtpWhatsapp(
             "Content-Type":
               "application/json",
           },
-
-          timeout: 15000,
-
-          validateStatus:
-            () => true,
         }
       );
-
-    if (
-      response.status < 200 ||
-      response.status >= 300
-    ) {
-      console.error(
-        "[TapQR][WhatsApp] Meta API rejected OTP:",
-        {
-          status:
-            response.status,
-
-          data:
-            response.data,
-        }
-      );
-
-      throw new AppError(
-        "WhatsApp OTP could not be sent.",
-        502,
-        "WHATSAPP_SEND_FAILED"
-      );
-    }
 
     console.log(
-      "[TapQR][WhatsApp] OTP accepted by Meta:",
+      "[WHATSAPP] OTP sent successfully",
       {
-        status:
-          response.status,
+        phone:
+          `${phone.slice(0, 3)}******${phone.slice(-2)}`,
 
         messageId:
           response.data?.messages?.[0]?.id,
+
+        status:
+          response.status,
       }
     );
-  } catch (
-    error: any
-  ) {
-    if (
-      error instanceof AppError
-    ) {
-      throw error;
-    }
+  } catch (error: any) {
+    const metaError =
+      error?.response?.data?.error;
 
     console.error(
-      "[TapQR][WhatsApp] Network/API error:",
+      "[WHATSAPP] Meta API error",
       {
-        message:
-          error?.message,
-
         status:
           error?.response?.status,
 
-        data:
-          error?.response?.data,
+        type:
+          metaError?.type,
+
+        code:
+          metaError?.code,
+
+        subcode:
+          metaError?.error_subcode,
+
+        message:
+          metaError?.message,
+
+        details:
+          metaError?.error_data,
+
+        phone:
+          `${phone.slice(0, 3)}******${phone.slice(-2)}`,
       }
     );
 
     throw new AppError(
-      "WhatsApp OTP service is temporarily unavailable.",
+      "Failed to send WhatsApp OTP. Please try again shortly.",
       502,
-      "WHATSAPP_SERVICE_UNAVAILABLE"
+      "WHATSAPP_SEND_FAILED"
     );
   }
 }
