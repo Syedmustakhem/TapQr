@@ -15,13 +15,15 @@ import {
 } from "./analytics.types";
 
 export class AnalyticsService {
-
-  private repository =
+  private readonly repository =
     new AnalyticsRepository();
 
-  /**
-   * Called by the public QR redirect flow.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | RECORD PUBLIC QR SCAN
+  |--------------------------------------------------------------------------
+  */
+
   async recordScan(
     data: RecordScanInput
   ) {
@@ -37,29 +39,36 @@ export class AnalyticsService {
       return await this.repository.recordScan(
         data
       );
-    } catch (error: any) {
+    } catch (error) {
+      /*
+       * Analytics must never take down the public QR
+       * customer experience.
+       */
       console.error(
         "[Analytics] Failed to record scan:",
         error
       );
 
-      /*
-       * Scan tracking should never break
-       * the customer's QR experience.
-       *
-       * The QR redirect should continue even
-       * if analytics storage temporarily fails.
-       */
       return null;
     }
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | BUSINESS ANALYTICS
+  |--------------------------------------------------------------------------
+  */
 
   async getBusinessOverview(
     userId: string,
     businessId: string,
     days = 30,
-    qrCodeId?: string
+    qrCodeId?: string,
+    limit = 10
   ) {
+    /*
+     * Verify business ownership.
+     */
     const business =
       await prisma.business.findUnique({
         where: {
@@ -68,14 +77,16 @@ export class AnalyticsService {
 
         select: {
           id: true,
-
           ownerId: true,
-
           status: true,
+          deletedAt: true,
         },
       });
 
-    if (!business) {
+    if (
+      !business ||
+      business.deletedAt
+    ) {
       throw new AppError(
         "Business not found.",
         404,
@@ -93,6 +104,9 @@ export class AnalyticsService {
       );
     }
 
+    /*
+     * Normalize analytics period.
+     */
     const safeDays =
       Math.min(
         Math.max(
@@ -102,6 +116,18 @@ export class AnalyticsService {
         365
       );
 
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Math.floor(limit),
+          1
+        ),
+        50
+      );
+
+    /*
+     * Current period.
+     */
     const endDate =
       new Date();
 
@@ -113,6 +139,9 @@ export class AnalyticsService {
         safeDays
     );
 
+    /*
+     * Previous comparable period.
+     */
     const previousEndDate =
       new Date(startDate);
 
@@ -124,6 +153,12 @@ export class AnalyticsService {
         safeDays
     );
 
+    /*
+     * Get QR codes owned by this business.
+     *
+     * If qrCodeId is present, repository guarantees
+     * that the QR belongs to the requested business.
+     */
     const qrCodes =
       await this.repository.getBusinessQrCodes(
         businessId,
@@ -146,15 +181,69 @@ export class AnalyticsService {
         (qr) => qr.id
       );
 
+    /*
+     * No QR codes means valid business but no analytics.
+     */
+    if (qrCodeIds.length === 0) {
+      return {
+        period: {
+          days: safeDays,
+          startDate,
+          endDate,
+        },
+
+        overview: {
+          totalScans: 0,
+          uniqueVisitors: 0,
+          previousPeriodScans: 0,
+          percentageChange: 0,
+          activeQrCodes: 0,
+          totalQrCodes: 0,
+          averageDailyScans: 0,
+        },
+
+        scansByDay:
+          this.buildDailySeries(
+            [],
+            startDate,
+            endDate
+          ),
+
+        qrPerformance: [],
+
+        locations: {
+          countries: [],
+          cities: [],
+        },
+
+        technology: {
+          devices: [],
+          browsers: [],
+          operatingSystems: [],
+        },
+
+        referrers: [],
+
+        recentScans: [],
+      };
+    }
+
+    /*
+     * Query analytics concurrently.
+     *
+     * PostgreSQL performs the aggregation.
+     */
     const [
       totalScans,
       previousPeriodScans,
+      uniqueVisitors,
       dailyScans,
       cities,
       countries,
       devices,
       browsers,
       operatingSystems,
+      referrers,
       recentScans,
     ] = await Promise.all([
       this.repository.countScans(
@@ -167,6 +256,12 @@ export class AnalyticsService {
         qrCodeIds,
         previousStartDate,
         previousEndDate
+      ),
+
+      this.repository.countUniqueVisitors(
+        qrCodeIds,
+        startDate,
+        endDate
       ),
 
       this.repository.getDailyScans(
@@ -205,11 +300,21 @@ export class AnalyticsService {
         endDate
       ),
 
+      this.repository.getReferrers(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
       this.repository.getRecentScans(
-        qrCodeIds
+        qrCodeIds,
+        safeLimit
       ),
     ]);
 
+    /*
+     * Growth calculation.
+     */
     const percentageChange =
       previousPeriodScans === 0
         ? totalScans > 0
@@ -225,17 +330,28 @@ export class AnalyticsService {
             ).toFixed(1)
           );
 
+    /*
+     * Average daily scans.
+     */
+    const averageDailyScans =
+      Number(
+        (
+          totalScans /
+          safeDays
+        ).toFixed(2)
+      );
+
     return {
       period: {
         days: safeDays,
-
         startDate,
-
         endDate,
       },
 
       overview: {
         totalScans,
+
+        uniqueVisitors,
 
         previousPeriodScans,
 
@@ -246,8 +362,16 @@ export class AnalyticsService {
             (qr) =>
               qr.status === "ACTIVE"
           ).length,
+
+        totalQrCodes:
+          qrCodes.length,
+
+        averageDailyScans,
       },
 
+      /*
+       * Timeline.
+       */
       scansByDay:
         this.buildDailySeries(
           dailyScans,
@@ -255,6 +379,14 @@ export class AnalyticsService {
           endDate
         ),
 
+      /*
+       * QR performance.
+       *
+       * Important:
+       * scanCount is lifetime count stored on QRCode.
+       * dashboard period scans are obtained separately
+       * through the scan event aggregation.
+       */
       qrPerformance:
         qrCodes.map(
           (qr) => ({
@@ -267,14 +399,33 @@ export class AnalyticsService {
 
             scanCount:
               qr.scanCount,
+
+            status:
+              qr.status,
+
+            type:
+              qr.type,
+
+            experienceType:
+              qr.experienceType,
+
+            createdAt:
+              qr.createdAt,
+
+            updatedAt:
+              qr.updatedAt,
           })
         ),
 
+      /*
+       * Geography.
+       */
       locations: {
         cities:
           cities.map(
             (item) => ({
-              name: item.city,
+              name:
+                item.city,
 
               scans:
                 item._count._all,
@@ -293,6 +444,9 @@ export class AnalyticsService {
           ),
       },
 
+      /*
+       * Technology.
+       */
       technology: {
         devices:
           devices.map(
@@ -328,9 +482,32 @@ export class AnalyticsService {
           ),
       },
 
+      /*
+       * Traffic sources.
+       */
+      referrers:
+        referrers.map(
+          (item) => ({
+            name:
+              item.referrer,
+
+            scans:
+              item._count._all,
+          })
+        ),
+
+      /*
+       * Recent activity.
+       */
       recentScans,
     };
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMPLETE DAILY SERIES
+  |--------------------------------------------------------------------------
+  */
 
   private buildDailySeries(
     rows: Array<{

@@ -1,15 +1,25 @@
 import { z } from "zod";
 
-export const analyticsQuerySchema = z.object({
-  days: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(365)
-    .default(30),
+export const analyticsQuerySchema =
+  z
+    .object({
+      days: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .default(30),
 
-  qrCodeId: z
-    .string()
-    .uuid()
-    .optional(),
-});
+      qrCodeId: z
+        .string()
+        .uuid()
+        .optional(),
+
+      limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10),
+    })
+    .strict();

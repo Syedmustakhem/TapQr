@@ -17,6 +17,7 @@ import optionRoutes from "./modules/catalog/option.routes";
 import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 import whatsappWebhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
+import analyticsRoutes from "./modules/analytics/analytics.routes";
 const app = express();
 app.set("trust proxy", 1);
 /**
@@ -83,6 +84,10 @@ app.use(
  */
 app.use("/api/staff", staffRoutes);
 
+app.use(
+  "/api/analytics",
+  analyticsRoutes
+);
 /**
  * Catalog management
  *
