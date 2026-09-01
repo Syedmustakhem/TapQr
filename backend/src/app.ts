@@ -18,6 +18,9 @@ import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 import whatsappWebhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
+
+import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
+
 const app = express();
 app.set("trust proxy", 1);
 /**
@@ -78,6 +81,11 @@ app.use(
 app.use(
   "/api/catalogs",
   optionRoutes
+);
+
+app.use(
+  "/api/reviews",
+  reviewsRoutes
 );
 /**
  * Staff management
