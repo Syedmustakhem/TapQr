@@ -13,15 +13,16 @@ datasource db {
 // ============================================================
 
 model User {
-  id       String   @id @default(uuid())
-  fullName String
-  email    String?  @unique
-  phone    String?  @unique
-  role     UserRole @default(OWNER)
-  isActive Boolean  @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String         @id @default(uuid())
+  fullName      String
+  email         String?        @unique
+  phone         String?        @unique
+  role          UserRole       @default(OWNER)
+  isActive      Boolean        @default(true)
+  reviews       Review[]
+  reviewReports ReviewReport[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   authProviders   AuthProvider[]
   businesses      Business[]
@@ -77,19 +78,20 @@ model OtpVerification {
 // ============================================================
 
 model Business {
-  id          String         @id @default(uuid())
-  ownerId     String
-  name        String
-  slug        String         @unique
-  email       String?
-  phone       String?
-  logo        String?
-  description String?
-  status      BusinessStatus @default(ACTIVE)
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id            String         @id @default(uuid())
+  ownerId       String
+  name          String
+  slug          String         @unique
+  email         String?
+  phone         String?
+  logo          String?
+  description   String?
+  status        BusinessStatus @default(ACTIVE)
+  reviews       Review[]
+  reviewReports ReviewReport[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
 
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
@@ -121,10 +123,10 @@ model BusinessProfile {
   id         String @id @default(cuid())
   businessId String @unique
 
-  tagline     String?
-  description String?
-
-  website String?
+  tagline           String?
+  description       String?
+  externalReviewUrl String?
+  website           String?
 
   email    String?
   phone    String?
@@ -228,6 +230,97 @@ model BusinessInvitation {
 }
 
 // ============================================================
+// BUSINESS REVIEWS
+// Customer ratings and feedback collected through TapQR.
+// ============================================================
+
+model Review {
+  id String @id @default(cuid())
+
+  businessId String
+  qrCodeId   String?
+
+  // Optional when the reviewer has a TapQR account.
+  userId String?
+
+  // Guest reviewer information.
+  reviewerName  String?
+  reviewerEmail String?
+
+  rating Int
+
+  title   String?
+  comment String?
+
+  status ReviewStatus @default(PENDING)
+
+  // True when the review was associated with a
+  // valid TapQR interaction/verification flow.
+  isVerified Boolean @default(false)
+
+  verifiedAt DateTime?
+
+  // Optional business response.
+  ownerResponse String?
+  respondedAt   DateTime?
+
+  // Moderation/reporting.
+  reportedAt     DateTime?
+  moderatedAt    DateTime?
+  moderationNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  qrCode QRCode? @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  reports ReviewReport[]
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([businessId, rating])
+  @@index([businessId, createdAt])
+  @@index([qrCodeId])
+  @@index([userId])
+  @@index([status])
+  @@index([isVerified])
+}
+
+// ============================================================
+// REVIEW REPORTS
+// Allows customers/businesses to flag abusive content.
+// ============================================================
+
+model ReviewReport {
+  id String @id @default(cuid())
+
+  reviewId   String
+  userId     String?
+  businessId String
+
+  reason  String
+  details String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@index([businessId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================================
 // QR CODE
 // ============================================================
 
@@ -238,8 +331,8 @@ model QRCode {
 
   name        String
   description String?
-
-  type QRType @default(DYNAMIC)
+  reviews     Review[]
+  type        QRType   @default(DYNAMIC)
 
   // Used only for REDIRECT experience.
   destinationUrl String?
@@ -787,6 +880,13 @@ enum WhatsAppMessageStatus {
   DELIVERED
   READ
   FAILED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+  REJECTED
 }
 
 // ============================================================
