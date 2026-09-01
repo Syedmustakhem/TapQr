@@ -1,59 +1,142 @@
 import { z } from "zod";
-
 import {
   BusinessMemberRole,
+  BusinessMemberStatus,
+  InvitationStatus,
 } from "@prisma/client";
 
-/**
- * Invite staff.
- */
-export const inviteStaffSchema =
-  z.object({
+/*
+|--------------------------------------------------------------------------
+| Invitation
+|--------------------------------------------------------------------------
+*/
+
+export const inviteStaffSchema = z
+  .object({
     email: z
       .string()
       .trim()
-      .email(
-        "Invalid email address."
-      ),
+      .toLowerCase()
+      .email("Invalid email address."),
 
     role: z.enum([
       BusinessMemberRole.MANAGER,
       BusinessMemberRole.STAFF,
     ]),
-  });
+  })
+  .strict();
 
-/**
- * Accept invitation.
- *
- * The token is normally taken from the
- * URL parameter, but we keep this schema
- * compatible with the existing route
- * validation middleware.
- */
-export const acceptInvitationSchema =
-  z.object({
-    token: z
+export const invitationTokenSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[a-f0-9]{64}$/i,
+    "Invalid invitation token."
+  );
+
+export const acceptInvitationSchema = z
+  .object({
+    token: invitationTokenSchema,
+  })
+  .strict();
+
+/*
+|--------------------------------------------------------------------------
+| Member management
+|--------------------------------------------------------------------------
+*/
+
+export const updateMemberRoleSchema = z
+  .object({
+    role: z.enum([
+      BusinessMemberRole.MANAGER,
+      BusinessMemberRole.STAFF,
+    ]),
+  })
+  .strict();
+
+export const updateMemberStatusSchema = z
+  .object({
+    status: z.enum([
+      BusinessMemberStatus.ACTIVE,
+      BusinessMemberStatus.SUSPENDED,
+    ]),
+  })
+  .strict();
+
+export const removeMemberSchema = z
+  .object({})
+  .strict();
+
+/*
+|--------------------------------------------------------------------------
+| Query parameters
+|--------------------------------------------------------------------------
+*/
+
+export const staffListQuerySchema = z
+  .object({
+    page: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100000)
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(25),
+
+    search: z
       .string()
       .trim()
-      .min(
-        32,
-        "Invalid invitation token."
-      ),
-  });
+      .max(100)
+      .optional(),
 
-/**
- * Update member role.
- */
-export const updateMemberRoleSchema =
-  z.object({
-    role: z.enum([
-      BusinessMemberRole.MANAGER,
-      BusinessMemberRole.STAFF,
-    ]),
-  });
+    role: z
+      .enum([
+        BusinessMemberRole.OWNER,
+        BusinessMemberRole.MANAGER,
+        BusinessMemberRole.STAFF,
+      ])
+      .optional(),
 
-/**
- * Remove member.
- */
-export const removeMemberSchema =
-  z.object({}).strict();
+    status: z
+      .enum([
+        BusinessMemberStatus.ACTIVE,
+        BusinessMemberStatus.SUSPENDED,
+        BusinessMemberStatus.REMOVED,
+      ])
+      .optional(),
+  })
+  .strict();
+
+export const invitationListQuerySchema = z
+  .object({
+    page: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100000)
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(25),
+
+    status: z
+      .enum([
+        InvitationStatus.PENDING,
+        InvitationStatus.ACCEPTED,
+        InvitationStatus.REJECTED,
+        InvitationStatus.EXPIRED,
+      ])
+      .optional(),
+  })
+  .strict();

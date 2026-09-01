@@ -1,14 +1,27 @@
 import {
   BusinessMemberRole,
   BusinessMemberStatus,
+  Prisma,
 } from "@prisma/client";
 
 import { prisma } from "../../../config/prisma";
 
+const userSelect = {
+  id: true,
+  fullName: true,
+  email: true,
+  phone: true,
+  role: true,
+  isActive: true,
+} satisfies Prisma.UserSelect;
+
+const memberInclude = {
+  user: {
+    select: userSelect,
+  },
+} satisfies Prisma.BusinessMemberInclude;
+
 export class BusinessMemberRepository {
-  /**
-   * Create a business member.
-   */
   async create(data: {
     userId: string;
     businessId: string;
@@ -23,46 +36,21 @@ export class BusinessMemberRepository {
         invitedById: data.invitedById,
         status: BusinessMemberStatus.ACTIVE,
       },
-
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            role: true,
-            isActive: true,
-          },
-        },
-      },
+      include: memberInclude,
     });
   }
 
-  /**
-   * Find member by ID.
-   */
   async findById(id: string) {
     return prisma.businessMember.findUnique({
-      where: {
-        id,
-      },
-
+      where: { id },
       include: {
         user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            role: true,
-            isActive: true,
-          },
+          select: userSelect,
         },
-
         business: {
           select: {
             id: true,
+            ownerId: true,
             name: true,
             slug: true,
             status: true,
@@ -72,12 +60,6 @@ export class BusinessMemberRepository {
     });
   }
 
-  /**
-   * Find a specific user/business membership.
-   *
-   * Prisma schema has:
-   * @@unique([userId, businessId])
-   */
   async findByUserAndBusiness(
     userId: string,
     businessId: string
@@ -89,58 +71,106 @@ export class BusinessMemberRepository {
           businessId,
         },
       },
-
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            role: true,
-            isActive: true,
-          },
-        },
-      },
+      include: memberInclude,
     });
   }
 
-  /**
-   * Get all members belonging to a business.
-   */
-  async findByBusiness(
-    businessId: string
+  async listByBusiness(
+    businessId: string,
+    options: {
+      page: number;
+      limit: number;
+      search?: string;
+      role?: BusinessMemberRole;
+      status?: BusinessMemberStatus;
+    }
   ) {
-    return prisma.businessMember.findMany({
-      where: {
-        businessId,
-        status: {
-          not: BusinessMemberStatus.REMOVED,
-        },
-      },
+    const where: Prisma.BusinessMemberWhereInput = {
+      businessId,
 
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            role: true,
-            isActive: true,
-          },
-        },
-      },
+      ...(options.status
+        ? { status: options.status }
+        : {
+            status: {
+              not: BusinessMemberStatus.REMOVED,
+            },
+          }),
 
-      orderBy: {
-  createdAt: "desc",
-},
-    });
+      ...(options.role
+        ? { role: options.role }
+        : {}),
+
+      ...(options.search
+        ? {
+            user: {
+              OR: [
+                {
+                  fullName: {
+                    contains:
+                      options.search,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  email: {
+                    contains:
+                      options.search,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  phone: {
+                    contains:
+                      options.search,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const skip =
+      (options.page - 1) *
+      options.limit;
+
+    const [members, total] =
+      await prisma.$transaction([
+        prisma.businessMember.findMany({
+          where,
+
+          include: memberInclude,
+
+          orderBy: [
+            {
+              role: "asc",
+            },
+            {
+              createdAt: "desc",
+            },
+          ],
+
+          skip,
+          take: options.limit,
+        }),
+
+        prisma.businessMember.count({
+          where,
+        }),
+      ]);
+
+    return {
+      members,
+      total,
+      page: options.page,
+      limit: options.limit,
+      totalPages: Math.ceil(
+        total / options.limit
+      ),
+    };
   }
 
-  /**
-   * Update member role.
-   */
   async update(
     id: string,
     data: {
@@ -149,59 +179,20 @@ export class BusinessMemberRepository {
     }
   ) {
     return prisma.businessMember.update({
-      where: {
-        id,
-      },
-
+      where: { id },
       data,
-
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phone: true,
-            role: true,
-            isActive: true,
-          },
-        },
-      },
+      include: memberInclude,
     });
   }
 
-  /**
-   * Suspend member.
-   */
-  async suspend(id: string) {
-    return prisma.businessMember.update({
-      where: {
-        id,
-      },
-
-      data: {
-        status:
-          BusinessMemberStatus.SUSPENDED,
-      },
-    });
-  }
-
-  /**
-   * Remove member.
-   *
-   * We don't physically delete the membership.
-   * This preserves historical membership information.
-   */
   async remove(id: string) {
     return prisma.businessMember.update({
-      where: {
-        id,
-      },
-
+      where: { id },
       data: {
         status:
           BusinessMemberStatus.REMOVED,
       },
+      include: memberInclude,
     });
   }
 }

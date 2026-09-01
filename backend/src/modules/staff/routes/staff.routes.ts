@@ -4,89 +4,145 @@ import {
   StaffController,
 } from "../controllers/staff.controller";
 
-import { authenticate } from "../../auth/auth.middleware";
+import {
+  authenticate,
+} from "../../auth/auth.middleware";
 
 import {
   validate,
 } from "../../../cores/middleware/validate";
 
 import {
+  authLimiter,
+} from "../../../cores/middleware/rateLimiter";
+
+import {
   inviteStaffSchema,
   updateMemberRoleSchema,
+  updateMemberStatusSchema,
   removeMemberSchema,
 } from "../validations/staff.validation";
 
-const router =
-  Router();
+const router = Router();
 
-const staffController =
+const controller =
   new StaffController();
 
-/**
- * Invite Staff
- *
- * POST /staff/invitations
+/*
+|--------------------------------------------------------------------------
+| All staff routes are authenticated.
+|--------------------------------------------------------------------------
+*/
+
+router.use(
+  authenticate
+);
+
+/*
+|--------------------------------------------------------------------------
+| Invitations
+|--------------------------------------------------------------------------
+*/
+
+/*
+ * POST /api/staff/businesses/:businessId/invitations
  */
 router.post(
-  "/invitations",
-  authenticate,
+  "/businesses/:businessId/invitations",
+  authLimiter,
   validate(inviteStaffSchema),
-  staffController.inviteStaff.bind(
-    staffController
+  controller.inviteStaff.bind(
+    controller
   )
 );
 
-/**
- * Accept Invitation
- *
- * POST /staff/invitations/:token/accept
+/*
+ * GET /api/staff/businesses/:businessId/invitations
+ */
+router.get(
+  "/businesses/:businessId/invitations",
+  controller.listInvitations.bind(
+    controller
+  )
+);
+
+/*
+ * POST /api/staff/businesses/:businessId/invitations/:invitationId/resend
+ */
+router.post(
+  "/businesses/:businessId/invitations/:invitationId/resend",
+  authLimiter,
+  controller.resendInvitation.bind(
+    controller
+  )
+);
+
+/*
+ * POST /api/staff/businesses/:businessId/invitations/:invitationId/cancel
+ */
+router.post(
+  "/businesses/:businessId/invitations/:invitationId/cancel",
+  controller.cancelInvitation.bind(
+    controller
+  )
+);
+
+/*
+ * POST /api/staff/invitations/:token/accept
  */
 router.post(
   "/invitations/:token/accept",
-  authenticate,
-  staffController.acceptInvitation.bind(
-    staffController
+  controller.acceptInvitation.bind(
+    controller
   )
 );
 
-/**
- * Get Business Members
- *
- * GET /staff/members
+/*
+|--------------------------------------------------------------------------
+| Members
+|--------------------------------------------------------------------------
+*/
+
+/*
+ * GET /api/staff/businesses/:businessId/members
  */
 router.get(
-  "/members",
-  authenticate,
-  staffController.getMembers.bind(
-    staffController
+  "/businesses/:businessId/members",
+  controller.getMembers.bind(
+    controller
   )
 );
 
-/**
- * Update Member Role
- *
- * PATCH /staff/members/:memberId
+/*
+ * PATCH /api/staff/businesses/:businessId/members/:memberId/role
  */
 router.patch(
-  "/members/:memberId",
-  authenticate,
+  "/businesses/:businessId/members/:memberId/role",
   validate(updateMemberRoleSchema),
-  staffController.updateMemberRole.bind(
-    staffController
+  controller.updateMemberRole.bind(
+    controller
   )
 );
 
-/**
- * Remove Member
- *
- * DELETE /staff/members/:memberId
+/*
+ * PATCH /api/staff/businesses/:businessId/members/:memberId/status
+ */
+router.patch(
+  "/businesses/:businessId/members/:memberId/status",
+  validate(updateMemberStatusSchema),
+  controller.updateMemberStatus.bind(
+    controller
+  )
+);
+
+/*
+ * DELETE /api/staff/businesses/:businessId/members/:memberId
  */
 router.delete(
-  "/members/:memberId",
-  authenticate,
+  "/businesses/:businessId/members/:memberId",
   validate(removeMemberSchema),
-  staffController.removeMember.bind(
-    staffController
+  controller.removeMember.bind(
+    controller
   )
 );
 

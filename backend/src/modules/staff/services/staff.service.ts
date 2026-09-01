@@ -2,8 +2,8 @@ import crypto from "crypto";
 
 import {
   BusinessMemberRole,
-  InvitationStatus,
   BusinessMemberStatus,
+  InvitationStatus,
 } from "@prisma/client";
 
 import { prisma } from "../../../config/prisma";
@@ -16,53 +16,111 @@ import { BusinessRepository } from "../../business/business.repository";
 import { BusinessMemberRepository } from "../repositories/business-member.repository";
 import { BusinessInvitationRepository } from "../repositories/business-invitation.repository";
 
-export interface InviteStaffServiceInput {
-  ownerId: string;
-  email: string;
-  role: BusinessMemberRole;
+import {
+  InvitationPaginationQuery,
+  InviteStaffInput,
+  AcceptInvitationInput,
+  StaffPaginationQuery,
+  UpdateMemberRoleInput,
+  UpdateMemberStatusInput,
+  RemoveMemberInput,
+  CancelInvitationInput,
+  ResendInvitationInput,
+} from "../types/staff.types";
+
+type ActorRole =
+  | "OWNER"
+  | "MANAGER"
+  | "STAFF";
+
+const INVITATION_TTL_DAYS = 7;
+
+function normalizeEmail(
+  email: string
+) {
+  return email.trim().toLowerCase();
 }
 
-export interface AcceptInvitationServiceInput {
-  userId: string;
-  token: string;
+function createRawInvitationToken() {
+  return crypto
+    .randomBytes(32)
+    .toString("hex");
+}
+
+/*
+ * New invitations store a deterministic HMAC digest instead of the
+ * raw token. The raw token should be delivered only through email.
+ *
+ * Existing plaintext invitation tokens remain readable because the
+ * repository still supports direct lookup; new records are hashed.
+ */
+function hashInvitationToken(
+  token: string
+) {
+  const secret =
+    process.env
+      .INVITATION_TOKEN_SECRET ||
+    process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new AppError(
+      "Invitation token security is not configured.",
+      500,
+      "INVITATION_TOKEN_SECRET_MISSING"
+    );
+  }
+
+  return crypto
+    .createHmac(
+      "sha256",
+      secret
+    )
+    .update(token)
+    .digest("hex");
+}
+
+function invitationExpiry() {
+  const date = new Date();
+
+  date.setUTCDate(
+    date.getUTCDate() +
+      INVITATION_TTL_DAYS
+  );
+
+  return date;
 }
 
 export class StaffService {
-  private authRepository =
+  private readonly authRepository =
     new AuthRepository();
 
-  private businessRepository =
+  private readonly businessRepository =
     new BusinessRepository();
 
-  private businessMemberRepository =
+  private readonly businessMemberRepository =
     new BusinessMemberRepository();
 
-  private businessInvitationRepository =
+  private readonly businessInvitationRepository =
     new BusinessInvitationRepository();
 
-  /**
-   * Invite staff/member.
-   */
-  async inviteStaff(
-    data: InviteStaffServiceInput
-  ) {
-    const email =
-      data.email
-        .trim()
-        .toLowerCase();
+  /*
+  |--------------------------------------------------------------------------
+  | ACCESS CONTROL
+  |--------------------------------------------------------------------------
+  */
 
-    /**
-     * Only OWNER can currently invite.
-     *
-     * We can later extend this to MANAGER
-     * through granular permissions.
-     */
+  private async getBusiness(
+    businessId: string
+  ) {
     const business =
-      await this.businessRepository.findPrimaryByOwnerId(
-        data.ownerId
+      await this.businessRepository.findById(
+        businessId
       );
 
-    if (!business) {
+    if (
+      !business ||
+      business.deletedAt
+    ) {
       throw new AppError(
         "Business not found.",
         404,
@@ -74,15 +132,116 @@ export class StaffService {
       business.status !== "ACTIVE"
     ) {
       throw new AppError(
-        "Your business is not active.",
+        "This business is not active.",
         403,
         "BUSINESS_NOT_ACTIVE"
       );
     }
 
-    /**
-     * Prevent inviting OWNER as staff.
-     */
+    return business;
+  }
+
+  private async getActorRole(
+    userId: string,
+    businessId: string
+  ): Promise<ActorRole> {
+    const business =
+      await this.getBusiness(
+        businessId
+      );
+
+    if (
+      business.ownerId === userId
+    ) {
+      return BusinessMemberRole.OWNER;
+    }
+
+    const member =
+      await this.businessMemberRepository.findByUserAndBusiness(
+        userId,
+        businessId
+      );
+
+    if (
+      !member ||
+      member.status !==
+        BusinessMemberStatus.ACTIVE
+    ) {
+      throw new AppError(
+        "You do not have access to this business.",
+        403,
+        "BUSINESS_ACCESS_DENIED"
+      );
+    }
+
+    return member.role as ActorRole;
+  }
+
+  private assertCanManageTeam(
+    actorRole: ActorRole
+  ) {
+    if (
+      actorRole !==
+        BusinessMemberRole.OWNER &&
+      actorRole !==
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "You do not have permission to manage team members.",
+        403,
+        "STAFF_MANAGEMENT_FORBIDDEN"
+      );
+    }
+  }
+
+  private assertCanManageTarget(
+    actorRole: ActorRole,
+    targetRole: BusinessMemberRole
+  ) {
+    if (
+      targetRole ===
+      BusinessMemberRole.OWNER
+    ) {
+      throw new AppError(
+        "The business owner cannot be modified through staff management.",
+        403,
+        "OWNER_IMMUTABLE"
+      );
+    }
+
+    if (
+      actorRole ===
+        BusinessMemberRole.MANAGER &&
+      targetRole ===
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "Managers cannot manage other managers.",
+        403,
+        "MANAGER_SCOPE_FORBIDDEN"
+      );
+    }
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | INVITATIONS
+  |--------------------------------------------------------------------------
+  */
+
+  async inviteStaff(
+    data: InviteStaffInput
+  ) {
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
+      );
+
+    this.assertCanManageTeam(
+      actorRole
+    );
+
     if (
       data.role ===
       BusinessMemberRole.OWNER
@@ -94,27 +253,55 @@ export class StaffService {
       );
     }
 
-    /**
-     * Check existing pending invitation.
-     */
+    if (
+      actorRole ===
+        BusinessMemberRole.MANAGER &&
+      data.role ===
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "Managers can invite staff only.",
+        403,
+        "MANAGER_INVITE_SCOPE_FORBIDDEN"
+      );
+    }
+
+    const email =
+      normalizeEmail(
+        data.email
+      );
+
+    const actor =
+      await this.authRepository.findUserById(
+        data.actorId
+      );
+
+    if (
+      actor?.email &&
+      normalizeEmail(actor.email) ===
+        email
+    ) {
+      throw new AppError(
+        "You cannot invite your own account.",
+        400,
+        "SELF_INVITATION"
+      );
+    }
+
     const existingInvitation =
       await this.businessInvitationRepository.findPendingByBusinessAndEmail(
-        business.id,
+        data.businessId,
         email
       );
 
     if (existingInvitation) {
       throw new AppError(
-        "An invitation has already been sent to this email.",
+        "A pending invitation already exists for this email.",
         409,
         "INVITATION_EXISTS"
       );
     }
 
-    /**
-     * Check whether the email belongs to
-     * an existing account.
-     */
     const existingUser =
       await this.authRepository.findUserByEmail(
         email
@@ -124,100 +311,264 @@ export class StaffService {
       const existingMember =
         await this.businessMemberRepository.findByUserAndBusiness(
           existingUser.id,
-          business.id
+          data.businessId
         );
 
-      if (existingMember) {
-        if (
-          existingMember.status ===
+      if (
+        existingMember &&
+        existingMember.status !==
           BusinessMemberStatus.REMOVED
-        ) {
-          /**
-           * A removed member can be re-added
-           * through a fresh invitation.
-           */
-        } else {
-          throw new AppError(
-            "This user is already a member of your business.",
-            409,
-            "MEMBER_EXISTS"
-          );
-        }
+      ) {
+        throw new AppError(
+          "This user is already a member of your business.",
+          409,
+          "MEMBER_EXISTS"
+        );
       }
     }
 
-    /**
-     * Generate cryptographically secure invitation token.
-     */
-    const token =
-      crypto
-        .randomBytes(32)
-        .toString("hex");
+    const rawToken =
+      createRawInvitationToken();
 
-    /**
-     * Invitation valid for 7 days.
-     */
     const expiresAt =
-      new Date();
-
-    expiresAt.setDate(
-      expiresAt.getDate() + 7
-    );
+      invitationExpiry();
 
     const invitation =
-      await this.businessInvitationRepository.create({
-        businessId:
-          business.id,
+      await this.businessInvitationRepository.create(
+        {
+          businessId:
+            data.businessId,
+          invitedById:
+            data.actorId,
+          email,
+          role: data.role,
+          token:
+            hashInvitationToken(
+              rawToken
+            ),
+          expiresAt,
+        }
+      );
 
-        invitedById:
-          data.ownerId,
-
-        email,
-
-        role:
-          data.role,
-
-        token,
-
-        expiresAt,
-      });
-
-    /**
-     * IMPORTANT:
+    /*
+     * The raw token is deliberately not returned in production.
+     * Your email provider should receive the raw token here:
      *
-     * Email delivery is intentionally not hard-coded here.
+     *   /staff/invitations/<rawToken>/accept
      *
-     * When your invitation email provider is ready,
-     * call it here.
+     * For local development only, return it as developmentToken.
      */
+    const developmentToken =
+      process.env.NODE_ENV !==
+      "production"
+        ? rawToken
+        : undefined;
+
     return {
       message:
         "Invitation created successfully.",
 
       invitation: {
-        id:
-          invitation.id,
-
+        id: invitation.id,
+        businessId:
+          invitation.businessId,
         email:
           invitation.email,
-
         role:
           invitation.role,
-
         status:
           invitation.status,
-
         expiresAt:
           invitation.expiresAt,
+      },
+
+      ...(developmentToken && {
+        developmentToken,
+      }),
+    };
+  }
+
+  async listInvitations(
+    actorId: string,
+    businessId: string,
+    query: InvitationPaginationQuery
+  ) {
+    const actorRole =
+      await this.getActorRole(
+        actorId,
+        businessId
+      );
+
+    this.assertCanManageTeam(
+      actorRole
+    );
+
+    await this.businessInvitationRepository.expireOldInvitations();
+
+    return this.businessInvitationRepository.listByBusiness(
+      businessId,
+      query
+    );
+  }
+
+  async cancelInvitation(
+    data: CancelInvitationInput
+  ) {
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
+      );
+
+    this.assertCanManageTeam(
+      actorRole
+    );
+
+    const invitation =
+      await this.businessInvitationRepository.findById(
+        data.invitationId
+      );
+
+    if (
+      !invitation ||
+      invitation.business.id !==
+        data.businessId
+    ) {
+      throw new AppError(
+        "Invitation not found.",
+        404,
+        "INVITATION_NOT_FOUND"
+      );
+    }
+
+    if (
+      actorRole ===
+        BusinessMemberRole.MANAGER &&
+      invitation.role ===
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "Managers cannot manage manager invitations.",
+        403,
+        "MANAGER_INVITATION_SCOPE_FORBIDDEN"
+      );
+    }
+
+    if (
+      invitation.status !==
+      InvitationStatus.PENDING
+    ) {
+      throw new AppError(
+        "Only pending invitations can be revoked.",
+        409,
+        "INVITATION_NOT_PENDING"
+      );
+    }
+
+    const updated =
+      await this.businessInvitationRepository.update(
+        invitation.id,
+        {
+          status:
+            InvitationStatus.REJECTED,
+        }
+      );
+
+    return {
+      message:
+        "Invitation revoked successfully.",
+      invitation: {
+        id: updated.id,
+        status:
+          updated.status,
       },
     };
   }
 
-  /**
-   * Accept staff invitation.
-   */
+  async resendInvitation(
+    data: ResendInvitationInput
+  ) {
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
+      );
+
+    this.assertCanManageTeam(
+      actorRole
+    );
+
+    const oldInvitation =
+      await this.businessInvitationRepository.findById(
+        data.invitationId
+      );
+
+    if (
+      !oldInvitation ||
+      oldInvitation.business.id !==
+        data.businessId
+    ) {
+      throw new AppError(
+        "Invitation not found.",
+        404,
+        "INVITATION_NOT_FOUND"
+      );
+    }
+
+    if (
+      actorRole ===
+        BusinessMemberRole.MANAGER &&
+      oldInvitation.role ===
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "Managers cannot manage manager invitations.",
+        403,
+        "MANAGER_INVITATION_SCOPE_FORBIDDEN"
+      );
+    }
+
+    if (
+      oldInvitation.status !==
+        InvitationStatus.PENDING &&
+      oldInvitation.status !==
+        InvitationStatus.EXPIRED
+    ) {
+      throw new AppError(
+        "Only pending or expired invitations can be resent.",
+        409,
+        "INVITATION_NOT_RESENDABLE"
+      );
+    }
+
+    await this.businessInvitationRepository.update(
+      oldInvitation.id,
+      {
+        status:
+          InvitationStatus.REJECTED,
+      }
+    );
+
+    return this.inviteStaff({
+      actorId:
+        data.actorId,
+      businessId:
+        data.businessId,
+      email:
+        oldInvitation.email,
+      role:
+        oldInvitation.role,
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | ACCEPT INVITATION
+  |--------------------------------------------------------------------------
+  */
+
   async acceptInvitation(
-    data: AcceptInvitationServiceInput
+    data: AcceptInvitationInput
   ) {
     const token =
       data.token.trim();
@@ -230,7 +581,20 @@ export class StaffService {
       );
     }
 
+    /*
+     * New records use an HMAC digest.
+     * A plaintext fallback keeps already-issued legacy invitations
+     * valid during the migration period.
+     */
+    const hashedToken =
+      hashInvitationToken(
+        token
+      );
+
     const invitation =
+      await this.businessInvitationRepository.findByToken(
+        hashedToken
+      ) ??
       await this.businessInvitationRepository.findByToken(
         token
       );
@@ -286,9 +650,6 @@ export class StaffService {
       );
     }
 
-    /**
-     * Normalize both emails before comparison.
-     */
     const userEmail =
       user.email
         ?.trim()
@@ -311,166 +672,184 @@ export class StaffService {
       );
     }
 
-    /**
-     * Prevent duplicate membership.
-     */
-    const existingMember =
+    const business =
+      await this.getBusiness(
+        invitation.business.id
+      );
+
+    let existingMember =
       await this.businessMemberRepository.findByUserAndBusiness(
         user.id,
-        invitation.businessId
+        business.id
       );
 
-    if (
-      existingMember &&
-      existingMember.status !==
-        BusinessMemberStatus.REMOVED
-    ) {
-      throw new AppError(
-        "You are already a member of this business.",
-        409,
-        "MEMBER_EXISTS"
-      );
-    }
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          /*
+           * Atomically consume only a still-pending invitation.
+           * This prevents the same invitation from being accepted twice.
+           */
+          const consumed =
+            await tx.businessInvitation.updateMany(
+              {
+                where: {
+                  id:
+                    invitation.id,
+                  status:
+                    InvitationStatus.PENDING,
+                  expiresAt: {
+                    gt: new Date(),
+                  },
+                },
+                data: {
+                  status:
+                    InvitationStatus.ACCEPTED,
+                  acceptedAt:
+                    new Date(),
+                },
+              }
+            );
 
-    /**
-     * Transaction:
-     *
-     * 1. Create/reactivate membership
-     * 2. Mark invitation accepted
-     */
-    await prisma.$transaction(
-      async (tx) => {
-        if (
-          existingMember &&
-          existingMember.status ===
-            BusinessMemberStatus.REMOVED
-        ) {
-          await tx.businessMember.update({
-            where: {
-              id:
-                existingMember.id,
-            },
+          if (
+            consumed.count !== 1
+          ) {
+            throw new AppError(
+              "Invitation is no longer valid.",
+              409,
+              "INVITATION_CONSUMED"
+            );
+          }
 
-            data: {
-              role:
-                invitation.role,
-
-              status:
-                BusinessMemberStatus.ACTIVE,
-
-              invitedById:
-                invitation.invitedById,
-
-              joinedAt:
-                new Date(),
-            },
-          });
-        } else {
-          await tx.businessMember.create({
-            data: {
-              userId:
+          if (
+            existingMember &&
+            existingMember.status ===
+              BusinessMemberStatus.REMOVED
+          ) {
+            existingMember =
+              await this.businessMemberRepository.findByUserAndBusiness(
                 user.id,
+                business.id
+              );
 
-              businessId:
-                invitation.businessId,
-
-              role:
-                invitation.role,
-
-              status:
-                BusinessMemberStatus.ACTIVE,
-
-              invitedById:
-                invitation.invitedById,
-            },
-          });
+            await tx.businessMember.update(
+              {
+                where: {
+                  id:
+                    existingMember!.id,
+                },
+                data: {
+                  role:
+                    invitation.role,
+                  status:
+                    BusinessMemberStatus.ACTIVE,
+                  invitedById:
+                    invitation.invitedById,
+                  joinedAt:
+                    new Date(),
+                },
+              }
+            );
+          } else if (
+            existingMember
+          ) {
+            throw new AppError(
+              "You are already a member of this business.",
+              409,
+              "MEMBER_EXISTS"
+            );
+          } else {
+            await tx.businessMember.create(
+              {
+                data: {
+                  userId:
+                    user.id,
+                  businessId:
+                    business.id,
+                  role:
+                    invitation.role,
+                  status:
+                    BusinessMemberStatus.ACTIVE,
+                  invitedById:
+                    invitation.invitedById,
+                },
+              }
+            );
+          }
         }
-
-        await tx.businessInvitation.update({
-          where: {
-            id:
-              invitation.id,
-          },
-
-          data: {
-            status:
-              InvitationStatus.ACCEPTED,
-
-            acceptedAt:
-              new Date(),
-          },
-        });
+      );
+    } catch (error: any) {
+      if (
+        error?.code === "P2002"
+      ) {
+        throw new AppError(
+          "You are already a member of this business.",
+          409,
+          "MEMBER_EXISTS"
+        );
       }
-    );
+
+      throw error;
+    }
 
     return {
       message:
         "Invitation accepted successfully.",
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+      },
+      role:
+        invitation.role,
     };
   }
 
-  /**
-   * Get members for owner's primary business.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | MEMBERS
+  |--------------------------------------------------------------------------
+  */
+
   async getMembers(
-    ownerId: string
+    actorId: string,
+    businessId: string,
+    query: StaffPaginationQuery
   ) {
-    const business =
-      await this.businessRepository.findPrimaryByOwnerId(
-        ownerId
-      );
+    await this.getActorRole(
+      actorId,
+      businessId
+    );
 
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404,
-        "BUSINESS_NOT_FOUND"
-      );
-    }
-
-    return this.businessMemberRepository.findByBusiness(
-      business.id
+    return this.businessMemberRepository.listByBusiness(
+      businessId,
+      query
     );
   }
 
-  /**
-   * Update member role.
-   */
   async updateMemberRole(
-    ownerId: string,
-    memberId: string,
-    role: BusinessMemberRole
+    data: UpdateMemberRoleInput
   ) {
-    if (
-      role ===
-      BusinessMemberRole.OWNER
-    ) {
-      throw new AppError(
-        "OWNER role cannot be assigned through this endpoint.",
-        400,
-        "INVALID_MEMBER_ROLE"
-      );
-    }
-
-    const business =
-      await this.businessRepository.findPrimaryByOwnerId(
-        ownerId
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
       );
 
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404,
-        "BUSINESS_NOT_FOUND"
-      );
-    }
+    this.assertCanManageTeam(
+      actorRole
+    );
 
     const member =
       await this.businessMemberRepository.findById(
-        memberId
+        data.memberId
       );
 
-    if (!member) {
+    if (
+      !member ||
+      member.business.id !==
+        data.businessId
+    ) {
       throw new AppError(
         "Member not found.",
         404,
@@ -479,53 +858,76 @@ export class StaffService {
     }
 
     if (
-      member.businessId !==
-      business.id
+      member.status ===
+      BusinessMemberStatus.REMOVED
     ) {
       throw new AppError(
-        "Member does not belong to your business.",
+        "Removed members cannot be modified.",
+        409,
+        "MEMBER_REMOVED"
+      );
+    }
+
+    this.assertCanManageTarget(
+      actorRole,
+      member.role
+    );
+
+    if (
+      actorRole ===
+        BusinessMemberRole.MANAGER &&
+      data.role ===
+        BusinessMemberRole.MANAGER
+    ) {
+      throw new AppError(
+        "Managers cannot promote members to manager.",
         403,
-        "MEMBER_ACCESS_DENIED"
+        "MANAGER_ROLE_FORBIDDEN"
+      );
+    }
+
+    if (
+      member.user.id ===
+      data.actorId
+    ) {
+      throw new AppError(
+        "You cannot change your own role.",
+        403,
+        "SELF_ROLE_CHANGE_FORBIDDEN"
       );
     }
 
     return this.businessMemberRepository.update(
       member.id,
       {
-        role,
+        role: data.role,
       }
     );
   }
 
-  /**
-   * Remove member from business.
-   *
-   * Soft-removes membership instead of deleting
-   * the database row.
-   */
-  async removeMember(
-    ownerId: string,
-    memberId: string
+  async updateMemberStatus(
+    data: UpdateMemberStatusInput
   ) {
-    const business =
-      await this.businessRepository.findPrimaryByOwnerId(
-        ownerId
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
       );
 
-    if (!business) {
-      throw new AppError(
-        "Business not found.",
-        404,
-        "BUSINESS_NOT_FOUND"
-      );
-    }
+    this.assertCanManageTeam(
+      actorRole
+    );
 
     const member =
       await this.businessMemberRepository.findById(
-        memberId
+        data.memberId
       );
 
-    if (!member) {
+    if (
+      !member ||
+      member.business.id !==
+        data.businessId
+    ) {
       throw new AppError(
         "Member not found.",
         404,
@@ -533,25 +935,96 @@ export class StaffService {
       );
     }
 
+    this.assertCanManageTarget(
+      actorRole,
+      member.role
+    );
+
     if (
-      member.businessId !==
-      business.id
+      member.user.id ===
+      data.actorId
     ) {
       throw new AppError(
-        "Member does not belong to your business.",
+        "You cannot change your own access status.",
         403,
-        "MEMBER_ACCESS_DENIED"
+        "SELF_STATUS_CHANGE_FORBIDDEN"
       );
     }
 
     if (
-      member.role ===
-      BusinessMemberRole.OWNER
+      member.status ===
+      BusinessMemberStatus.REMOVED
     ) {
       throw new AppError(
-        "The business owner cannot be removed.",
-        400,
-        "OWNER_CANNOT_BE_REMOVED"
+        "Removed members cannot be modified.",
+        409,
+        "MEMBER_REMOVED"
+      );
+    }
+
+    return this.businessMemberRepository.update(
+      member.id,
+      {
+        status:
+          data.status,
+      }
+    );
+  }
+
+  async removeMember(
+    data: RemoveMemberInput
+  ) {
+    const actorRole =
+      await this.getActorRole(
+        data.actorId,
+        data.businessId
+      );
+
+    this.assertCanManageTeam(
+      actorRole
+    );
+
+    const member =
+      await this.businessMemberRepository.findById(
+        data.memberId
+      );
+
+    if (
+      !member ||
+      member.business.id !==
+        data.businessId
+    ) {
+      throw new AppError(
+        "Member not found.",
+        404,
+        "MEMBER_NOT_FOUND"
+      );
+    }
+
+    this.assertCanManageTarget(
+      actorRole,
+      member.role
+    );
+
+    if (
+      member.user.id ===
+      data.actorId
+    ) {
+      throw new AppError(
+        "You cannot remove yourself from the business.",
+        403,
+        "SELF_REMOVAL_FORBIDDEN"
+      );
+    }
+
+    if (
+      member.status ===
+      BusinessMemberStatus.REMOVED
+    ) {
+      throw new AppError(
+        "Member is already removed.",
+        409,
+        "MEMBER_ALREADY_REMOVED"
       );
     }
 

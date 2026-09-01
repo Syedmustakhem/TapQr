@@ -1,14 +1,29 @@
 import {
-  InvitationStatus,
   BusinessMemberRole,
+  InvitationStatus,
+  Prisma,
 } from "@prisma/client";
 
 import { prisma } from "../../../config/prisma";
 
+const invitationInclude = {
+  business: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+  invitedBy: {
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+    },
+  },
+} satisfies Prisma.BusinessInvitationInclude;
+
 export class BusinessInvitationRepository {
-  /**
-   * Create a staff invitation.
-   */
   async create(data: {
     businessId: string;
     invitedById: string;
@@ -27,53 +42,26 @@ export class BusinessInvitationRepository {
         expiresAt: data.expiresAt,
         status: InvitationStatus.PENDING,
       },
-
-      include: {
-        business: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
-
-        invitedBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-      },
+      include: invitationInclude,
     });
   }
 
-  /**
-   * Find invitation by secure token.
-   */
   async findByToken(
     token: string
   ) {
     return prisma.businessInvitation.findUnique({
-      where: {
-        token,
-      },
-
-      include: {
-        business: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
-      },
+      where: { token },
+      include: invitationInclude,
     });
   }
 
-  /**
-   * Find pending invitation for a business/email pair.
-   */
+  async findById(id: string) {
+    return prisma.businessInvitation.findUnique({
+      where: { id },
+      include: invitationInclude,
+    });
+  }
+
   async findPendingByBusinessAndEmail(
     businessId: string,
     email: string
@@ -81,60 +69,103 @@ export class BusinessInvitationRepository {
     return prisma.businessInvitation.findFirst({
       where: {
         businessId,
-
         email: email
           .trim()
           .toLowerCase(),
-
         status:
           InvitationStatus.PENDING,
-
         expiresAt: {
           gt: new Date(),
         },
       },
-
       orderBy: {
         createdAt: "desc",
       },
     });
   }
 
-  /**
-   * Update invitation.
-   */
+  async listByBusiness(
+    businessId: string,
+    options: {
+      page: number;
+      limit: number;
+      status?: InvitationStatus;
+    }
+  ) {
+    const where: Prisma.BusinessInvitationWhereInput =
+      {
+        businessId,
+
+        ...(options.status
+          ? {
+              status:
+                options.status,
+            }
+          : {}),
+      };
+
+    const skip =
+      (options.page - 1) *
+      options.limit;
+
+    const [invitations, total] =
+      await prisma.$transaction([
+        prisma.businessInvitation.findMany(
+          {
+            where,
+            include:
+              invitationInclude,
+            orderBy: {
+              createdAt:
+                "desc",
+            },
+            skip,
+            take:
+              options.limit,
+          }
+        ),
+
+        prisma.businessInvitation.count({
+          where,
+        }),
+      ]);
+
+    return {
+      invitations,
+      total,
+      page: options.page,
+      limit: options.limit,
+      totalPages: Math.ceil(
+        total / options.limit
+      ),
+    };
+  }
+
   async update(
     id: string,
     data: {
       status?: InvitationStatus;
       acceptedAt?: Date | null;
+      token?: string;
+      expiresAt?: Date;
     }
   ) {
     return prisma.businessInvitation.update({
-      where: {
-        id,
-      },
-
+      where: { id },
       data,
+      include: invitationInclude,
     });
   }
 
-  /**
-   * Expire all old pending invitations.
-   *
-   * Useful for cleanup jobs later.
-   */
   async expireOldInvitations() {
     return prisma.businessInvitation.updateMany({
       where: {
         status:
           InvitationStatus.PENDING,
-
         expiresAt: {
           lt: new Date(),
         },
       },
-
       data: {
         status:
           InvitationStatus.EXPIRED,

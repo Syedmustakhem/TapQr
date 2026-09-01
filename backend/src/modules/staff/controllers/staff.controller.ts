@@ -3,188 +3,371 @@ import {
   NextFunction,
 } from "express";
 
-import { StaffService } from "../services/staff.service";
 import { AuthRequest } from "../../auth/auth.types";
 
-export class StaffController {
-  private staffService = new StaffService();
+import {
+  StaffService,
+} from "../services/staff.service";
 
-  /**
-   * POST /staff/invitations
-   */
+import {
+  inviteStaffSchema,
+  acceptInvitationSchema,
+  updateMemberRoleSchema,
+  updateMemberStatusSchema,
+  removeMemberSchema,
+  staffListQuerySchema,
+  invitationListQuerySchema,
+} from "../validations/staff.validation";
+
+import {
+  ResponseHandler,
+} from "../../../cores/responses/ResponseHandler";
+
+export class StaffController {
+  private readonly staffService =
+    new StaffService();
+
+  private getUserId(
+    req: AuthRequest
+  ) {
+    if (!req.user?.id) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    return req.user.id;
+  }
+
   async inviteStaff(
     req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const ownerId = req.user?.id;
+      const actorId =
+        this.getUserId(req);
 
-      if (!ownerId) {
+      const input =
+        inviteStaffSchema.parse(
+          req.body
+        );
+
+      const businessId =
+        String(
+          req.params.businessId ?? ""
+        ).trim();
+
+      const result =
+        await this.staffService.inviteStaff(
+          {
+            actorId,
+            businessId,
+            email: input.email,
+            role: input.role,
+          }
+        );
+
+      return ResponseHandler.created(
+        res,
+        result.message,
+        result
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message ===
+          "Authentication required."
+      ) {
         return res.status(401).json({
           success: false,
-          message: "Authentication required.",
+          message:
+            "Authentication required.",
           code: "UNAUTHORIZED",
         });
       }
 
-      const result =
-        await this.staffService.inviteStaff({
-          ownerId,
-          email: req.body.email,
-          role: req.body.role,
-        });
+      next(error);
+    }
+  }
 
-      return res.status(201).json({
-        success: true,
-        ...result,
-      });
+  async listInvitations(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const actorId =
+        this.getUserId(req);
+
+      const query =
+        invitationListQuerySchema.parse(
+          req.query
+        );
+
+      const result =
+        await this.staffService.listInvitations(
+          actorId,
+          String(
+            req.params.businessId
+          ),
+          query
+        );
+
+      return ResponseHandler.success(
+        res,
+        "Invitations retrieved successfully.",
+        result
+      );
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * POST /staff/invitations/:token/accept
-   */
+  async resendInvitation(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const actorId =
+        this.getUserId(req);
+
+      const result =
+        await this.staffService.resendInvitation(
+          {
+            actorId,
+            businessId: String(
+              req.params.businessId
+            ),
+            invitationId:
+              String(
+                req.params.invitationId
+              ),
+          }
+        );
+
+      return ResponseHandler.success(
+        res,
+        result.message,
+        result
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async cancelInvitation(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const actorId =
+        this.getUserId(req);
+
+      const result =
+        await this.staffService.cancelInvitation(
+          {
+            actorId,
+            businessId: String(
+              req.params.businessId
+            ),
+            invitationId:
+              String(
+                req.params.invitationId
+              ),
+          }
+        );
+
+      return ResponseHandler.success(
+        res,
+        result.message,
+        result
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async acceptInvitation(
     req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const token = String(req.params.token);
+      const input =
+        acceptInvitationSchema.parse(
+          {
+            token: String(
+              req.params.token ??
+                ""
+            ),
+          }
+        );
 
       const result =
-        await this.staffService.acceptInvitation({
-          userId,
-          token,
-        });
+        await this.staffService.acceptInvitation(
+          {
+            userId,
+            token: input.token,
+          }
+        );
 
-      return res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return ResponseHandler.success(
+        res,
+        result.message,
+        result
+      );
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * GET /staff/members
-   */
   async getMembers(
     req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const ownerId = req.user?.id;
+      const actorId =
+        this.getUserId(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const members =
-        await this.staffService.getMembers(
-          ownerId
+      const query =
+        staffListQuerySchema.parse(
+          req.query
         );
 
-      return res.status(200).json({
-        success: true,
-        members,
-      });
+      const result =
+        await this.staffService.getMembers(
+          actorId,
+          String(
+            req.params.businessId
+          ),
+          query
+        );
+
+      return ResponseHandler.success(
+        res,
+        "Members retrieved successfully.",
+        result
+      );
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * PATCH /staff/members/:memberId
-   */
   async updateMemberRole(
     req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const ownerId = req.user?.id;
+      const actorId =
+        this.getUserId(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const memberId =
-        String(req.params.memberId);
-
-      const member =
-        await this.staffService.updateMemberRole(
-          ownerId,
-          memberId,
-          req.body.role
+      const input =
+        updateMemberRoleSchema.parse(
+          req.body
         );
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "Member updated successfully.",
-        member,
-      });
+      const result =
+        await this.staffService.updateMemberRole(
+          {
+            actorId,
+            businessId: String(
+              req.params.businessId
+            ),
+            memberId: String(
+              req.params.memberId
+            ),
+            role: input.role,
+          }
+        );
+
+      return ResponseHandler.success(
+        res,
+        "Member role updated successfully.",
+        result
+      );
     } catch (error) {
       next(error);
     }
   }
 
-  /**
-   * DELETE /staff/members/:memberId
-   */
+  async updateMemberStatus(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const actorId =
+        this.getUserId(req);
+
+      const input =
+        updateMemberStatusSchema.parse(
+          req.body
+        );
+
+      const result =
+        await this.staffService.updateMemberStatus(
+          {
+            actorId,
+            businessId: String(
+              req.params.businessId
+            ),
+            memberId: String(
+              req.params.memberId
+            ),
+            status:
+              input.status,
+          }
+        );
+
+      return ResponseHandler.success(
+        res,
+        "Member access status updated successfully.",
+        result
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async removeMember(
     req: AuthRequest,
     res: Response,
     next: NextFunction
   ) {
     try {
-      const ownerId = req.user?.id;
+      const actorId =
+        this.getUserId(req);
 
-      if (!ownerId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const memberId =
-        String(req.params.memberId);
+      removeMemberSchema.parse(
+        req.body
+      );
 
       const result =
         await this.staffService.removeMember(
-          ownerId,
-          memberId
+          {
+            actorId,
+            businessId: String(
+              req.params.businessId
+            ),
+            memberId: String(
+              req.params.memberId
+            ),
+          }
         );
 
-      return res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return ResponseHandler.success(
+        res,
+        result.message,
+        result
+      );
     } catch (error) {
       next(error);
     }
