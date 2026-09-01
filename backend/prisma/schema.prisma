@@ -782,6 +782,7 @@ enum WhatsAppMessageType {
 
 enum WhatsAppMessageStatus {
   PENDING
+  RECEIVED
   SENT
   DELIVERED
   READ
