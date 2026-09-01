@@ -416,14 +416,14 @@ export class BusinessRepository {
     };
 
     return prisma.businessProfile.upsert({
-      where: {
-        businessId,
-      },
+  where: {
+    businessId,
+  },
 
-      create: profileData,
+  create: profileData,
 
-      update: data,
-    });
+  update: profileData,
+});
   }
 
   async softDelete(id: string) {
