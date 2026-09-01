@@ -1,7 +1,15 @@
-import { Response, NextFunction } from "express";
+import {
+  NextFunction,
+  Response,
+} from "express";
 
-import { BusinessService } from "./business.service";
-import { BusinessAuthRequest } from "./business.types";
+import {
+  BusinessService,
+} from "./business.service";
+
+import {
+  BusinessAuthRequest,
+} from "./business.types";
 
 import {
   createBusinessSchema,
@@ -9,28 +17,77 @@ import {
   updateBusinessSchema,
 } from "./business.validation";
 
-export class BusinessController {
-  private service = new BusinessService();
+import { AppError } from "../../cores/errors/AppError";
 
+import {
+  ResponseHandler,
+} from "../../cores/responses/ResponseHandler";
+
+export class BusinessController {
+  private readonly service =
+    new BusinessService();
+
+  /**
+   * Get authenticated user ID.
+   *
+   * Authentication is normally guaranteed by the
+   * authenticate middleware, but we still fail safely
+   * if the request reaches the controller without a user.
+   */
+  private getUserId(
+    req: BusinessAuthRequest
+  ): string {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new AppError(
+        "Authentication required.",
+        401,
+        "UNAUTHORIZED"
+      );
+    }
+
+    return userId;
+  }
+
+  /**
+   * Validate and return business ID.
+   *
+   * Business IDs in the current Prisma schema are UUIDs.
+   */
+  private getBusinessId(
+    req: BusinessAuthRequest
+  ): string {
+    const businessId =
+      String(req.params.id ?? "").trim();
+
+    if (!businessId) {
+      throw new AppError(
+        "Business ID is required.",
+        400,
+        "BUSINESS_ID_REQUIRED"
+      );
+    }
+
+    return businessId;
+  }
+
+  /**
+   * Create business.
+   */
   create = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const data = createBusinessSchema.parse(
-        req.body
-      );
+      const data =
+        createBusinessSchema.parse(
+          req.body
+        );
 
       const business =
         await this.service.create(
@@ -38,131 +95,126 @@ export class BusinessController {
           data
         );
 
-      return res.status(201).json({
-        success: true,
-        message: "Business created successfully.",
-        data: business,
-      });
+      return ResponseHandler.created(
+        res,
+        "Business created successfully.",
+        business
+      );
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * Get all businesses owned by the
+   * authenticated user.
+   */
   getMine = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
+      const userId =
+        this.getUserId(req);
 
       const businesses =
         await this.service.getMyBusinesses(
           userId
         );
 
-      return res.status(200).json({
-        success: true,
-        message: "Businesses retrieved successfully.",
-        data: businesses,
-      });
+      return ResponseHandler.success(
+        res,
+        "Businesses retrieved successfully.",
+        businesses
+      );
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * Get a single business.
+   */
   getById = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
+      const businessId =
+        this.getBusinessId(req);
 
       const business =
         await this.service.getById(
           userId,
-          String(req.params.id)
+          businessId
         );
 
-      return res.status(200).json({
-        success: true,
-        message: "Business retrieved successfully.",
-        data: business,
-      });
+      return ResponseHandler.success(
+        res,
+        "Business retrieved successfully.",
+        business
+      );
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * Update business core information.
+   */
   update = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
+      const businessId =
+        this.getBusinessId(req);
 
-      const data = updateBusinessSchema.parse(
-        req.body
-      );
+      const data =
+        updateBusinessSchema.parse(
+          req.body
+        );
 
       const business =
         await this.service.update(
           userId,
-       String(req.params.id),
+          businessId,
           data
         );
 
-      return res.status(200).json({
-        success: true,
-        message: "Business updated successfully.",
-        data: business,
-      });
+      return ResponseHandler.success(
+        res,
+        "Business updated successfully.",
+        business
+      );
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * Update public/business profile information.
+   */
   updateProfile = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
+      const businessId =
+        this.getBusinessId(req);
 
       const data =
         updateBusinessProfileSchema.parse(
@@ -172,47 +224,47 @@ export class BusinessController {
       const profile =
         await this.service.updateProfile(
           userId,
-          String(req.params.id),
+          businessId,
           data
         );
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "Business profile updated successfully.",
-        data: profile,
-      });
+      return ResponseHandler.success(
+        res,
+        "Business profile updated successfully.",
+        profile
+      );
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * Soft-delete / deactivate business.
+   */
   delete = async (
     req: BusinessAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
     try {
-      const userId = req.user?.id;
+      const userId =
+        this.getUserId(req);
 
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
+      const businessId =
+        this.getBusinessId(req);
 
       const result =
         await this.service.delete(
           userId,
-          String(req.params.id),
+          businessId
         );
 
-      return res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return ResponseHandler.success(
+        res,
+        result.message ??
+          "Business deactivated successfully.",
+        result
+      );
     } catch (error) {
       next(error);
     }
