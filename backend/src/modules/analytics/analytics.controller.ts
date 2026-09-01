@@ -15,9 +15,16 @@ import {
   AnalyticsService,
 } from "./analytics.service";
 
-export class AnalyticsController {
+import {
+  ResponseHandler,
+} from "../../cores/responses/ResponseHandler";
 
-  private service =
+import {
+  AppError,
+} from "../../cores/errors/AppError";
+
+export class AnalyticsController {
+  private readonly service =
     new AnalyticsService();
 
   getBusinessOverview = async (
@@ -30,15 +37,24 @@ export class AnalyticsController {
         req.user?.id;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
+        throw new AppError(
+          "Authentication required.",
+          401,
+          "UNAUTHORIZED"
+        );
+      }
 
-          message:
-            "Authentication required.",
+      const businessId =
+        String(
+          req.params.businessId ?? ""
+        ).trim();
 
-          code:
-            "UNAUTHORIZED",
-        });
+      if (!businessId) {
+        throw new AppError(
+          "Business ID is required.",
+          400,
+          "BUSINESS_ID_REQUIRED"
+        );
       }
 
       const query =
@@ -49,22 +65,17 @@ export class AnalyticsController {
       const result =
         await this.service.getBusinessOverview(
           userId,
-
-String(req.params.businessId),
+          businessId,
           query.days,
-
-          query.qrCodeId
+          query.qrCodeId,
+          query.limit
         );
 
-      return res.status(200).json({
-        success: true,
-
-        message:
-          "Analytics retrieved successfully.",
-
-        data: result,
-      });
-
+      return ResponseHandler.success(
+        res,
+        "Analytics retrieved successfully.",
+        result
+      );
     } catch (error) {
       next(error);
     }

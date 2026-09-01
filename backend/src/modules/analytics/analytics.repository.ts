@@ -2,26 +2,26 @@ import {
   Prisma,
 } from "@prisma/client";
 
-import { prisma } from "../../config/prisma";
+import {
+  prisma,
+} from "../../config/prisma";
 
 import {
   RecordScanInput,
 } from "./analytics.types";
 
 export class AnalyticsRepository {
+  /*
+  |--------------------------------------------------------------------------
+  | RECORD SCAN
+  |--------------------------------------------------------------------------
+  */
 
-  /**
-   * Record one QR scan.
-   *
-   * The scan event and QR scan counter are updated
-   * inside one transaction.
-   */
   async recordScan(
     data: RecordScanInput
   ) {
     return prisma.$transaction(
       async (tx) => {
-
         const scan =
           await tx.scanEvent.create({
             data: {
@@ -65,12 +65,12 @@ export class AnalyticsRepository {
     );
   }
 
-  /**
-   * Get QR codes belonging to a business.
-   *
-   * If qrCodeId is supplied, it is additionally
-   * restricted to this business.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | BUSINESS QR CODES
+  |--------------------------------------------------------------------------
+  */
+
   async getBusinessQrCodes(
     businessId: string,
     qrCodeId?: string
@@ -99,7 +99,13 @@ export class AnalyticsRepository {
 
         status: true,
 
+        type: true,
+
+        experienceType: true,
+
         createdAt: true,
+
+        updatedAt: true,
       },
 
       orderBy: {
@@ -108,17 +114,18 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Count scans for a set of QR codes.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | TOTAL SCANS
+  |--------------------------------------------------------------------------
+  */
+
   async countScans(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return 0;
     }
 
@@ -137,20 +144,69 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Daily scan aggregation.
-   *
-   * PostgreSQL performs the grouping.
-   * We do NOT load every ScanEvent into Node.js.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | UNIQUE VISITORS
+  |--------------------------------------------------------------------------
+  |
+  | Uses distinct IP addresses recorded by the existing
+  | ScanEvent model.
+  |
+  | This is a visitor estimate, not a person identity system.
+  |
+  */
+
+  async countUniqueVisitors(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return 0;
+    }
+
+    const result =
+      await prisma.$queryRaw<
+        Array<{
+          count: bigint;
+        }>
+      >(
+        Prisma.sql`
+          SELECT
+            COUNT(
+              DISTINCT "ipAddress"
+            )::bigint AS count
+          FROM "ScanEvent"
+          WHERE
+            "qrCodeId" IN (
+              ${Prisma.join(
+                qrCodeIds
+              )}
+            )
+            AND "scannedAt" >= ${startDate}
+            AND "scannedAt" < ${endDate}
+            AND "ipAddress" IS NOT NULL
+            AND "ipAddress" <> ''
+        `
+      );
+
+    return Number(
+      result[0]?.count ?? 0
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DAILY SCANS
+  |--------------------------------------------------------------------------
+  */
+
   async getDailyScans(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
 
@@ -172,9 +228,11 @@ export class AnalyticsRepository {
         FROM "ScanEvent"
 
         WHERE
-          "qrCodeId" IN (${Prisma.join(
-            qrCodeIds
-          )})
+          "qrCodeId" IN (
+            ${Prisma.join(
+              qrCodeIds
+            )}
+          )
 
           AND "scannedAt" >= ${startDate}
 
@@ -186,69 +244,24 @@ export class AnalyticsRepository {
             "scannedAt"
           )
 
-        ORDER BY date ASC
+        ORDER BY
+          date ASC
       `
     );
   }
 
-  /**
-   * City analytics.
-   */
-  async getCities(
-    qrCodeIds: string[],
-    startDate: Date,
-    endDate: Date
-  ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
-      return [];
-    }
+  /*
+  |--------------------------------------------------------------------------
+  | COUNTRIES
+  |--------------------------------------------------------------------------
+  */
 
-    return prisma.scanEvent.groupBy({
-      by: ["city"],
-
-      where: {
-        qrCodeId: {
-          in: qrCodeIds,
-        },
-
-        scannedAt: {
-          gte: startDate,
-
-          lt: endDate,
-        },
-
-        city: {
-          not: null,
-        },
-      },
-
-      _count: {
-        _all: true,
-      },
-
-      orderBy: {
-        _count: {
-          city: "desc",
-        },
-      },
-
-      take: 10,
-    });
-  }
-
-  /**
-   * Country analytics.
-   */
   async getCountries(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
 
@@ -285,17 +298,66 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Device analytics.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | CITIES
+  |--------------------------------------------------------------------------
+  */
+
+  async getCities(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.scanEvent.groupBy({
+      by: ["city"],
+
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+
+        scannedAt: {
+          gte: startDate,
+
+          lt: endDate,
+        },
+
+        city: {
+          not: null,
+        },
+      },
+
+      _count: {
+        _all: true,
+      },
+
+      orderBy: {
+        _count: {
+          city: "desc",
+        },
+      },
+
+      take: 10,
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | DEVICES
+  |--------------------------------------------------------------------------
+  */
+
   async getDevices(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
 
@@ -332,17 +394,18 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Browser analytics.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | BROWSERS
+  |--------------------------------------------------------------------------
+  */
+
   async getBrowsers(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
 
@@ -379,17 +442,18 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Operating system analytics.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | OPERATING SYSTEMS
+  |--------------------------------------------------------------------------
+  */
+
   async getOperatingSystems(
     qrCodeIds: string[],
     startDate: Date,
     endDate: Date
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
 
@@ -426,20 +490,76 @@ export class AnalyticsRepository {
     });
   }
 
-  /**
-   * Recent scans.
-   *
-   * Always limited.
-   */
+  /*
+  |--------------------------------------------------------------------------
+  | REFERRERS
+  |--------------------------------------------------------------------------
+  */
+
+  async getReferrers(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.scanEvent.groupBy({
+      by: ["referrer"],
+
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+
+        scannedAt: {
+          gte: startDate,
+
+          lt: endDate,
+        },
+
+        referrer: {
+          not: null,
+        },
+      },
+
+      _count: {
+        _all: true,
+      },
+
+      orderBy: {
+        _count: {
+          referrer: "desc",
+        },
+      },
+
+      take: 10,
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | RECENT SCANS
+  |--------------------------------------------------------------------------
+  */
+
   async getRecentScans(
     qrCodeIds: string[],
     limit = 10
   ) {
-    if (
-      qrCodeIds.length === 0
-    ) {
+    if (qrCodeIds.length === 0) {
       return [];
     }
+
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Math.floor(limit),
+          1
+        ),
+        50
+      );
 
     return prisma.scanEvent.findMany({
       where: {
@@ -472,10 +592,7 @@ export class AnalyticsRepository {
         scannedAt: "desc",
       },
 
-      take: Math.min(
-        Math.max(limit, 1),
-        50
-      ),
+      take: safeLimit,
     });
   }
 }

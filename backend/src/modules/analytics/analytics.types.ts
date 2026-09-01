@@ -8,6 +8,12 @@ export interface AnalyticsAuthRequest
   };
 }
 
+/*
+|--------------------------------------------------------------------------
+| PUBLIC QR SCAN
+|--------------------------------------------------------------------------
+*/
+
 export interface RecordScanInput {
   qrCodeId: string;
 
@@ -22,4 +28,18 @@ export interface RecordScanInput {
   device?: string;
 
   operatingSystem?: string;
+}
+
+/*
+|--------------------------------------------------------------------------
+| ANALYTICS QUERY
+|--------------------------------------------------------------------------
+*/
+
+export interface AnalyticsQuery {
+  days: number;
+
+  qrCodeId?: string;
+
+  limit: number;
 }
