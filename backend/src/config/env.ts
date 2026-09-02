@@ -16,6 +16,9 @@ export const env = {
   JWT_REFRESH_EXPIRES_IN:
     process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
+  REVIEW_VERIFICATION_SECRET:
+    process.env.REVIEW_VERIFICATION_SECRET!,
+
   // Google
   GOOGLE_CLIENT_ID_WEB:
     process.env.GOOGLE_CLIENT_ID_WEB!,
@@ -23,36 +26,35 @@ export const env = {
   GOOGLE_CLIENT_ID_ANDROID:
     process.env.GOOGLE_CLIENT_ID_ANDROID!,
 
-  // WhatsApp
- // WhatsApp Cloud API
-WHATSAPP_ACCESS_TOKEN:
-  process.env.WHATSAPP_ACCESS_TOKEN!,
+  // WhatsApp Cloud API
+  WHATSAPP_ACCESS_TOKEN:
+    process.env.WHATSAPP_ACCESS_TOKEN!,
 
-WHATSAPP_PHONE_NUMBER_ID:
-  process.env.WHATSAPP_PHONE_NUMBER_ID!,
+  WHATSAPP_PHONE_NUMBER_ID:
+    process.env.WHATSAPP_PHONE_NUMBER_ID!,
 
-WHATSAPP_OTP_TEMPLATE_NAME:
-  process.env.WHATSAPP_OTP_TEMPLATE_NAME!,
+  WHATSAPP_OTP_TEMPLATE_NAME:
+    process.env.WHATSAPP_OTP_TEMPLATE_NAME!,
 
-WHATSAPP_OTP_TEMPLATE_LANG:
-  process.env.WHATSAPP_OTP_TEMPLATE_LANG ||
-  "en",
+  WHATSAPP_OTP_TEMPLATE_LANG:
+    process.env.WHATSAPP_OTP_TEMPLATE_LANG ||
+    "en",
 
-WHATSAPP_API_VERSION:
-  process.env.WHATSAPP_API_VERSION ||
-  "v19.0",
+  WHATSAPP_API_VERSION:
+    process.env.WHATSAPP_API_VERSION ||
+    "v19.0",
 
- WHATSAPP_WEBHOOK_VERIFY_TOKEN:
-  process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!, 
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN:
+    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN!,
 
-  // Resend
   // Email / Resend
-EMAIL_API_KEY: process.env.EMAIL_API_KEY!,
+  EMAIL_API_KEY:
+    process.env.EMAIL_API_KEY!,
 
-EMAIL_FROM:
-  process.env.EMAIL_FROM ||
-  "noreply@tapqr.shop",
+  EMAIL_FROM:
+    process.env.EMAIL_FROM ||
+    "noreply@tapqr.shop",
 
-RESEND_TEMPLATE_ID:
-  process.env.RESEND_TEMPLATE_ID!,
+  RESEND_TEMPLATE_ID:
+    process.env.RESEND_TEMPLATE_ID!,
 };
