@@ -13,7 +13,6 @@ import {
 const router = Router();
 const controller = new ReviewsController();
 
-/* Public */
 router.post(
   "/businesses/:businessId",
   authLimiter,
@@ -36,7 +35,6 @@ router.get(
   controller.getExternalReviewUrl
 );
 
-/* Authenticated customer */
 router.post(
   "/businesses/:businessId/authenticated",
   authenticate,
@@ -53,7 +51,6 @@ router.post(
   controller.reportReview
 );
 
-/* Business management */
 router.get(
   "/businesses/:businessId/manage",
   authenticate,

@@ -1,10 +1,6 @@
 import { Request } from "express";
 import { ReviewStatus } from "@prisma/client";
 
-export interface ReviewAuthRequest extends Request {
-  user?: { id: string; role: string };
-}
-
 export interface CreateReviewInput {
   businessId: string;
   qrCodeId?: string | null;
@@ -14,6 +10,7 @@ export interface CreateReviewInput {
   rating: number;
   title?: string | null;
   comment?: string | null;
+  verificationToken?: string | null;
 }
 
 export interface ReviewListQuery {
@@ -43,4 +40,11 @@ export interface ReportReviewInput {
   userId?: string | null;
   reason: string;
   details?: string | null;
+}
+
+export interface ReviewAuthRequest extends Request {
+  user?: {
+    id: string;
+    role: string;
+  };
 }
