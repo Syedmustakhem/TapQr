@@ -857,6 +857,10 @@ model Notification {
   createdAt DateTime  @default(now())
   expiresAt DateTime?
 
+  // NULL = unread
+  // timestamp = read
+  readAt DateTime?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   business   Business?              @relation(fields: [businessId], references: [id], onDelete: SetNull)
@@ -864,6 +868,7 @@ model Notification {
 
   @@unique([userId, eventKey])
   @@index([userId, createdAt])
+  @@index([userId, readAt])
   @@index([businessId, createdAt])
   @@index([type, createdAt])
 }
