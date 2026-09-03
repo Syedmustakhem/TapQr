@@ -1,5 +1,10 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
+
+import {
+  NotificationType,
+} from "@prisma/client";
 
 import {
   AuthRepository,
@@ -17,6 +22,10 @@ import {
 import {
   env,
 } from "../../config/env";
+
+import {
+  NotificationsService,
+} from "../notifications/notifications.service";
 
 import {
   generateAccessToken,
@@ -43,7 +52,7 @@ import {
   verifyGoogleIdToken,
 } from "./google.provider";
 
-const OTP_TTL_MINUTES =10;
+const OTP_TTL_MINUTES = 10;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
@@ -55,9 +64,18 @@ type AuthMode =
   | "register"
   | "login";
 
+type LoginMethod =
+  | "PASSWORD"
+  | "EMAIL_OTP"
+  | "WHATSAPP_OTP"
+  | "GOOGLE";
+
 export class AuthService {
   private authRepository =
     new AuthRepository();
+
+  private notificationsService =
+    new NotificationsService();
 
   /*
   |--------------------------------------------------------------------------
@@ -218,8 +236,15 @@ export class AuthService {
       );
     }
 
-    return this.issueSession(
-      user
+    /*
+     * Successful password login.
+     *
+     * Use the login-specific session method so
+     * the security notification is created.
+     */
+    return this.issueLoginSession(
+      user,
+      "PASSWORD"
     );
   }
 
@@ -391,6 +416,9 @@ export class AuthService {
       await this.authRepository
         .findUserByEmail(email);
 
+    /*
+     * REGISTER
+     */
     if (
       mode === "register"
     ) {
@@ -426,11 +454,20 @@ export class AuthService {
               "EMAIL",
           });
 
+      /*
+       * Registration.
+       *
+       * Do NOT create a "login detected"
+       * notification here.
+       */
       return this.issueSession(
         user
       );
     }
 
+    /*
+     * LOGIN
+     */
     if (!existingUser) {
       throw new AppError(
         "No account found with this email. Please register first.",
@@ -451,8 +488,12 @@ export class AuthService {
         "EMAIL"
       );
 
-    return this.issueSession(
-      existingUser
+    /*
+     * Successful email OTP login.
+     */
+    return this.issueLoginSession(
+      existingUser,
+      "EMAIL_OTP"
     );
   }
 
@@ -537,6 +578,9 @@ export class AuthService {
       await this.authRepository
         .findUserByPhone(phone);
 
+    /*
+     * REGISTER
+     */
     if (
       mode === "register"
     ) {
@@ -572,11 +616,20 @@ export class AuthService {
               "PHONE",
           });
 
+      /*
+       * Registration.
+       *
+       * Do NOT create a "login detected"
+       * notification here.
+       */
       return this.issueSession(
         user
       );
     }
 
+    /*
+     * LOGIN
+     */
     if (!existingUser) {
       throw new AppError(
         "No account found with this WhatsApp number. Please register first.",
@@ -597,8 +650,12 @@ export class AuthService {
         "PHONE"
       );
 
-    return this.issueSession(
-      existingUser
+    /*
+     * Successful WhatsApp OTP login.
+     */
+    return this.issueLoginSession(
+      existingUser,
+      "WHATSAPP_OTP"
     );
   }
 
@@ -627,6 +684,9 @@ export class AuthService {
           googleId
         );
 
+    /*
+     * Existing Google provider.
+     */
     if (existingProvider) {
       if (
         mode === "register"
@@ -638,8 +698,12 @@ export class AuthService {
         );
       }
 
-      return this.issueSession(
-        existingProvider.user
+      /*
+       * Successful Google login.
+       */
+      return this.issueLoginSession(
+        existingProvider.user,
+        "GOOGLE"
       );
     }
 
@@ -647,6 +711,9 @@ export class AuthService {
       await this.authRepository
         .findUserByEmail(email);
 
+    /*
+     * GOOGLE REGISTER
+     */
     if (
       mode === "register"
     ) {
@@ -670,11 +737,19 @@ export class AuthService {
               googleId,
           });
 
+      /*
+       * Registration.
+       *
+       * Do NOT create login notification.
+       */
       return this.issueSession(
         user
       );
     }
 
+    /*
+     * GOOGLE LOGIN
+     */
     if (!existingUser) {
       throw new AppError(
         "No account found with this Google account. Please register first.",
@@ -690,8 +765,12 @@ export class AuthService {
         googleId
       );
 
-    return this.issueSession(
-      existingUser
+    /*
+     * Successful Google login.
+     */
+    return this.issueLoginSession(
+      existingUser,
+      "GOOGLE"
     );
   }
 
@@ -849,6 +928,82 @@ export class AuthService {
       .consumeOtp(
         record.id
       );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | ISSUE LOGIN SESSION + SECURITY NOTIFICATION
+  |--------------------------------------------------------------------------
+  */
+
+  private async issueLoginSession(
+    user: {
+      id: string;
+      role: string;
+      fullName: string;
+      email: string | null;
+      phone: string | null;
+    },
+    loginMethod: LoginMethod
+  ) {
+    /*
+     * First create the authenticated session.
+     */
+    const session =
+      this.issueSession(
+        user
+      );
+
+    /*
+     * Create the security notification.
+     *
+     * This creates the database notification and
+     * delivery records.
+     *
+     * The notification worker is responsible for
+     * actually sending WhatsApp/email.
+     */
+    try {
+      await this.notificationsService
+        .publish({
+          userId: user.id,
+
+          type:
+            NotificationType.SECURITY,
+
+          title:
+            "New login detected",
+
+          message:
+            "A successful login was detected on your TapQR account.",
+
+          /*
+           * UUID makes every successful login
+           * a unique notification event.
+           */
+          eventKey:
+            `security.login.${user.id}.${randomUUID()}`,
+
+          actionUrl:
+            "/dashboard/notifications",
+
+          metadata: {
+            event: "LOGIN",
+            loginMethod,
+          },
+        });
+    } catch (notificationError) {
+      /*
+       * Notification failure must NEVER
+       * prevent a valid user from logging in.
+       */
+      console.error(
+        "Failed to create login security notification:",
+        notificationError
+      );
+    }
+
+    return session;
   }
 
   /*
