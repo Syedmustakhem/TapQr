@@ -18,11 +18,19 @@ import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 import whatsappWebhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
-
+import { startNotificationWorker } from "./modules/notifications/notification.worker";  
 import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
-
+import notificationRoutes from "./modules/notifications/notifications.routes";
 const app = express();
 app.set("trust proxy", 1);
+
+/**
+ * Notification delivery worker
+ *
+ * Processes pending email/WhatsApp notification deliveries
+ * and retries failed deliveries with exponential backoff.
+ */
+startNotificationWorker();
 /**
  * Security
  */
@@ -68,7 +76,10 @@ app.get("/health", (_req, res) => {
  * Authentication
  */
 app.use("/api/auth", authRoutes);
-
+app.use(
+  "/api/notifications",
+  notificationRoutes
+);
 /**
  * Business management
  */
