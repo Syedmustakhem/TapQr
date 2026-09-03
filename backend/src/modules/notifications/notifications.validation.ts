@@ -1,34 +1,71 @@
-import { z } from "zod";
 import { NotificationType } from "@prisma/client";
+import { z } from "zod";
 
-export const notificationListQuerySchema = z
-  .object({
-    page: z.coerce.number().int().min(1).max(100000).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(25),
+/**
+ * Validation for:
+ *
+ * GET /api/notifications
+ *
+ * Example:
+ *
+ * ?page=1&limit=20&unreadOnly=false&type=SECURITY
+ */
+export const notificationListQuerySchema =
+  z.object({
+    page: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(20),
+
     unreadOnly: z
-      .enum(["true", "false"])
-      .transform((value) => value === "true")
+      .enum([
+        "true",
+        "false",
+      ])
+      .transform(
+        (value) =>
+          value === "true"
+      )
       .default(false),
-    type: z.nativeEnum(NotificationType).optional(),
-  })
-  .strict();
 
-export const notificationIdParamSchema = z
-  .object({
-    id: z.string().trim().min(1, "Notification ID is required."),
-  })
-  .strict();
+    type: z
+      .nativeEnum(
+        NotificationType
+      )
+      .optional(),
+  });
 
-export const publishNotificationSchema = z
-  .object({
-    userId: z.string().uuid("Invalid user ID."),
-    businessId: z.string().uuid("Invalid business ID.").nullable().optional(),
-    type: z.nativeEnum(NotificationType),
-    title: z.string().trim().min(1).max(160),
-    message: z.string().trim().min(1).max(2000),
-    actionUrl: z.string().trim().max(500).nullable().optional(),
-    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-    eventKey: z.string().trim().min(1).max(255),
-    expiresAt: z.coerce.date().nullable().optional(),
-  })
-  .strict();
+/**
+ * Validation for notification ID routes.
+ *
+ * Used by:
+ *
+ * GET  /:id
+ * POST /:id/read
+ * POST /:id/retry
+ */
+export const notificationIdSchema =
+  z.object({
+    id: z
+      .string()
+      .min(
+        1,
+        "Notification ID is required."
+      ),
+  });
+
+/**
+ * Type inferred from the query schema.
+ */
+export type NotificationListQueryInput =
+  z.infer<
+    typeof notificationListQuerySchema
+  >;

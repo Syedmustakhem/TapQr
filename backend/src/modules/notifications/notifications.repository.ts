@@ -55,10 +55,10 @@ export class NotificationsRepository {
   }
 
   /**
-   * Create the notification first.
+   * Create a notification and its delivery records.
    *
-   * External delivery is intentionally handled separately
-   * by the notification delivery worker.
+   * External delivery is handled separately by the
+   * notification delivery worker.
    */
   async create(
     input: PublishNotificationInput,
@@ -82,6 +82,13 @@ export class NotificationsRepository {
         eventKey: input.eventKey,
         expiresAt: input.expiresAt ?? null,
 
+        /*
+         * New notifications are unread by default.
+         *
+         * readAt remains NULL.
+         */
+        readAt: null,
+
         deliveries: {
           create: channels.map((channel) => ({
             channel,
@@ -97,10 +104,9 @@ export class NotificationsRepository {
   }
 
   /**
-   * Find a notification belonging to a specific user.
+   * Find one notification belonging to a specific user.
    *
-   * This prevents one authenticated user from accessing
-   * another user's notification.
+   * userId is always checked to prevent cross-user access.
    */
   async findByIdForUser(
     id: string,
@@ -111,6 +117,7 @@ export class NotificationsRepository {
         id,
         userId,
       },
+
       include: {
         deliveries: true,
       },
@@ -118,7 +125,11 @@ export class NotificationsRepository {
   }
 
   /**
-   * List notifications belonging to a user.
+   * List notifications for the authenticated user.
+   *
+   * unreadOnly=true means:
+   *
+   * readAt IS NULL
    */
   async listForUser(
     userId: string,
@@ -127,26 +138,17 @@ export class NotificationsRepository {
     const where: Prisma.NotificationWhereInput = {
       userId,
 
+      ...(query.unreadOnly
+        ? {
+            readAt: null,
+          }
+        : {}),
+
       ...(query.type
         ? {
             type: query.type,
           }
         : {}),
-
-      /*
-       * unreadOnly intentionally does not add a condition yet.
-       *
-       * The current Notification model does not have a readAt
-       * / isRead field.
-       *
-       * Once readAt is added to Prisma, this should become:
-       *
-       * ...(query.unreadOnly
-       *   ? {
-       *       readAt: null,
-       *     }
-       *   : {}),
-       */
     };
 
     const skip =
@@ -198,15 +200,15 @@ export class NotificationsRepository {
   }
 
   /**
-   * Current schema does not contain a read marker.
-   *
-   * Therefore this intentionally returns the total number
-   * of notifications rather than pretending they are unread.
+   * Get the number of unread notifications.
    */
-  async unreadCount(userId: string) {
+  async unreadCount(
+    userId: string
+  ) {
     return prisma.notification.count({
       where: {
         userId,
+        readAt: null,
       },
     });
   }
@@ -214,35 +216,69 @@ export class NotificationsRepository {
   /**
    * Mark one notification as read.
    *
-   * Currently a safe placeholder because the Notification
-   * table does not contain readAt/isRead.
+   * updateMany is used so the ownership check and
+   * read-state check happen together.
    */
   async markRead(
     id: string,
     userId: string
   ) {
-    const notification =
-      await this.findByIdForUser(
+    const result =
+      await prisma.notification.updateMany({
+        where: {
+          id,
+          userId,
+          readAt: null,
+        },
+
+        data: {
+          readAt: new Date(),
+        },
+      });
+
+    /*
+     * If count = 0, there are two possibilities:
+     *
+     * 1. Notification does not exist for this user.
+     * 2. Notification was already read.
+     *
+     * Return the existing notification so the operation
+     * remains idempotent.
+     */
+    if (result.count === 0) {
+      return this.findByIdForUser(
         id,
         userId
       );
-
-    if (!notification) {
-      return null;
     }
 
-    return notification;
+    return this.findByIdForUser(
+      id,
+      userId
+    );
   }
 
   /**
-   * Mark all notifications as read.
-   *
-   * Currently a safe no-op because the Notification table
-   * does not contain readAt/isRead.
+   * Mark all unread notifications belonging to
+   * the authenticated user as read.
    */
-  async markAllRead(userId: string) {
+  async markAllRead(
+    userId: string
+  ) {
+    const result =
+      await prisma.notification.updateMany({
+        where: {
+          userId,
+          readAt: null,
+        },
+
+        data: {
+          readAt: new Date(),
+        },
+      });
+
     return {
-      count: 0,
+      count: result.count,
     };
   }
 
@@ -273,9 +309,11 @@ export class NotificationsRepository {
   }
 
   /**
-   * Find a notification delivery and its parent notification.
+   * Find a notification delivery.
    */
-  async findDelivery(id: string) {
+  async findDelivery(
+    id: string
+  ) {
     return prisma.notificationDelivery.findUnique({
       where: {
         id,
@@ -295,6 +333,7 @@ export class NotificationsRepository {
             eventKey: true,
             createdAt: true,
             expiresAt: true,
+            readAt: true,
           },
         },
       },
@@ -302,10 +341,9 @@ export class NotificationsRepository {
   }
 
   /**
-   * Idempotency lookup.
+   * Find an existing notification by event key.
    *
-   * The same eventKey for the same user must not create
-   * duplicate notifications.
+   * This provides notification idempotency.
    */
   async findNotificationByEventKey(
     userId: string,
@@ -332,7 +370,7 @@ export class NotificationsRepository {
    *   immediately process.
    *
    * FAILED:
-   *   process only after exponential backoff.
+   *   process after exponential backoff.
    *
    * Expired notifications are excluded.
    */
@@ -373,8 +411,8 @@ export class NotificationsRepository {
         },
 
         /*
-         * Fetch more candidates because some FAILED
-         * deliveries may still be inside their backoff window.
+         * Fetch extra candidates because some FAILED
+         * records may still be inside their backoff period.
          */
         take: limit * 3,
       });
@@ -382,7 +420,7 @@ export class NotificationsRepository {
     return rows
       .filter((row) => {
         /*
-         * PENDING deliveries can be processed immediately.
+         * PENDING deliveries are ready immediately.
          */
         if (
           row.status ===
@@ -392,7 +430,7 @@ export class NotificationsRepository {
         }
 
         /*
-         * FAILED delivery without previous attempt timestamp
+         * FAILED delivery without a timestamp
          * can be retried immediately.
          */
         if (!row.lastAttemptAt) {
@@ -406,7 +444,7 @@ export class NotificationsRepository {
          * attempt 2 -> 60 seconds
          * attempt 3 -> 120 seconds
          *
-         * capped at 15 minutes.
+         * maximum = 15 minutes
          */
         const backoff =
           Math.min(
@@ -431,11 +469,8 @@ export class NotificationsRepository {
   /**
    * Atomically claim a delivery.
    *
-   * updateMany is important here because multiple
-   * API/worker instances could see the same PENDING
-   * delivery at approximately the same time.
-   *
-   * Only one instance can successfully change it to SENDING.
+   * This prevents two worker instances from sending
+   * the same notification simultaneously.
    */
   async claimDelivery(
     id: string,
@@ -470,8 +505,9 @@ export class NotificationsRepository {
   }
 
   /**
-   * Fetch a delivery with the recipient information
-   * required by the email/WhatsApp providers.
+   * Load delivery + notification + recipient.
+   *
+   * Used by the notification worker.
    */
   async findDeliveryForProcessing(
     id: string
@@ -503,12 +539,9 @@ export class NotificationsRepository {
   /**
    * Reset a failed delivery for manual retry.
    *
-   * IMPORTANT:
-   * attempts is reset to 0.
-   *
-   * Without this, a delivery that already reached the
-   * MAX_ATTEMPTS limit would become PENDING but the worker
-   * would immediately ignore it because attempts >= maxAttempts.
+   * attempts is reset to zero so a delivery that
+   * already reached the automatic retry limit can
+   * still be manually retried.
    */
   async resetFailedDelivery(
     deliveryId: string,

@@ -52,12 +52,12 @@ export class NotificationsService {
   }
 
   /**
-   * Retry all failed deliveries belonging to a notification.
+   * Retry all failed deliveries for a notification.
    *
-   * The service does not directly call email/WhatsApp.
+   * This method does not directly call email or WhatsApp.
    *
-   * It only puts failed deliveries back into PENDING.
-   * The notification worker will perform the actual delivery.
+   * It resets failed deliveries to PENDING.
+   * The notification worker performs the actual delivery.
    */
   async retry(
     userId: string,
@@ -77,6 +77,9 @@ export class NotificationsService {
       );
     }
 
+    /*
+     * Do not retry deliveries that already succeeded.
+     */
     const failedDeliveries =
       notification.deliveries.filter(
         (delivery) =>
@@ -123,22 +126,19 @@ export class NotificationsService {
   }
 
   /**
-   * Central notification entry point.
-   *
-   * Core business modules should call this service instead
-   * of talking directly to email/WhatsApp providers.
+   * Central notification creation method.
    *
    * Responsibilities:
    *
-   * 1. Validate recipient.
-   * 2. Validate business ownership when businessId is supplied.
-   * 3. Validate business status.
-   * 4. Enforce eventKey idempotency.
-   * 5. Check notification preferences.
-   * 6. Resolve delivery channels.
-   * 7. Persist notification and delivery records.
+   * - validate recipient
+   * - validate business ownership
+   * - validate business status
+   * - enforce eventKey idempotency
+   * - check notification preferences
+   * - resolve delivery channels
+   * - persist notification
    *
-   * External delivery is handled separately by the worker.
+   * External providers are handled by the worker.
    */
   async publish(
     input: PublishNotificationInput
@@ -164,9 +164,9 @@ export class NotificationsService {
       );
     }
 
-    /**
-     * If the notification belongs to a business,
-     * verify that the recipient owns that business.
+    /*
+     * If businessId is provided, verify that the
+     * notification recipient owns that business.
      */
     if (input.businessId) {
       const business =
@@ -195,12 +195,10 @@ export class NotificationsService {
       }
     }
 
-    /**
+    /*
      * Idempotency:
      *
-     * The same eventKey for the same user returns
-     * the existing notification instead of creating
-     * another notification.
+     * Same user + same eventKey = same notification.
      */
     const existing =
       await this.repository.findNotificationByEventKey(
@@ -212,8 +210,8 @@ export class NotificationsService {
       return existing;
     }
 
-    /**
-     * Load user notification preferences.
+    /*
+     * Load notification preferences.
      */
     const preference =
       await this.repository.findPreference(
@@ -225,23 +223,20 @@ export class NotificationsService {
         input.type
       ];
 
-    /**
-     * If the preference record does not exist,
-     * notifications are enabled by default.
+    /*
+     * Notifications are enabled by default when
+     * the user does not yet have a preference record.
      */
     const categoryEnabled =
       preference?.[
         typePreferenceKey
       ] ?? true;
 
-    /**
+    /*
      * Category disabled:
      *
-     * Persist the notification but create no external
-     * delivery records.
-     *
-     * This preserves the notification event/history
-     * without violating the user's preference.
+     * Persist the notification for history,
+     * but do not create external delivery records.
      */
     if (!categoryEnabled) {
       return this.repository.create(
@@ -250,13 +245,13 @@ export class NotificationsService {
       );
     }
 
-    /**
-     * Resolve the actual channels based on:
+    /*
+     * Resolve channels based on:
      *
      * - requested channels
-     * - user preferences
+     * - preferences
      * - available email
-     * - available phone number
+     * - available phone
      */
     const channels =
       this.resolveChannels(
@@ -266,10 +261,10 @@ export class NotificationsService {
         user.phone
       );
 
-    /**
-     * Persist first.
+    /*
+     * Persist notification.
      *
-     * The worker handles external delivery later.
+     * readAt = NULL means unread.
      */
     return this.repository.create(
       input,
@@ -278,8 +273,11 @@ export class NotificationsService {
   }
 
   /**
-   * Resolve channels that are actually available
-   * and allowed by user preferences.
+   * Resolve channels that are both:
+   *
+   * - requested
+   * - enabled
+   * - available
    */
   private resolveChannels(
     requested:
@@ -308,9 +306,8 @@ export class NotificationsService {
       preference?.whatsappEnabled ??
       true;
 
-    /**
-     * If the caller does not explicitly provide channels,
-     * default to EMAIL + WHATSAPP.
+    /*
+     * Default delivery channels.
      */
     const requestedChannels =
       requested ??
@@ -320,13 +317,8 @@ export class NotificationsService {
       ];
 
     for (const channel of requestedChannels) {
-      /**
-       * Email:
-       *
-       * Only create an email delivery when:
-       * - channel was requested
-       * - email notifications are enabled
-       * - user has an email address
+      /*
+       * EMAIL
        */
       if (
         channel ===
@@ -339,13 +331,8 @@ export class NotificationsService {
         );
       }
 
-      /**
-       * WhatsApp:
-       *
-       * Only create a WhatsApp delivery when:
-       * - channel was requested
-       * - WhatsApp notifications are enabled
-       * - user has a phone number
+      /*
+       * WHATSAPP
        */
       if (
         channel ===
@@ -389,12 +376,9 @@ export class NotificationsService {
   }
 
   /**
-   * Get notification count.
+   * Get true unread notification count.
    *
-   * NOTE:
-   * The current Notification schema does not have
-   * readAt/isRead, therefore this is not a true unread
-   * count yet.
+   * readAt IS NULL = unread.
    */
   async getUnreadCount(
     userId: string
@@ -406,15 +390,14 @@ export class NotificationsService {
         ),
 
       readTrackingAvailable:
-        false,
+        true,
     };
   }
 
   /**
    * Mark one notification as read.
    *
-   * Currently delegates to the repository placeholder
-   * because the schema does not yet contain readAt/isRead.
+   * This operation is idempotent.
    */
   async markRead(
     userId: string,
@@ -438,10 +421,8 @@ export class NotificationsService {
   }
 
   /**
-   * Mark all notifications as read.
-   *
-   * Currently a safe no-op until a read marker is added
-   * to the Prisma Notification model.
+   * Mark all notifications belonging to the user
+   * as read.
    */
   async markAllRead(
     userId: string
@@ -452,9 +433,9 @@ export class NotificationsService {
   }
 
   /**
-   * Put a notification delivery back into PENDING.
+   * Put a delivery back into PENDING.
    *
-   * This method is useful for internal workflows.
+   * Intended for internal notification workflows.
    */
   async markDeliveryPending(
     deliveryId: string
