@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/**
+ * ============================================================
+ * CREATE QR CODE
+ * ============================================================
+ */
+
 export const createQRCodeSchema =
   z
     .object({
@@ -60,6 +66,9 @@ export const createQRCodeSchema =
         .optional(),
     })
     .superRefine((data, ctx) => {
+      /**
+       * Redirect QR requires URL.
+       */
       if (
         data.experienceType ===
           "REDIRECT" &&
@@ -73,6 +82,9 @@ export const createQRCodeSchema =
         });
       }
 
+      /**
+       * Catalog based experiences require catalog.
+       */
       if (
         [
           "CATALOG",
@@ -92,6 +104,12 @@ export const createQRCodeSchema =
         });
       }
 
+      /**
+       * Static QR backward compatibility.
+       *
+       * We intentionally allow destinationUrl
+       * for existing records.
+       */
       if (
         data.experienceType !==
           "REDIRECT" &&
@@ -99,9 +117,14 @@ export const createQRCodeSchema =
         data.destinationUrl
       ) {
         // Allowed for backward compatibility.
-        // We do not reject it.
       }
     });
+
+/**
+ * ============================================================
+ * UPDATE QR CODE
+ * ============================================================
+ */
 
 export const updateQRCodeSchema =
   z.object({
@@ -157,3 +180,80 @@ export const updateQRCodeSchema =
       ])
       .optional(),
   });
+
+/**
+ * ============================================================
+ * QR BRANDING / QR STUDIO
+ * ============================================================
+ */
+
+const hexColorSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^#[0-9A-Fa-f]{6}$/,
+    "Color must be a valid HEX color."
+  );
+
+export const updateQRBrandingSchema =
+  z.object({
+    primaryColor:
+      hexColorSchema
+        .nullable()
+        .optional(),
+
+    secondaryColor:
+      hexColorSchema
+        .nullable()
+        .optional(),
+
+    backgroundColor:
+      hexColorSchema
+        .nullable()
+        .optional(),
+
+    qrForegroundColor:
+      hexColorSchema
+        .nullable()
+        .optional(),
+
+    qrBackgroundColor:
+      hexColorSchema
+        .nullable()
+        .optional(),
+
+    logoUrl: z
+      .string()
+      .trim()
+      .url("Invalid logo URL.")
+      .nullable()
+      .optional(),
+
+    coverImageUrl: z
+      .string()
+      .trim()
+      .url("Invalid cover image URL.")
+      .nullable()
+      .optional(),
+
+    buttonStyle: z
+      .string()
+      .trim()
+      .min(1)
+      .max(50)
+      .nullable()
+      .optional(),
+
+    fontFamily: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .nullable()
+      .optional(),
+  });
+
+export type UpdateQRBrandingInput =
+  z.infer<
+    typeof updateQRBrandingSchema
+  >;

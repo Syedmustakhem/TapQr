@@ -38,9 +38,6 @@ export interface CreateQRCodeDTO {
 
   /**
    * Required only when experienceType = REDIRECT.
-   *
-   * Kept optional so catalog/business QR codes
-   * don't need a destination URL.
    */
   destinationUrl?: string;
 
@@ -55,16 +52,6 @@ export interface CreateQRCodeDTO {
   /**
    * Controls which sections appear
    * on the guest experience page.
-   *
-   * Example:
-   *
-   * [
-   *   "PROFILE",
-   *   "CATALOG",
-   *   "OFFERS",
-   *   "CONTACT",
-   *   "LOCATION"
-   * ]
    */
   enabledSections?: string[];
 }
@@ -95,6 +82,39 @@ export interface UpdateQRCodeDTO {
   enabledSections?: string[];
 
   status?: QRCodeStatus;
+}
+
+/**
+ * QR Studio branding configuration.
+ */
+export interface QRBrandingDTO {
+  primaryColor?: string | null;
+
+  secondaryColor?: string | null;
+
+  backgroundColor?: string | null;
+
+  qrForegroundColor?: string | null;
+
+  qrBackgroundColor?: string | null;
+
+  logoUrl?: string | null;
+
+  coverImageUrl?: string | null;
+
+  buttonStyle?: string | null;
+
+  fontFamily?: string | null;
+}
+
+/**
+ * Update QR Studio branding.
+ */
+export interface UpdateQRBrandingDTO
+  extends QRBrandingDTO {
+  qrCodeId: string;
+
+  ownerId: string;
 }
 
 /**

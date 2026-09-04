@@ -10,6 +10,12 @@ export class QRCodeController {
   private qrCodeService =
     new QRCodeService();
 
+  /**
+   * ============================================================
+   * CREATE QR
+   * ============================================================
+   */
+
   createQRCode = async (
     req: AuthRequest,
     res: Response
@@ -27,13 +33,20 @@ export class QRCodeController {
     );
   };
 
+  /**
+   * ============================================================
+   * GET BUSINESS QRS
+   * ============================================================
+   */
+
   getBusinessQRCodes = async (
     req: AuthRequest,
     res: Response
   ) => {
-    const businessId = String(
-      req.params.businessId
-    );
+    const businessId =
+      String(
+        req.params.businessId
+      );
 
     const result =
       await this.qrCodeService.getBusinessQRCodes(
@@ -48,13 +61,18 @@ export class QRCodeController {
     );
   };
 
+  /**
+   * ============================================================
+   * GET QR
+   * ============================================================
+   */
+
   getQRCodeById = async (
     req: AuthRequest,
     res: Response
   ) => {
-    const id = String(
-      req.params.id
-    );
+    const id =
+      String(req.params.id);
 
     const result =
       await this.qrCodeService.getQRCodeById(
@@ -69,13 +87,18 @@ export class QRCodeController {
     );
   };
 
+  /**
+   * ============================================================
+   * UPDATE QR
+   * ============================================================
+   */
+
   updateQRCode = async (
     req: AuthRequest,
     res: Response
   ) => {
-    const id = String(
-      req.params.id
-    );
+    const id =
+      String(req.params.id);
 
     const result =
       await this.qrCodeService.updateQRCode({
@@ -91,13 +114,18 @@ export class QRCodeController {
     );
   };
 
+  /**
+   * ============================================================
+   * DELETE QR
+   * ============================================================
+   */
+
   deleteQRCode = async (
     req: AuthRequest,
     res: Response
   ) => {
-    const id = String(
-      req.params.id
-    );
+    const id =
+      String(req.params.id);
 
     const result =
       await this.qrCodeService.deleteQRCode(
@@ -108,6 +136,59 @@ export class QRCodeController {
     return ResponseHandler.success(
       res,
       "QR Code deleted successfully.",
+      result
+    );
+  };
+
+  /**
+   * ============================================================
+   * QR STUDIO - GET BRANDING
+   * ============================================================
+   */
+
+  getQRBranding = async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    const id =
+      String(req.params.id);
+
+    const result =
+      await this.qrCodeService.getQRBranding(
+        id,
+        req.user!.id
+      );
+
+    return ResponseHandler.success(
+      res,
+      "QR branding retrieved successfully.",
+      result
+    );
+  };
+
+  /**
+   * ============================================================
+   * QR STUDIO - UPDATE BRANDING
+   * ============================================================
+   */
+
+  updateQRBranding = async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    const id =
+      String(req.params.id);
+
+    const result =
+      await this.qrCodeService.updateQRBranding(
+        id,
+        req.user!.id,
+        req.body
+      );
+
+    return ResponseHandler.success(
+      res,
+      "QR branding updated successfully.",
       result
     );
   };

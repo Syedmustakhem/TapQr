@@ -4,8 +4,11 @@ import { prisma } from "../../config/prisma";
 
 export class QRCodeRepository {
   /**
-   * Create a QR code.
+   * ============================================================
+   * CREATE
+   * ============================================================
    */
+
   async create(
     data: Prisma.QRCodeCreateInput
   ) {
@@ -15,11 +18,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Find QR code by ID.
-   *
-   * Includes business ownership information,
-   * business profile, attached catalog and branding.
+   * ============================================================
+   * FIND BY ID
+   * ============================================================
    */
+
   async findById(id: string) {
     return prisma.qRCode.findUnique({
       where: {
@@ -38,7 +41,6 @@ export class QRCodeRepository {
             logo: true,
             description: true,
             status: true,
-
             profile: true,
           },
         },
@@ -131,10 +133,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Find QR code by public short code.
-   *
-   * Used by the public guest experience.
+   * ============================================================
+   * FIND BY SHORT CODE
+   * ============================================================
    */
+
   async findByShortCode(
     shortCode: string
   ) {
@@ -155,7 +158,6 @@ export class QRCodeRepository {
             logo: true,
             description: true,
             status: true,
-
             profile: true,
           },
         },
@@ -248,11 +250,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Find a catalog by ID.
-   *
-   * Used when attaching a catalog
-   * to a QR code.
+   * ============================================================
+   * FIND CATALOG
+   * ============================================================
    */
+
   async findCatalogById(
     catalogId: string
   ) {
@@ -276,8 +278,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Find all QR codes belonging to a business.
+   * ============================================================
+   * FIND BUSINESS QR CODES
+   * ============================================================
    */
+
   async findByBusinessId(
     businessId: string
   ) {
@@ -310,8 +315,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Update QR code.
+   * ============================================================
+   * UPDATE
+   * ============================================================
    */
+
   async update(
     id: string,
     data: Prisma.QRCodeUpdateInput
@@ -326,8 +334,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Soft delete QR code.
+   * ============================================================
+   * SOFT DELETE
+   * ============================================================
    */
+
   async softDelete(id: string) {
     return prisma.qRCode.update({
       where: {
@@ -341,11 +352,11 @@ export class QRCodeRepository {
   }
 
   /**
-   * Increment QR scan count.
-   *
-   * Kept for compatibility with
-   * existing analytics functionality.
+   * ============================================================
+   * SCAN COUNT
+   * ============================================================
    */
+
   async incrementScanCount(
     id: string
   ) {
@@ -359,6 +370,66 @@ export class QRCodeRepository {
           increment: 1,
         },
       },
+    });
+  }
+
+  /**
+   * ============================================================
+   * QR BRANDING
+   * ============================================================
+   */
+
+  async findBranding(
+    qrCodeId: string
+  ) {
+    return prisma.qRBranding.findUnique({
+      where: {
+        qrCodeId,
+      },
+    });
+  }
+
+  /**
+   * Create QR branding.
+   */
+  async createBranding(
+    qrCodeId: string,
+    data: Prisma.QRBrandingCreateInput
+  ) {
+    return prisma.qRBranding.create({
+      data: {
+        ...data,
+
+        qrCode: {
+          connect: {
+            id: qrCodeId,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Create or update QR branding.
+   */
+  async upsertBranding(
+    qrCodeId: string,
+    data: Prisma.QRBrandingUpdateInput
+  ) {
+    return prisma.qRBranding.upsert({
+      where: {
+        qrCodeId,
+      },
+
+      create: {
+        qrCode: {
+          connect: {
+            id: qrCodeId,
+          },
+        },
+      },
+
+      update: data,
     });
   }
 }
