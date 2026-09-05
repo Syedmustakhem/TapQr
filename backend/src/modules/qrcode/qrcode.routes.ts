@@ -1,120 +1,20 @@
 import { Router } from "express";
-
 import { authenticate } from "../auth/auth.middleware";
-
 import { validate } from "../../cores/middleware/validate";
-
-import {
-  createQRCodeSchema,
-  updateQRCodeSchema,
-  updateQRBrandingSchema,
-} from "./qrcode.schema";
-
+import { createQRCodeSchema, updateQRCodeSchema, updateQRBrandingSchema } from "./qrcode.schema";
 import { QRCodeController } from "./qrcode.controller";
 
-const router =
-  Router();
-
-const qrCodeController =
-  new QRCodeController();
-
-/**
- * ============================================================
- * AUTHENTICATION
- * ============================================================
- */
+const router = Router();
+const controller = new QRCodeController();
 
 router.use(authenticate);
 
-/**
- * ============================================================
- * QR CODE CRUD
- * ============================================================
- */
-
-/**
- * Create QR Code
- *
- * POST /api/qrcodes
- */
-router.post(
-  "/",
-  validate(createQRCodeSchema),
-  qrCodeController.createQRCode
-);
-
-/**
- * Get business QR Codes
- *
- * GET /api/qrcodes/business/:businessId
- */
-router.get(
-  "/business/:businessId",
-  qrCodeController.getBusinessQRCodes
-);
-
-/**
- * ============================================================
- * QR STUDIO
- * ============================================================
- */
-
-/**
- * Get QR branding
- *
- * GET /api/qrcodes/:id/branding
- */
-router.get(
-  "/:id/branding",
-  qrCodeController.getQRBranding
-);
-
-/**
- * Update QR branding
- *
- * PUT /api/qrcodes/:id/branding
- */
-router.put(
-  "/:id/branding",
-  validate(updateQRBrandingSchema),
-  qrCodeController.updateQRBranding
-);
-
-/**
- * ============================================================
- * SINGLE QR
- * ============================================================
- */
-
-/**
- * Get single QR Code
- *
- * GET /api/qrcodes/:id
- */
-router.get(
-  "/:id",
-  qrCodeController.getQRCodeById
-);
-
-/**
- * Update QR Code
- *
- * PUT /api/qrcodes/:id
- */
-router.put(
-  "/:id",
-  validate(updateQRCodeSchema),
-  qrCodeController.updateQRCode
-);
-
-/**
- * Delete QR Code
- *
- * DELETE /api/qrcodes/:id
- */
-router.delete(
-  "/:id",
-  qrCodeController.deleteQRCode
-);
+router.post("/", validate(createQRCodeSchema), controller.createQRCode);
+router.get("/business/:businessId", controller.getBusinessQRCodes);
+router.get("/:id/branding", controller.getQRBranding);
+router.put("/:id/branding", validate(updateQRBrandingSchema), controller.updateQRBranding);
+router.get("/:id", controller.getQRCodeById);
+router.put("/:id", validate(updateQRCodeSchema), controller.updateQRCode);
+router.delete("/:id", controller.deleteQRCode);
 
 export default router;

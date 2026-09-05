@@ -1,7 +1,20 @@
 export type QRCodeType =
   | "STATIC"
   | "DYNAMIC";
-
+export type QRSourceType =
+  | "TABLE"
+  | "COUNTER"
+  | "TAKEAWAY"
+  | "PACKAGING"
+  | "POSTER"
+  | "FLYER"
+  | "BUSINESS_CARD"
+  | "RECEIPT"
+  | "WEBSITE"
+  | "SOCIAL_MEDIA"
+  | "ADVERTISEMENT"
+  | "EVENT"
+  | "OTHER";
 export type QRCodeStatus =
   | "ACTIVE"
   | "PAUSED"
@@ -42,7 +55,10 @@ export interface CreateQRCodeDTO {
   destinationUrl?: string;
 
   type: QRCodeType;
-
+sourceType?: QRSourceType;
+placementLabel?: string;
+locationLabel?: string;
+campaignName?: string;
   /**
    * Determines what the guest sees
    * after scanning the QR.
@@ -71,7 +87,10 @@ export interface UpdateQRCodeDTO {
   name?: string;
 
   description?: string;
-
+sourceType?: QRSourceType;
+placementLabel?: string;
+locationLabel?: string;
+campaignName?: string;
   /**
    * null = remove destination URL.
    */

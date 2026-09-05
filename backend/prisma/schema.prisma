@@ -379,9 +379,16 @@ model QRCode {
 
   branding QRBranding?
 
-  scanEvents    ScanEvent[]
-  conversations Conversation[]
+  scanEvents     ScanEvent[]
+  conversations  Conversation[]
+  sourceType     QRSourceType   @default(OTHER)
+  placementLabel String?
+  locationLabel  String?
+  campaignName   String?
+  lastScannedAt  DateTime?
 
+  @@index([businessId, sourceType])
+  @@index([lastScannedAt])
   @@index([businessId])
   @@index([catalogId])
   @@index([status])
@@ -687,10 +694,11 @@ model ScanEvent {
   referrer  String?
   userAgent String?
 
-  scannedAt DateTime @default(now())
+  scannedAt          DateTime      @default(now())
+  sourceTypeSnapshot QRSourceType?
+  qrCode             QRCode        @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
 
-  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
-
+  @@index([sourceTypeSnapshot])
   @@index([qrCodeId])
   @@index([scannedAt])
   @@index([country])
@@ -929,6 +937,21 @@ model NotificationPreference {
 // ============================================================
 // ENUMS FOR WHATSAPP
 // ============================================================
+enum QRSourceType {
+  TABLE
+  COUNTER
+  TAKEAWAY
+  PACKAGING
+  POSTER
+  FLYER
+  BUSINESS_CARD
+  RECEIPT
+  WEBSITE
+  SOCIAL_MEDIA
+  ADVERTISEMENT
+  EVENT
+  OTHER
+}
 
 enum ConversationStatus {
   OPEN
