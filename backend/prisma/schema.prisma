@@ -1,6 +1,5 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -378,10 +377,18 @@ model QRCode {
   catalog Catalog? @relation(fields: [catalogId], references: [id], onDelete: SetNull)
 
   branding QRBranding?
+  rules    QRRule[]
 
+  experiments QRExperiment[]
+
+  ruleMatches QRRuleMatch[]
+
+  conversions QRConversion[]
+
+  overrides      QRRuleOverride[]
   scanEvents     ScanEvent[]
   conversations  Conversation[]
-  sourceType     QRSourceType   @default(OTHER)
+  sourceType     QRSourceType     @default(OTHER)
   placementLabel String?
   locationLabel  String?
   campaignName   String?
@@ -576,13 +583,13 @@ model CatalogItem {
 // Examples:
 //
 // Pizza:
-//   Small  -> â‚¹149
-//   Medium -> â‚¹249
-//   Large  -> â‚¹349
+//   Small  -> Ã¢â€šÂ¹149
+//   Medium -> Ã¢â€šÂ¹249
+//   Large  -> Ã¢â€šÂ¹349
 //
 // Milk:
-//   500ml -> â‚¹30
-//   1L    -> â‚¹55
+//   500ml -> Ã¢â€šÂ¹30
+//   1L    -> Ã¢â€šÂ¹55
 // ============================================================
 
 model CatalogItemVariant {
@@ -619,12 +626,12 @@ model CatalogItemVariant {
 //
 // Pizza
 //   Crust
-//     Thin      +â‚¹0
-//     Cheese    +â‚¹50
+//     Thin      +Ã¢â€šÂ¹0
+//     Cheese    +Ã¢â€šÂ¹50
 //
 //   Toppings
-//     Paneer    +â‚¹40
-//     Mushroom  +â‚¹30
+//     Paneer    +Ã¢â€šÂ¹40
+//     Mushroom  +Ã¢â€šÂ¹30
 // ============================================================
 
 model CatalogItemOptionGroup {
@@ -934,6 +941,511 @@ model NotificationPreference {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ============================================
+// SMART QR RULE
+// ============================================
+
+// ============================================
+// ADVANCED SMART QR RULE
+// ============================================
+
+model QRRule {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  name        String
+  description String?
+
+  status QRRuleStatus @default(DRAFT)
+
+  /**
+   * Higher priority executes first.
+   */
+  priority Int @default(0)
+
+  /**
+   * Optional activation window.
+   */
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /**
+   * Top-level condition logic.
+   */
+  logic QRRuleLogic @default(AND)
+
+  /**
+   * Action executed when the rule matches.
+   */
+  actionType  QRRuleActionType
+  actionValue String
+
+  /**
+   * Optional fallback specific to this rule.
+   */
+  fallbackActionType  QRRuleActionType?
+  fallbackActionValue String?
+
+  /**
+   * Runtime statistics.
+   */
+  matchCount Int @default(0)
+
+  lastMatchedAt DateTime?
+
+  /**
+   * Version currently published.
+   */
+  publishedVersion Int?
+
+  /**
+   * Optional experiment.
+   */
+  experimentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  conditions QRRuleCondition[]
+  versions   QRRuleVersion[]
+
+  experiment QRExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+
+  auditLogs QRRuleAuditLog[]
+
+  overrides             QRRuleOverride[]
+  qrruleConditionGroups QRRuleConditionGroup[]
+  qrruleMatches         QRRuleMatch[]
+  qrconversions         QRConversion[]
+
+  @@index([qrCodeId])
+  @@index([qrCodeId, status])
+  @@index([qrCodeId, priority])
+  @@index([status])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([experimentId])
+}
+
+// ============================================
+// SMART QR RULE CONDITION
+// ============================================
+
+// ============================================
+// ADVANCED SMART QR CONDITION
+// ============================================
+
+model QRRuleCondition {
+  id String @id @default(cuid())
+
+  ruleId String
+
+  /**
+   * Parent condition group.
+   * NULL means this belongs directly
+   * to the rule.
+   */
+  groupId String?
+
+  type     QRRuleConditionType
+  operator QRRuleOperator
+
+  /**
+   * Flexible condition payload.
+   */
+  value Json
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rule QRRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  group QRRuleConditionGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([ruleId, sortOrder])
+  @@index([groupId])
+  @@index([type])
+}
+
+// ============================================
+// CONDITION GROUP
+// ============================================
+
+model QRRuleConditionGroup {
+  id String @id @default(cuid())
+
+  ruleId String
+
+  parentGroupId String?
+
+  logic QRRuleLogic @default(AND)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rule QRRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  parentGroup QRRuleConditionGroup? @relation("QRRuleConditionGroupTree", fields: [parentGroupId], references: [id], onDelete: Cascade)
+
+  children QRRuleConditionGroup[] @relation("QRRuleConditionGroupTree")
+
+  conditions QRRuleCondition[]
+
+  @@index([ruleId])
+  @@index([parentGroupId])
+  @@index([ruleId, sortOrder])
+}
+
+// ============================================
+// SMART QR RULE VERSION
+// ============================================
+// ============================================
+// RULE VERSION
+// ============================================
+
+model QRRuleVersion {
+  id String @id @default(cuid())
+
+  ruleId String
+
+  version Int
+
+  status QRRuleVersionStatus @default(DRAFT)
+
+  /**
+   * Complete immutable snapshot.
+   */
+  snapshot Json
+
+  createdBy           String?
+  publishedBy         String?
+  rollbackFromVersion Int?
+
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  rule QRRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, version])
+  @@index([ruleId])
+  @@index([ruleId, status])
+  @@index([createdAt])
+}
+
+// ============================================
+// QR EXPERIMENT
+// ============================================
+
+model QRExperiment {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  name        String
+  description String?
+
+  status QRExperimentStatus @default(DRAFT)
+
+  allocationType QRExperimentAllocationType @default(PERCENTAGE)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /**
+   * Total visitors entering experiment.
+   */
+  participantCount Int @default(0)
+
+  /**
+   * Total conversions attributed
+   * to experiment.
+   */
+  conversionCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  rules QRRule[]
+
+  variants                QRExperimentVariant[]
+  qrexperimentAssignments QRExperimentAssignment[]
+
+  @@index([qrCodeId])
+  @@index([qrCodeId, status])
+  @@index([startsAt])
+  @@index([endsAt])
+}
+
+// ============================================
+// EXPERIMENT VARIANT
+// ============================================
+
+model QRExperimentVariant {
+  id String @id @default(cuid())
+
+  experimentId String
+
+  name String
+
+  /**
+   * Example:
+   * A = 50
+   * B = 50
+   */
+  allocation Int
+
+  /**
+   * Experience/action to execute.
+   */
+  actionType  QRRuleActionType
+  actionValue String
+
+  participantCount Int @default(0)
+  conversionCount  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experiment QRExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  assignments QRExperimentAssignment[]
+
+  @@index([experimentId])
+}
+
+// ============================================
+// EXPERIMENT ASSIGNMENT
+// ============================================
+
+model QRExperimentAssignment {
+  id String @id @default(cuid())
+
+  experimentId String
+  variantId    String
+
+  /**
+   * Anonymous visitor identifier.
+   * This should be a privacy-conscious
+   * application-generated identifier,
+   * not raw personal information.
+   */
+  visitorKey String
+
+  firstAssignedAt DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+
+  experiment QRExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  variant QRExperimentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, visitorKey])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([visitorKey])
+}
+
+// ============================================
+// RULE MATCH ANALYTICS
+// ============================================
+
+model QRRuleMatch {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  ruleId String?
+
+  ruleVersion Int?
+
+  status QRRuleMatchStatus
+
+  /**
+   * Selected action.
+   */
+  actionType  QRRuleActionType?
+  actionValue String?
+
+  /**
+   * Optional experiment information.
+   */
+  experimentId String?
+  variantId    String?
+
+  /**
+   * Request context snapshots.
+   */
+  device          String?
+  operatingSystem String?
+  browser         String?
+
+  country String?
+  state   String?
+  city    String?
+
+  language String?
+
+  referrer String?
+
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+
+  sourceType String?
+
+  /**
+   * Anonymous visitor key.
+   */
+  visitorKey String?
+
+  matchedAt DateTime @default(now())
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  rule QRRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([qrCodeId])
+  @@index([qrCodeId, matchedAt])
+  @@index([ruleId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([status])
+  @@index([sourceType])
+}
+
+// ============================================
+// QR CONVERSION
+// ============================================
+
+model QRConversion {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  ruleId      String?
+  ruleVersion Int?
+
+  experimentId String?
+  variantId    String?
+
+  /**
+   * External/business-defined conversion.
+   * Examples:
+   * ORDER
+   * LEAD
+   * BOOKING
+   * SIGNUP
+   * CALL
+   * WHATSAPP
+   */
+  conversionType String
+
+  externalId String?
+
+  value    Decimal? @db.Decimal(12, 2)
+  currency String?
+
+  visitorKey String?
+
+  convertedAt DateTime @default(now())
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  rule QRRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([qrCodeId])
+  @@index([ruleId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([conversionType])
+  @@index([convertedAt])
+  @@index([externalId])
+}
+
+// ============================================
+// QR RULE OVERRIDE
+// ============================================
+
+model QRRuleOverride {
+  id String @id @default(cuid())
+
+  qrCodeId String
+
+  ruleId String?
+
+  type QRRuleOverrideType
+
+  status QRRuleOverrideStatus @default(ACTIVE)
+
+  priority Int @default(10000)
+
+  reason String
+
+  actionType  QRRuleActionType
+  actionValue String
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  createdBy String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  rule QRRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([qrCodeId])
+  @@index([qrCodeId, status])
+  @@index([qrCodeId, priority])
+  @@index([startsAt])
+  @@index([endsAt])
+}
+
+// ============================================
+// QR RULE AUDIT LOG
+// ============================================
+
+model QRRuleAuditLog {
+  id String @id @default(cuid())
+
+  ruleId String
+
+  action QRRuleAuditAction
+
+  actorId String?
+
+  /**
+   * Before/after snapshots.
+   */
+  previousState Json?
+  newState      Json?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  rule QRRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([action])
+}
+
 // ============================================================
 // ENUMS FOR WHATSAPP
 // ============================================================
@@ -999,6 +1511,67 @@ enum ReviewStatus {
   PUBLISHED
   HIDDEN
   REJECTED
+}
+
+// ============================================
+// SMART QR RULE ENGINE ENUMS
+// ============================================
+
+enum QRRuleStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  EXPIRED
+  ARCHIVED
+}
+
+enum QRRuleOperator {
+  EQUALS
+  NOT_EQUALS
+
+  GREATER_THAN
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN
+  LESS_THAN_OR_EQUAL
+
+  IN
+  NOT_IN
+
+  BETWEEN
+  NOT_BETWEEN
+
+  CONTAINS
+  NOT_CONTAINS
+
+  STARTS_WITH
+  ENDS_WITH
+
+  EXISTS
+  NOT_EXISTS
+}
+
+enum QRRuleLogic {
+  AND
+  OR
+}
+
+enum QRRuleActionType {
+  EXPERIENCE
+  REDIRECT
+  CATALOG
+  MENU
+  SERVICES
+  PRODUCTS
+  CONTACT
+  CAMPAIGN
+  CUSTOM
+}
+
+enum QRRuleVersionStatus {
+  DRAFT
+  TESTING
+  PUBLISHED
+  ARCHIVED
 }
 
 // ============================================================
@@ -1107,4 +1680,100 @@ enum InvitationStatus {
   ACCEPTED
   REJECTED
   EXPIRED
+}
+
+// ============================================
+// ADVANCED SMART QR ENUMS
+// ============================================
+
+enum QRRuleOverrideType {
+  EMERGENCY
+  BUSINESS
+  CAMPAIGN
+  SYSTEM
+}
+
+enum QRRuleOverrideStatus {
+  ACTIVE
+  EXPIRED
+  DISABLED
+}
+
+enum QRExperimentStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum QRExperimentAllocationType {
+  PERCENTAGE
+  FIXED
+}
+
+enum QRRuleMatchStatus {
+  MATCHED
+  NOT_MATCHED
+  FALLBACK
+  ERROR
+}
+
+enum QRRuleConditionType {
+  TIME
+  DATE
+  DAY_OF_WEEK
+  BUSINESS_HOURS
+
+  DEVICE
+  OPERATING_SYSTEM
+  BROWSER
+  LANGUAGE
+
+  COUNTRY
+  STATE
+  CITY
+  GEO_RADIUS
+
+  REFERRER
+
+  UTM_SOURCE
+  UTM_MEDIUM
+  UTM_CAMPAIGN
+  UTM_TERM
+  UTM_CONTENT
+
+  QR_SOURCE
+  QR_PLACEMENT
+  QR_LOCATION
+
+  CAMPAIGN
+  SCAN_COUNT
+
+  VISITOR_TYPE
+  CUSTOMER_STATE
+  CUSTOMER_SEGMENT
+  AUTHENTICATION_STATE
+
+  BUSINESS_STATE
+  CATALOG_STATE
+  PRODUCT_AVAILABILITY
+
+  SUBSCRIPTION_PLAN
+
+  CUSTOM
+}
+
+enum QRRuleAuditAction {
+  CREATED
+  UPDATED
+  ACTIVATED
+  PAUSED
+  PUBLISHED
+  ROLLED_BACK
+  ARCHIVED
+  DELETED
+  PRIORITY_CHANGED
+  OVERRIDE_CREATED
+  OVERRIDE_DISABLED
 }
