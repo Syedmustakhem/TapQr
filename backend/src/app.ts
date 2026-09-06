@@ -1,7 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
-
+import qrRulesRoutes from "./modules/qrrules/qr-rules.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import businessRoutes from "./modules/business/business.routes";
 import qrCodeRoutes from "./modules/qrcode/qrcode.routes";
@@ -140,6 +140,7 @@ app.use(
   "/api/qrcodes/public",
   qrCodePublicRoutes
 );
+app.use("/api/qr-rules", qrRulesRoutes);
 
 /**
  * AUTHENTICATED QR MANAGEMENT
