@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { authenticate } from "../auth/auth.middleware";
+
 import { validate } from "../../cores/middleware/validate";
 
 import {
@@ -23,9 +24,8 @@ const controller = new QRRulesController();
  * ============================================================
  * AUTHENTICATION
  * ============================================================
- *
- * All QR Rule management endpoints require authentication.
  */
+
 router.use(authenticate);
 
 /**
@@ -33,11 +33,22 @@ router.use(authenticate);
  * CREATE RULE
  * ============================================================
  *
- * POST /api/qrrules
+ * POST /api/qr-rules
+ *
+ * Body:
+ * {
+ *   qrCodeId,
+ *   name,
+ *   ...
+ * }
  */
+
 router.post(
   "/",
-  validate(createQRRuleSchema),
+  validate(
+    createQRRuleSchema,
+    "body"
+  ),
   controller.create
 );
 
@@ -46,31 +57,52 @@ router.post(
  * SIMULATE RULE
  * ============================================================
  *
- * POST /api/qrrules/simulate
- *
- * IMPORTANT:
- * Keep this route BEFORE /:id so "simulate"
- * is not interpreted as a rule ID.
+ * POST /api/qr-rules/simulate
  */
+
 router.post(
   "/simulate",
-  validate(simulateQRRuleSchema),
+  validate(
+    simulateQRRuleSchema,
+    "body"
+  ),
   controller.simulate
 );
 
 /**
  * ============================================================
- * RULE MATCH ANALYTICS
+ * LIST RULE MATCHES
  * ============================================================
  *
- * GET /api/qrrules/qr/:qrCodeId/matches
+ * GET /api/qr-rules/qr/:qrCodeId/matches
  *
- * IMPORTANT:
- * Keep this BEFORE /qr/:qrCodeId.
+ * URL params:
+ *   qrCodeId
+ *
+ * Query:
+ *   ruleId
+ *   status
+ *   from
+ *   to
+ *   limit
+ *   offset
+ *
+ * We validate params and query separately.
  */
+
 router.get(
   "/qr/:qrCodeId/matches",
-  validate(qrRuleMatchesQuerySchema),
+
+  validate(
+    qrCodeRuleParamSchema,
+    "params"
+  ),
+
+  validate(
+    qrRuleMatchesQuerySchema,
+    "query"
+  ),
+
   controller.listMatches
 );
 
@@ -79,11 +111,19 @@ router.get(
  * LIST RULES FOR QR CODE
  * ============================================================
  *
- * GET /api/qrrules/qr/:qrCodeId
+ * GET /api/qr-rules/qr/:qrCodeId
+ *
+ * qrCodeId comes from req.params.
  */
+
 router.get(
   "/qr/:qrCodeId",
-  validate(qrCodeRuleParamSchema),
+
+  validate(
+    qrCodeRuleParamSchema,
+    "params"
+  ),
+
   controller.list
 );
 
@@ -92,11 +132,17 @@ router.get(
  * GET SINGLE RULE
  * ============================================================
  *
- * GET /api/qrrules/:id
+ * GET /api/qr-rules/:id
  */
+
 router.get(
   "/:id",
-  validate(qrRuleIdSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
   controller.getById
 );
 
@@ -105,24 +151,44 @@ router.get(
  * UPDATE RULE
  * ============================================================
  *
- * PATCH /api/qrrules/:id
+ * PATCH /api/qr-rules/:id
+ *
+ * id       → params
+ * rule data → body
  */
+
 router.patch(
   "/:id",
-  validate(updateQRRuleSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
+  validate(
+    updateQRRuleSchema,
+    "body"
+  ),
+
   controller.update
 );
 
 /**
  * ============================================================
- * DELETE / ARCHIVE RULE
+ * DELETE RULE
  * ============================================================
  *
- * DELETE /api/qrrules/:id
+ * DELETE /api/qr-rules/:id
  */
+
 router.delete(
   "/:id",
-  validate(qrRuleIdSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
   controller.delete
 );
 
@@ -131,11 +197,17 @@ router.delete(
  * ACTIVATE RULE
  * ============================================================
  *
- * POST /api/qrrules/:id/activate
+ * POST /api/qr-rules/:id/activate
  */
+
 router.post(
   "/:id/activate",
-  validate(qrRuleIdSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
   controller.activate
 );
 
@@ -144,11 +216,17 @@ router.post(
  * PAUSE RULE
  * ============================================================
  *
- * POST /api/qrrules/:id/pause
+ * POST /api/qr-rules/:id/pause
  */
+
 router.post(
   "/:id/pause",
-  validate(qrRuleIdSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
   controller.pause
 );
 
@@ -157,11 +235,17 @@ router.post(
  * PUBLISH RULE
  * ============================================================
  *
- * POST /api/qrrules/:id/publish
+ * POST /api/qr-rules/:id/publish
  */
+
 router.post(
   "/:id/publish",
-  validate(qrRuleIdSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
   controller.publish
 );
 
@@ -170,11 +254,25 @@ router.post(
  * ROLLBACK RULE
  * ============================================================
  *
- * POST /api/qrrules/:id/rollback
+ * POST /api/qr-rules/:id/rollback
+ *
+ * id      → params
+ * version → body
  */
+
 router.post(
   "/:id/rollback",
-  validate(rollbackQRRuleSchema),
+
+  validate(
+    qrRuleIdSchema,
+    "params"
+  ),
+
+  validate(
+    rollbackQRRuleSchema,
+    "body"
+  ),
+
   controller.rollback
 );
 
