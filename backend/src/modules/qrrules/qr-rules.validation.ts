@@ -22,7 +22,11 @@ const conditionSchema = z.object({
 
   value: z.unknown(),
 
-  sortOrder: z.number().int().min(0).default(0),
+  sortOrder: z
+    .number()
+    .int()
+    .min(0)
+    .default(0),
 });
 
 /**
@@ -39,9 +43,15 @@ const conditionGroupSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     id: z.string().min(1).optional(),
 
-    logic: z.nativeEnum(QRRuleLogic).default(QRRuleLogic.AND),
+    logic: z
+      .nativeEnum(QRRuleLogic)
+      .default(QRRuleLogic.AND),
 
-    sortOrder: z.number().int().min(0).default(0),
+    sortOrder: z
+      .number()
+      .int()
+      .min(0)
+      .default(0),
 
     conditions: z
       .array(conditionSchema)
@@ -82,7 +92,10 @@ export const createQRRuleSchema = z.object({
     .string()
     .trim()
     .min(1, "Rule name is required.")
-    .max(120, "Rule name cannot exceed 120 characters."),
+    .max(
+      120,
+      "Rule name cannot exceed 120 characters."
+    ),
 
   description: z
     .string()
@@ -172,18 +185,28 @@ export const updateQRRuleSchema =
  */
 
 export const qrRuleIdSchema = z.object({
-  id: z.string().min(1),
+  id: z
+    .string()
+    .min(1, "Rule ID is required."),
 });
 
 /**
  * ============================================================
  * QR CODE PARAM
  * ============================================================
+ *
+ * Used for:
+ *
+ * GET /api/qr-rules/qr/:qrCodeId
+ *
+ * GET /api/qr-rules/qr/:qrCodeId/matches
  */
 
 export const qrCodeRuleParamSchema =
   z.object({
-    qrCodeId: z.string().min(1),
+    qrCodeId: z
+      .string()
+      .min(1, "QR Code ID is required."),
   });
 
 /**
@@ -197,81 +220,123 @@ export const rollbackQRRuleSchema =
     version: z
       .number()
       .int()
-      .min(1),
+      .min(1, "Version must be at least 1."),
   });
 
 /**
  * ============================================================
  * SIMULATOR
  * ============================================================
- *
- * We are defining the validation now so the same contracts
- * can later be reused by the Rule Simulator.
  */
 
-export const simulateQRRuleSchema = z.object({
-  qrCodeId: z.string().min(1),
+export const simulateQRRuleSchema =
+  z.object({
+    qrCodeId: z
+      .string()
+      .min(1, "QR Code ID is required."),
 
-  timestamp: z.coerce.date().optional(),
+    timestamp: z
+      .coerce
+      .date()
+      .optional(),
 
-  timezone: z.string().trim().min(1).optional(),
+    timezone: z
+      .string()
+      .trim()
+      .min(1)
+      .optional(),
 
-  headers: z
-    .record(z.string(), z.string())
-    .optional(),
+    headers: z
+      .record(z.string(), z.string())
+      .optional(),
 
-  query: z
-    .record(z.string(), z.string())
-    .optional(),
+    query: z
+      .record(z.string(), z.string())
+      .optional(),
 
-  visitorKey: z
-    .string()
-    .trim()
-    .max(128)
-    .optional(),
+    visitorKey: z
+      .string()
+      .trim()
+      .max(128)
+      .optional(),
 
-  customerId: z
-    .string()
-    .trim()
-    .optional(),
+    customerId: z
+      .string()
+      .trim()
+      .optional(),
 
-  custom: z
-    .record(z.string(), z.unknown())
-    .optional(),
-});
+    custom: z
+      .record(z.string(), z.unknown())
+      .optional(),
+  });
 
-export const qrRuleMatchesQuerySchema = z.object({
-  qrCodeId: z.string().min(1),
+/**
+ * ============================================================
+ * RULE MATCHES QUERY
+ * ============================================================
+ *
+ * IMPORTANT:
+ *
+ * qrCodeId is NOT part of this schema because it comes from:
+ *
+ * req.params.qrCodeId
+ *
+ * Query parameters are only:
+ *
+ * ?ruleId=
+ * ?status=
+ * ?from=
+ * ?to=
+ * ?limit=
+ * ?offset=
+ */
 
-  ruleId: z.string().optional(),
+export const qrRuleMatchesQuerySchema =
+  z.object({
+    ruleId: z
+      .string()
+      .optional(),
 
-  status: z
-    .enum([
-      "MATCHED",
-      "NOT_MATCHED",
-      "FALLBACK",
-      "ERROR",
-    ])
-    .optional(),
+    status: z
+      .enum([
+        "MATCHED",
+        "NOT_MATCHED",
+        "FALLBACK",
+        "ERROR",
+      ])
+      .optional(),
 
-  from: z.coerce.date().optional(),
+    from: z
+      .coerce
+      .date()
+      .optional(),
 
-  to: z.coerce.date().optional(),
+    to: z
+      .coerce
+      .date()
+      .optional(),
 
-  limit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .default(50),
+    limit: z
+      .coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(50),
 
-  offset: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .default(0),
-});
-  
+    offset: z
+      .coerce
+      .number()
+      .int()
+      .min(0)
+      .default(0),
+  });
+
+/**
+ * ============================================================
+ * TYPES
+ * ============================================================
+ */
 
 export type CreateQRRuleInput =
   z.infer<typeof createQRRuleSchema>;
