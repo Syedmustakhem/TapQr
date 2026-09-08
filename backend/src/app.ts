@@ -49,6 +49,20 @@ app.use(
   cors({
     origin: allowedOrigins,
     credentials: true,
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Accept",
+      "x-tapqr-visitor-key",
+    ],
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
   })
 );
 
