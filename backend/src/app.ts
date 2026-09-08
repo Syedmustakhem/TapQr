@@ -21,6 +21,7 @@ import analyticsRoutes from "./modules/analytics/analytics.routes";
 import { startNotificationWorker } from "./modules/notifications/notification.worker";  
 import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
+import qrExperimentsRoutes from "./modules/qr-experiments/qr-experiments.routes";
 const app = express();
 app.set("trust proxy", 1);
 
@@ -140,6 +141,8 @@ app.use(
   "/api/qrcodes/public",
   qrCodePublicRoutes
 );
+
+app.use("/api/qr-experiments", qrExperimentsRoutes);
 app.use("/api/qr-rules", qrRulesRoutes);
 
 /**
