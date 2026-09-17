@@ -21,6 +21,7 @@ import analyticsRoutes from "./modules/analytics/analytics.routes";
 import { startNotificationWorker } from "./modules/notifications/notification.worker";  
 import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
+import qrConversionRoutes from "./modules/qrcode/qr-conversion.routes";
 const app = express();
 app.set("trust proxy", 1);
 
@@ -101,6 +102,11 @@ app.use("/api/businesses", businessRoutes);
 app.use(
   "/api/catalogs",
   optionGroupRoutes
+);
+
+app.use(
+  "/api/qrcodes/public",
+  qrConversionRoutes
 );
 
 app.use(

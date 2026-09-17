@@ -195,11 +195,21 @@ export class AnalyticsService {
         overview: {
           totalScans: 0,
           uniqueVisitors: 0,
+
           previousPeriodScans: 0,
           percentageChange: 0,
+
           activeQrCodes: 0,
           totalQrCodes: 0,
+
           averageDailyScans: 0,
+
+          totalConversions: 0,
+          uniqueConverters: 0,
+          conversionRate: 0,
+
+          previousPeriodConversions: 0,
+          conversionPercentageChange: 0,
         },
 
         scansByDay:
@@ -208,6 +218,22 @@ export class AnalyticsService {
             startDate,
             endDate
           ),
+
+        conversionAnalytics: {
+          timeline:
+            this.buildConversionDailySeries(
+              [],
+              startDate,
+              endDate
+            ),
+
+          byType: [],
+          byQr: [],
+          byRule: [],
+          byExperiment: [],
+          byVariant: [],
+          valuesByCurrency: [],
+        },
 
         qrPerformance: [],
 
@@ -245,7 +271,21 @@ export class AnalyticsService {
       operatingSystems,
       referrers,
       recentScans,
+
+      totalConversions,
+      previousPeriodConversions,
+      uniqueConverters,
+      dailyConversions,
+      conversionsByType,
+      conversionsByQr,
+      conversionsByRule,
+      conversionsByExperiment,
+      conversionsByVariant,
+      conversionValues,
     ] = await Promise.all([
+      /*
+       * Scan analytics
+       */
       this.repository.countScans(
         qrCodeIds,
         startDate,
@@ -310,10 +350,73 @@ export class AnalyticsService {
         qrCodeIds,
         safeLimit
       ),
+
+      /*
+       * Conversion analytics
+       */
+      this.repository.countConversions(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.countConversions(
+        qrCodeIds,
+        previousStartDate,
+        previousEndDate
+      ),
+
+      this.repository.countUniqueConverters(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getDailyConversions(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionsByType(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionsByQr(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionsByRule(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionsByExperiment(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionsByVariant(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
+
+      this.repository.getConversionValuesByCurrency(
+        qrCodeIds,
+        startDate,
+        endDate
+      ),
     ]);
 
     /*
-     * Growth calculation.
+     * Scan growth calculation.
      */
     const percentageChange =
       previousPeriodScans === 0
@@ -323,11 +426,50 @@ export class AnalyticsService {
         : Number(
             (
               (
-                (totalScans -
-                  previousPeriodScans) /
+                (
+                  totalScans -
+                  previousPeriodScans
+                ) /
                 previousPeriodScans
               ) * 100
             ).toFixed(1)
+          );
+
+    /*
+     * Conversion growth calculation.
+     */
+    const conversionPercentageChange =
+      previousPeriodConversions === 0
+        ? totalConversions > 0
+          ? 100
+          : 0
+        : Number(
+            (
+              (
+                (
+                  totalConversions -
+                  previousPeriodConversions
+                ) /
+                previousPeriodConversions
+              ) * 100
+            ).toFixed(1)
+          );
+
+    /*
+     * Conversion rate.
+     *
+     * Conversions / scans.
+     */
+    const conversionRate =
+      totalScans === 0
+        ? 0
+        : Number(
+            (
+              (
+                totalConversions /
+                totalScans
+              ) * 100
+            ).toFixed(2)
           );
 
     /*
@@ -348,6 +490,9 @@ export class AnalyticsService {
         endDate,
       },
 
+      /*
+       * Overview.
+       */
       overview: {
         totalScans,
 
@@ -367,10 +512,23 @@ export class AnalyticsService {
           qrCodes.length,
 
         averageDailyScans,
+
+        /*
+         * Conversion metrics.
+         */
+        totalConversions,
+
+        uniqueConverters,
+
+        conversionRate,
+
+        previousPeriodConversions,
+
+        conversionPercentageChange,
       },
 
       /*
-       * Timeline.
+       * Scan timeline.
        */
       scansByDay:
         this.buildDailySeries(
@@ -380,12 +538,114 @@ export class AnalyticsService {
         ),
 
       /*
+       * Conversion analytics.
+       */
+      conversionAnalytics: {
+        timeline:
+          this.buildConversionDailySeries(
+            dailyConversions,
+            startDate,
+            endDate
+          ),
+
+        byType:
+          conversionsByType.map(
+            (item) => ({
+              type:
+                item.conversionType,
+
+              conversions:
+                item._count._all,
+            })
+          ),
+
+        byQr:
+          conversionsByQr.map(
+            (item) => {
+              const qr =
+                qrCodes.find(
+                  (candidate) =>
+                    candidate.id ===
+                    item.qrCodeId
+                );
+
+              return {
+                qrCodeId:
+                  item.qrCodeId,
+
+                name:
+                  qr?.name ??
+                  "Unknown QR",
+
+                shortCode:
+                  qr?.shortCode ??
+                  null,
+
+                conversions:
+                  item._count._all,
+              };
+            }
+          ),
+
+        byRule:
+          conversionsByRule.map(
+            (item) => ({
+              ruleId:
+                item.ruleId,
+
+              conversions:
+                item._count._all,
+            })
+          ),
+
+        byExperiment:
+          conversionsByExperiment.map(
+            (item) => ({
+              experimentId:
+                item.experimentId,
+
+              conversions:
+                item._count._all,
+            })
+          ),
+
+        byVariant:
+          conversionsByVariant.map(
+            (item) => ({
+              variantId:
+                item.variantId,
+
+              conversions:
+                item._count._all,
+            })
+          ),
+
+        valuesByCurrency:
+          conversionValues.map(
+            (item) => ({
+              currency:
+                item.currency,
+
+              conversions:
+                item._count._all,
+
+              totalValue:
+                item._sum.value !== null &&
+                item._sum.value !== undefined
+                  ? Number(
+                      item._sum.value
+                    )
+                  : 0,
+            })
+          ),
+      },
+
+      /*
        * QR performance.
        *
-       * Important:
        * scanCount is lifetime count stored on QRCode.
-       * dashboard period scans are obtained separately
-       * through the scan event aggregation.
+       * Dashboard period scans are obtained separately
+       * through ScanEvent aggregation.
        */
       qrPerformance:
         qrCodes.map(
@@ -505,7 +765,7 @@ export class AnalyticsService {
 
   /*
   |--------------------------------------------------------------------------
-  | COMPLETE DAILY SERIES
+  | COMPLETE DAILY SCAN SERIES
   |--------------------------------------------------------------------------
   */
 
@@ -571,6 +831,78 @@ export class AnalyticsService {
       ([date, scans]) => ({
         date,
         scans,
+      })
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMPLETE DAILY CONVERSION SERIES
+  |--------------------------------------------------------------------------
+  */
+
+  private buildConversionDailySeries(
+    rows: Array<{
+      date: Date;
+      conversions: bigint;
+    }>,
+    startDate: Date,
+    endDate: Date
+  ) {
+    const result =
+      new Map<
+        string,
+        number
+      >();
+
+    const cursor =
+      new Date(startDate);
+
+    cursor.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    while (
+      cursor < endDate
+    ) {
+      const key =
+        cursor
+          .toISOString()
+          .slice(0, 10);
+
+      result.set(
+        key,
+        0
+      );
+
+      cursor.setUTCDate(
+        cursor.getUTCDate() + 1
+      );
+    }
+
+    for (
+      const row of rows
+    ) {
+      const key =
+        row.date
+          .toISOString()
+          .slice(0, 10);
+
+      result.set(
+        key,
+        Number(row.conversions)
+      );
+    }
+
+    return Array.from(
+      result.entries()
+    ).map(
+      ([date, conversions]) => ({
+        date,
+        conversions,
       })
     );
   }

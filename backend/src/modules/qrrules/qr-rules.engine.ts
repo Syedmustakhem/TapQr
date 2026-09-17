@@ -1699,8 +1699,10 @@ export class QRRoutingEngine {
      */
 
     return {
+      // QRCode.experienceType can contain values such as "BUSINESS",
+      // but QRRuleMatch.actionType is backed by the QRRuleActionType
+      // Prisma enum. Always persist a valid routing action type.
       type:
-        qrCode.experienceType ??
         "EXPERIENCE",
 
       value:

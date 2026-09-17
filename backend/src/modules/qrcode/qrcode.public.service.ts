@@ -238,7 +238,6 @@ export class QRCodePublicService {
           profile: {
             select: {
               openingHours: true,
-              timezone: true,
             },
           },
         },
@@ -295,11 +294,6 @@ export class QRCodePublicService {
           catalogId:
             baseQR.catalogId,
 
-          timezone:
-            businessForRouting
-              .profile
-              ?.timezone ??
-            "UTC",
 
           /**
            * We deliberately don't infer
