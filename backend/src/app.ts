@@ -1,11 +1,11 @@
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
-
+import behavioralAnalyticsRoutes from "./modules/analytics/behavioral-analytics.routes";
 import qrRulesRoutes from "./modules/qrrules/qr-rules.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import businessRoutes from "./modules/business/business.routes";
-
+import qrJourneyAnalyticsRoutes from "./modules/analytics/qr-journey-analytics.routes";
 import qrCodeRoutes from "./modules/qrcode/qrcode.routes";
 import qrCodePublicRoutes from "./modules/qrcode/qrcode.public.routes";
 import redirectRoutes from "./modules/qrcode/redirect.routes";
@@ -160,7 +160,7 @@ app.use(
   "/api/staff",
   staffRoutes
 );
-
+app.use("/api/analytics", behavioralAnalyticsRoutes);
 /**
  * Analytics
  */
@@ -168,7 +168,7 @@ app.use(
   "/api/analytics",
   analyticsRoutes
 );
-
+app.use("/api/analytics", qrJourneyAnalyticsRoutes);
 /**
  * Catalog management
  *
