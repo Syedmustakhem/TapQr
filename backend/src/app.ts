@@ -12,7 +12,7 @@ import redirectRoutes from "./modules/qrcode/redirect.routes";
 import qrConversionRoutes from "./modules/qrcode/qr-conversion.routes";
 import advancedAnalyticsRoutes from "./modules/analytics/analytics-advanced.routes";
 import staffRoutes from "./modules/staff/routes/staff.routes";
-
+import visitorAnalyticsRoutes from "./modules/analytics/analytics-visitors.routes";
 import variantRoutes from "./modules/catalog/variant.routes";
 import catalogRoutes from "./modules/catalog/catalog.routes";
 import categoryRoutes from "./modules/catalog/category.routes";
@@ -144,7 +144,7 @@ app.use(
   "/api/catalogs",
   optionRoutes
 );
-
+app.use("/api/analytics", visitorAnalyticsRoutes);
 /**
  * Reviews
  */
