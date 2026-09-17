@@ -489,7 +489,318 @@ export class AnalyticsRepository {
       take: 10,
     });
   }
+  /*
+  |--------------------------------------------------------------------------
+  | CONVERSION ANALYTICS
+  |--------------------------------------------------------------------------
+  */
 
+  async countConversions(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return 0;
+    }
+
+    return prisma.qRConversion.count({
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+    });
+  }
+
+  async countUniqueConverters(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return 0;
+    }
+
+    const result =
+      await prisma.$queryRaw<
+        Array<{ count: bigint }>
+      >(
+        Prisma.sql`
+          SELECT
+            COUNT(
+              DISTINCT "visitorKey"
+            )::bigint AS count
+          FROM "QRConversion"
+          WHERE
+            "qrCodeId" IN (
+              ${Prisma.join(qrCodeIds)}
+            )
+            AND "convertedAt" >= ${startDate}
+            AND "convertedAt" < ${endDate}
+            AND "visitorKey" IS NOT NULL
+            AND "visitorKey" <> ''
+        `
+      );
+
+    return Number(
+      result[0]?.count ?? 0
+    );
+  }
+
+  async getConversionsByType(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["conversionType"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          conversionType: "desc",
+        },
+      },
+    });
+  }
+
+  async getConversionsByQr(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["qrCodeId"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          qrCodeId: "desc",
+        },
+      },
+    });
+  }
+
+  async getConversionsByRule(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["ruleId"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        ruleId: {
+          not: null,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          ruleId: "desc",
+        },
+      },
+    });
+  }
+
+  async getConversionsByExperiment(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["experimentId"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        experimentId: {
+          not: null,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          experimentId: "desc",
+        },
+      },
+    });
+  }
+
+  async getConversionsByVariant(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["variantId"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        variantId: {
+          not: null,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      orderBy: {
+        _count: {
+          variantId: "desc",
+        },
+      },
+    });
+  }
+
+  async getDailyConversions(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.$queryRaw<
+      Array<{
+        date: Date;
+        conversions: bigint;
+      }>
+    >(
+      Prisma.sql`
+        SELECT
+          DATE_TRUNC(
+            'day',
+            "convertedAt"
+          ) AS date,
+
+          COUNT(*)::bigint AS conversions
+
+        FROM "QRConversion"
+
+        WHERE
+          "qrCodeId" IN (
+            ${Prisma.join(qrCodeIds)}
+          )
+
+          AND "convertedAt" >= ${startDate}
+          AND "convertedAt" < ${endDate}
+
+        GROUP BY
+          DATE_TRUNC(
+            'day',
+            "convertedAt"
+          )
+
+        ORDER BY
+          date ASC
+      `
+    );
+  }
+
+  async getConversionValuesByCurrency(
+    qrCodeIds: string[],
+    startDate: Date,
+    endDate: Date
+  ) {
+    if (qrCodeIds.length === 0) {
+      return [];
+    }
+
+    return prisma.qRConversion.groupBy({
+      by: ["currency"],
+      where: {
+        qrCodeId: {
+          in: qrCodeIds,
+        },
+        currency: {
+          not: null,
+        },
+        value: {
+          not: null,
+        },
+        convertedAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      _sum: {
+        value: true,
+      },
+      orderBy: {
+        _sum: {
+          value: "desc",
+        },
+      },
+    });
+  }
   /*
   |--------------------------------------------------------------------------
   | REFERRERS
