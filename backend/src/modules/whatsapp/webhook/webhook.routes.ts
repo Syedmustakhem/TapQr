@@ -1,25 +1,16 @@
 import { Router } from "express";
-
-import {
-  whatsappWebhookController,
-} from "./webhook.controller";
+import { whatsappWebhookController } from "./webhook.controller";
 
 const router = Router();
 
-/**
- * Meta webhook verification
- */
 router.get(
   "/",
-  whatsappWebhookController.verify
+  whatsappWebhookController.verify,
 );
 
-/**
- * Incoming WhatsApp events
- */
 router.post(
   "/",
-  whatsappWebhookController.receive
+  whatsappWebhookController.receive,
 );
 
 export default router;

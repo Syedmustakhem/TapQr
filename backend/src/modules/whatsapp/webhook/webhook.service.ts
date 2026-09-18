@@ -1,29 +1,59 @@
 import { prisma } from "../../../config/prisma";
 import {
+  ConversationStatus,
   WhatsAppMessageDirection,
   WhatsAppMessageStatus,
   WhatsAppMessageType,
-  ConversationStatus,
 } from "@prisma/client";
+import { whatsappAutomationService } from "../automation/automation.service";
 
 export class WhatsAppWebhookService {
-  /**
-   * Process incoming Meta webhook.
-   */
+  verifyWebhook(
+    mode?: string,
+    token?: string,
+    challenge?: string,
+  ): string {
+    const verifyToken =
+      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
+
+    if (!verifyToken) {
+      throw new Error(
+        "WHATSAPP_WEBHOOK_VERIFY_TOKEN is not configured",
+      );
+    }
+
+    if (mode !== "subscribe") {
+      throw new Error("Invalid webhook mode");
+    }
+
+    if (!token || token.trim() !== verifyToken) {
+      throw new Error("Invalid webhook verify token");
+    }
+
+    if (!challenge) {
+      throw new Error("Missing webhook challenge");
+    }
+
+    console.log(
+      "[WHATSAPP WEBHOOK] Verification successful",
+    );
+
+    return challenge;
+  }
+
   async processWebhook(body: any): Promise<void> {
     console.log(
       "[WHATSAPP WEBHOOK] Incoming event:",
-      JSON.stringify(body, null, 2)
+      JSON.stringify(body, null, 2),
     );
 
     if (
       body?.object !==
       "whatsapp_business_account"
     ) {
-      console.warn(
-        "[WHATSAPP WEBHOOK] Ignoring unknown object"
+      console.log(
+        "[WHATSAPP WEBHOOK] Ignoring unknown object",
       );
-
       return;
     }
 
@@ -39,24 +69,15 @@ export class WhatsAppWebhookService {
           continue;
         }
 
-        /*
-         * Incoming customer messages
-         */
         const messages = value?.messages ?? [];
 
         for (const message of messages) {
           await this.processIncomingMessage(
             value,
-            message
+            message,
           );
         }
 
-        /*
-         * Delivery / read / failed statuses
-         *
-         * We will implement full status handling
-         * in the next step.
-         */
         const statuses = value?.statuses ?? [];
 
         for (const status of statuses) {
@@ -65,63 +86,17 @@ export class WhatsAppWebhookService {
       }
     }
   }
-verifyWebhook(
-  mode?: string,
-  token?: string,
-  challenge?: string
-): string {
-  const verifyToken =
-    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
 
-  if (!verifyToken) {
-    console.error(
-      "[WHATSAPP WEBHOOK] WHATSAPP_WEBHOOK_VERIFY_TOKEN is missing"
-    );
-
-    throw new Error(
-      "WhatsApp webhook verify token is not configured"
-    );
-  }
-
-  if (mode !== "subscribe") {
-    throw new Error("Invalid webhook mode");
-  }
-
-  if (!token || token.trim() !== verifyToken) {
-    console.error(
-      "[WHATSAPP WEBHOOK] Invalid verify token"
-    );
-
-    throw new Error(
-      "Invalid webhook verify token"
-    );
-  }
-
-  if (!challenge) {
-    throw new Error("Missing webhook challenge");
-  }
-
-  console.log(
-    "[WHATSAPP WEBHOOK] Verification successful"
-  );
-
-  return challenge;
-}
-  /**
-   * Process one incoming WhatsApp message.
-   */
   private async processIncomingMessage(
     value: any,
-    message: any
+    message: any,
   ): Promise<void> {
     const phoneNumberId =
       value?.metadata?.phone_number_id;
 
-    const customerPhone =
-      message?.from;
+    const customerPhone = message?.from;
 
-    const whatsappMessageId =
-      message?.id;
+    const whatsappMessageId = message?.id;
 
     if (
       !phoneNumberId ||
@@ -129,27 +104,10 @@ verifyWebhook(
       !whatsappMessageId
     ) {
       console.warn(
-        "[WHATSAPP WEBHOOK] Missing required message information"
+        "[WHATSAPP WEBHOOK] Missing message information",
       );
-
       return;
     }
-
-    console.log(
-      "[WHATSAPP WEBHOOK] Processing message",
-      {
-        phoneNumberId,
-        customerPhone,
-        whatsappMessageId,
-        type: message?.type,
-      }
-    );
-
-    /*
-     * --------------------------------------------------
-     * 1. Find the TapQR business
-     * --------------------------------------------------
-     */
 
     const whatsappAccount =
       await prisma.whatsAppBusinessAccount.findUnique({
@@ -159,47 +117,31 @@ verifyWebhook(
       });
 
     if (!whatsappAccount) {
-      console.error(
-        "[WHATSAPP WEBHOOK] No business mapping found",
+      console.warn(
+        "[WHATSAPP WEBHOOK] WhatsApp account not mapped",
         {
           phoneNumberId,
-        }
+        },
       );
-
       return;
     }
 
     if (!whatsappAccount.isActive) {
       console.warn(
-        "[WHATSAPP WEBHOOK] WhatsApp account is inactive",
+        "[WHATSAPP WEBHOOK] WhatsApp account inactive",
         {
           phoneNumberId,
-          businessId:
-            whatsappAccount.businessId,
-        }
+        },
       );
-
       return;
     }
 
     const businessId =
       whatsappAccount.businessId;
 
-    /*
-     * --------------------------------------------------
-     * 2. Get customer profile name
-     * --------------------------------------------------
-     */
-
     const profileName =
       value?.contacts?.[0]?.profile?.name ??
       null;
-
-    /*
-     * --------------------------------------------------
-     * 3. Find or create WhatsApp contact
-     * --------------------------------------------------
-     */
 
     const contact =
       await prisma.whatsAppContact.upsert({
@@ -222,8 +164,7 @@ verifyWebhook(
           ...(profileName
             ? {
                 profileName,
-                displayName:
-                  profileName,
+                displayName: profileName,
               }
             : {}),
 
@@ -231,18 +172,11 @@ verifyWebhook(
         },
       });
 
-    /*
-     * --------------------------------------------------
-     * 4. Find an existing open conversation
-     * --------------------------------------------------
-     */
-
     let conversation =
       await prisma.conversation.findFirst({
         where: {
           businessId,
           contactId: contact.id,
-
           status: {
             in: [
               ConversationStatus.OPEN,
@@ -255,12 +189,6 @@ verifyWebhook(
           updatedAt: "desc",
         },
       });
-
-    /*
-     * --------------------------------------------------
-     * 5. Create conversation if needed
-     * --------------------------------------------------
-     */
 
     if (!conversation) {
       conversation =
@@ -278,18 +206,11 @@ verifyWebhook(
         {
           conversationId:
             conversation.id,
+          contactId: contact.id,
           businessId,
-          contactId:
-            contact.id,
-        }
+        },
       );
     }
-
-    /*
-     * --------------------------------------------------
-     * 6. Prevent duplicate Meta webhook messages
-     * --------------------------------------------------
-     */
 
     const existingMessage =
       await prisma.whatsAppMessage.findUnique({
@@ -303,30 +224,14 @@ verifyWebhook(
         "[WHATSAPP] Duplicate message ignored",
         {
           whatsappMessageId,
-          messageId:
-            existingMessage.id,
-        }
+        },
       );
 
       return;
     }
 
-    /*
-     * --------------------------------------------------
-     * 7. Convert Meta message type
-     * --------------------------------------------------
-     */
-
     const messageType =
-      this.getMessageType(
-        message?.type
-      );
-
-    /*
-     * --------------------------------------------------
-     * 8. Extract message content
-     * --------------------------------------------------
-     */
+      this.getMessageType(message?.type);
 
     const text =
       this.extractText(message);
@@ -334,42 +239,23 @@ verifyWebhook(
     const mediaId =
       this.extractMediaId(message);
 
-    /*
-     * --------------------------------------------------
-     * 9. Save message
-     * --------------------------------------------------
-     */
-
     const savedMessage =
       await prisma.whatsAppMessage.create({
         data: {
           businessId,
           conversationId:
             conversation.id,
-
           whatsappMessageId,
-
           direction:
             WhatsAppMessageDirection.INBOUND,
-
           type: messageType,
-
           text,
-
           mediaId,
-
           status:
             WhatsAppMessageStatus.RECEIVED,
-
           metadata: message,
         },
       });
-
-    /*
-     * --------------------------------------------------
-     * 10. Update conversation
-     * --------------------------------------------------
-     */
 
     await prisma.conversation.update({
       where: {
@@ -378,11 +264,6 @@ verifyWebhook(
 
       data: {
         lastMessageAt: new Date(),
-
-        /*
-         * If a customer replies to an old
-         * conversation, reopen it.
-         */
         status: ConversationStatus.OPEN,
       },
     });
@@ -390,28 +271,33 @@ verifyWebhook(
     console.log(
       "[WHATSAPP] Message persisted successfully",
       {
-        messageId:
-          savedMessage.id,
-
+        messageId: savedMessage.id,
         whatsappMessageId,
-
         conversationId:
           conversation.id,
-
-        contactId:
-          contact.id,
-
+        contactId: contact.id,
         businessId,
-      }
+        handlingMode:
+          conversation.handlingMode,
+      },
+    );
+
+    /*
+     * Send the persisted inbound message
+     * to the automation layer.
+     *
+     * The automation service decides whether
+     * the conversation is controlled by AI
+     * or a human agent.
+     */
+    await whatsappAutomationService.processIncomingMessage(
+      conversation,
+      savedMessage,
     );
   }
 
-  /**
-   * Convert Meta message type
-   * into our Prisma enum.
-   */
   private getMessageType(
-    type: string | undefined
+    type?: string,
   ): WhatsAppMessageType {
     switch (type) {
       case "text":
@@ -447,30 +333,20 @@ verifyWebhook(
     }
   }
 
-  /**
-   * Extract text from supported text messages.
-   */
   private extractText(
-    message: any
+    message: any,
   ): string | null {
     if (message?.type === "text") {
-      return (
-        message?.text?.body ??
-        null
-      );
+      return message?.text?.body ?? null;
     }
 
     return null;
   }
 
-  /**
-   * Extract Meta media ID.
-   */
   private extractMediaId(
-    message: any
+    message: any,
   ): string | null {
-    const type =
-      message?.type;
+    const type = message?.type;
 
     if (
       type === "image" ||
@@ -478,36 +354,23 @@ verifyWebhook(
       type === "audio" ||
       type === "document"
     ) {
-      return (
-        message?.[type]?.id ??
-        null
-      );
+      return message?.[type]?.id ?? null;
     }
 
     return null;
   }
 
-  /**
-   * Message status handler.
-   *
-   * Full status update logic will be
-   * implemented next.
-   */
   private async processMessageStatus(
-    status: any
+    status: any,
   ): Promise<void> {
     console.log(
       "[WHATSAPP] Message status",
       {
-        messageId:
-          status?.id,
-
-        status:
-          status?.status,
-
+        messageId: status?.id,
+        status: status?.status,
         recipientId:
           status?.recipient_id,
-      }
+      },
     );
   }
 }
