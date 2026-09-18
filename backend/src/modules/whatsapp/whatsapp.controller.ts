@@ -1,69 +1,212 @@
 import { Request, Response, NextFunction } from "express";
-import { ConversationStatus } from "@prisma/client";
-import { conversationService } from "./conversations/conversation.service";
-import { messageService } from "./messages/message.service";
+import {
+  ConversationHandlingMode,
+  ConversationStatus,
+} from "@prisma/client";
+
+import { whatsappService } from "./whatsapp.service";
+
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    role: string;
+  };
+}
+
+/**
+ * Get conversation ID safely from Express params.
+ */
+const getConversationId = (
+  req: Request,
+): string | undefined => {
+  const value = req.params.id;
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
+
+/**
+ * Business ID comes from X-Business-Id.
+ *
+ * Business ID is intentionally NOT stored in the JWT.
+ * The WhatsApp service verifies that the authenticated
+ * user has access to the requested business.
+ */
+const getBusinessId = (
+  req: Request,
+): string | undefined => {
+  const value = req.headers["x-business-id"];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+};
 
 export class WhatsAppController {
-  getConversations = async (
-    req: Request,
+  /**
+   * ---------------------------------------------------------
+   * CREATE CONVERSATION
+   * ---------------------------------------------------------
+   * POST /api/whatsapp/conversations
+   * ---------------------------------------------------------
+   */
+  createConversation = async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 20;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
-      const status = req.query.status
-        ? (String(req.query.status) as ConversationStatus)
-        : undefined;
+      const { phoneNumber } = req.body;
 
-      const result = await conversationService.getConversations(
-        businessId,
-        {
-          page,
-          limit,
-          status,
-        },
-      );
+      if (
+        typeof phoneNumber !== "string" ||
+        !phoneNumber.trim()
+      ) {
+        res.status(400).json({
+          success: false,
+          message: "Customer phone number is required",
+        });
+        return;
+      }
 
-      res.status(200).json({
+      const conversation =
+        await whatsappService.createConversation(
+          userId,
+          businessId,
+          phoneNumber,
+        );
+
+      res.status(201).json({
         success: true,
-        data: result,
+        data: conversation,
       });
     } catch (error) {
       next(error);
     }
   };
 
-  getConversation = async (
-    req: Request,
+  /**
+   * ---------------------------------------------------------
+   * GET CONVERSATIONS
+   * ---------------------------------------------------------
+   * GET /api/whatsapp/conversations
+   * ---------------------------------------------------------
+   */
+  getConversations = async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
+
+      const status = req.query.status
+        ? (String(req.query.status) as ConversationStatus)
+        : undefined;
+
+      if (
+        status &&
+        !Object.values(ConversationStatus).includes(status)
+      ) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid conversation status",
+          validStatuses: Object.values(
+            ConversationStatus,
+          ),
+        });
+        return;
+      }
+
+      const conversations =
+        await whatsappService.getConversations(
+          userId,
+          businessId,
+          status,
+        );
+
+      res.status(200).json({
+        success: true,
+        data: conversations,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * ---------------------------------------------------------
+   * GET SINGLE CONVERSATION
+   * ---------------------------------------------------------
+   * GET /api/whatsapp/conversations/:id
+   * ---------------------------------------------------------
+   */
+  getConversation = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
       if (!conversationId) {
         res.status(400).json({
@@ -74,7 +217,8 @@ export class WhatsAppController {
       }
 
       const conversation =
-        await conversationService.getConversation(
+        await whatsappService.getConversation(
+          userId,
           businessId,
           conversationId,
         );
@@ -87,25 +231,96 @@ export class WhatsAppController {
       next(error);
     }
   };
-  sendMessage = async (
-    req: Request,
+
+  /**
+   * ---------------------------------------------------------
+   * GET MESSAGES
+   * ---------------------------------------------------------
+   * GET /api/whatsapp/conversations/:id/messages
+   * ---------------------------------------------------------
+   */
+  getMessages = async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
+
+      if (!conversationId) {
+        res.status(400).json({
+          success: false,
+          message: "Conversation ID is required",
+        });
+        return;
+      }
+
+      const messages =
+        await whatsappService.getMessages(
+          userId,
+          businessId,
+          conversationId,
+        );
+
+      res.status(200).json({
+        success: true,
+        data: messages,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * ---------------------------------------------------------
+   * SEND MESSAGE
+   * ---------------------------------------------------------
+   * POST /api/whatsapp/conversations/:id/messages
+   * ---------------------------------------------------------
+   */
+  sendMessage = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
       if (!conversationId) {
         res.status(400).json({
@@ -117,7 +332,10 @@ export class WhatsAppController {
 
       const { text } = req.body;
 
-      if (typeof text !== "string" || !text.trim()) {
+      if (
+        typeof text !== "string" ||
+        !text.trim()
+      ) {
         res.status(400).json({
           success: false,
           message: "Message text is required",
@@ -125,11 +343,13 @@ export class WhatsAppController {
         return;
       }
 
-      const message = await messageService.sendTextMessage(
-        businessId,
-        conversationId,
-        text,
-      );
+      const message =
+        await whatsappService.sendMessage(
+          userId,
+          businessId,
+          conversationId,
+          text,
+        );
 
       res.status(201).json({
         success: true,
@@ -139,25 +359,39 @@ export class WhatsAppController {
       next(error);
     }
   };
-  getMessages = async (
-    req: Request,
+
+  /**
+   * ---------------------------------------------------------
+   * UPDATE CONVERSATION STATUS
+   * ---------------------------------------------------------
+   * PATCH /api/whatsapp/conversations/:id/status
+   * ---------------------------------------------------------
+   */
+  updateConversationStatus = async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
       if (!conversationId) {
         res.status(400).json({
@@ -166,79 +400,28 @@ export class WhatsAppController {
         });
         return;
       }
-
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 50;
-
-      const result = await messageService.getMessages(
-        businessId,
-        conversationId,
-        {
-          page,
-          limit,
-        },
-      );
-
-      res.status(200).json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  updateConversationStatus = async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    try {
-      const businessId = (req as any).user?.businessId;
-
-      if (!businessId) {
-        res.status(401).json({
-          success: false,
-          message: "Business authentication required",
-        });
-        return;
-      }
-
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
 
       const { status } = req.body;
 
-      if (!conversationId) {
-        res.status(400).json({
-          success: false,
-          message: "Conversation ID is required",
-        });
-        return;
-      }
-
-      if (!status) {
-        res.status(400).json({
-          success: false,
-          message: "Conversation status is required",
-        });
-        return;
-      }
-
-      const validStatuses = Object.values(ConversationStatus);
-
-      if (!validStatuses.includes(status as ConversationStatus)) {
+      if (
+        typeof status !== "string" ||
+        !Object.values(ConversationStatus).includes(
+          status as ConversationStatus,
+        )
+      ) {
         res.status(400).json({
           success: false,
           message: "Invalid conversation status",
-          validStatuses,
+          validStatuses: Object.values(
+            ConversationStatus,
+          ),
         });
         return;
       }
 
       const result =
-        await conversationService.updateConversationStatus(
+        await whatsappService.updateConversationStatus(
+          userId,
           businessId,
           conversationId,
           status as ConversationStatus,
@@ -252,25 +435,39 @@ export class WhatsAppController {
       next(error);
     }
   };
-    assignConversation = async (
-    req: Request,
+
+  /**
+   * ---------------------------------------------------------
+   * ASSIGN CONVERSATION
+   * ---------------------------------------------------------
+   * POST /api/whatsapp/conversations/:id/assign
+   * ---------------------------------------------------------
+   */
+  assignConversation = async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
       if (!conversationId) {
         res.status(400).json({
@@ -293,8 +490,9 @@ export class WhatsAppController {
         return;
       }
 
-      const conversation =
-        await conversationService.assignConversation(
+      const result =
+        await whatsappService.assignConversation(
+          userId,
           businessId,
           conversationId,
           businessMemberId,
@@ -303,32 +501,45 @@ export class WhatsAppController {
       res.status(200).json({
         success: true,
         message: "Conversation assigned successfully",
-        data: conversation,
+        data: result,
       });
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * ---------------------------------------------------------
+   * UNASSIGN CONVERSATION
+   * ---------------------------------------------------------
+   * DELETE /api/whatsapp/conversations/:id/assign
+   * ---------------------------------------------------------
+   */
   unassignConversation = async (
-    req: Request,
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const businessId = (req as any).user?.businessId;
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
 
-      if (!businessId) {
+      if (!userId) {
         res.status(401).json({
           success: false,
-          message: "Business authentication required",
+          message: "Authentication required",
         });
         return;
       }
 
-      const conversationId = Array.isArray(req.params.id)
-        ? req.params.id[0]
-        : req.params.id;
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
 
       if (!conversationId) {
         res.status(400).json({
@@ -338,8 +549,9 @@ export class WhatsAppController {
         return;
       }
 
-      const conversation =
-        await conversationService.unassignConversation(
+      const result =
+        await whatsappService.unassignConversation(
+          userId,
           businessId,
           conversationId,
         );
@@ -347,70 +559,87 @@ export class WhatsAppController {
       res.status(200).json({
         success: true,
         message: "Conversation unassigned successfully",
-        data: conversation,
+        data: result,
       });
     } catch (error) {
       next(error);
     }
   };
 
+  /**
+   * ---------------------------------------------------------
+   * SET HANDLING MODE
+   * ---------------------------------------------------------
+   * PATCH /api/whatsapp/conversations/:id/handling-mode
+   * ---------------------------------------------------------
+   */
   setHandlingMode = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  try {
-    const businessId = (req as any).user?.businessId;
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+      const conversationId = getConversationId(req);
 
-    if (!businessId) {
-      res.status(401).json({
-        success: false,
-        message: "Business authentication required",
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
+
+      if (!conversationId) {
+        res.status(400).json({
+          success: false,
+          message: "Conversation ID is required",
+        });
+        return;
+      }
+
+      const { handlingMode } = req.body;
+
+      if (
+        handlingMode !== "AI" &&
+        handlingMode !== "HUMAN"
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            "Handling mode must be AI or HUMAN",
+        });
+        return;
+      }
+
+      const result =
+        await whatsappService.setHandlingMode(
+          userId,
+          businessId,
+          conversationId,
+          handlingMode as ConversationHandlingMode,
+        );
+
+      res.status(200).json({
+        success: true,
+        message:
+          `Conversation handling mode changed to ${handlingMode}`,
+        data: result,
       });
-      return;
+    } catch (error) {
+      next(error);
     }
-
-    const conversationId = Array.isArray(req.params.id)
-      ? req.params.id[0]
-      : req.params.id;
-
-    if (!conversationId) {
-      res.status(400).json({
-        success: false,
-        message: "Conversation ID is required",
-      });
-      return;
-    }
-
-    const { handlingMode } = req.body;
-
-    if (
-      handlingMode !== "AI" &&
-      handlingMode !== "HUMAN"
-    ) {
-      res.status(400).json({
-        success: false,
-        message: "Handling mode must be AI or HUMAN",
-      });
-      return;
-    }
-
-    const result =
-      await conversationService.setHandlingMode(
-        businessId,
-        conversationId,
-        handlingMode,
-      );
-
-    res.status(200).json({
-      success: true,
-      message: `Conversation handling mode changed to ${handlingMode}`,
-      data: result,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+  };
 }
 
-export const whatsappController = new WhatsAppController();
+export const whatsappController =
+  new WhatsAppController();
