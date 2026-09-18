@@ -106,6 +106,17 @@ export class QRCodeRepository {
       },
     });
   }
+async findCampaignById(campaignId: string) {
+  return prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: {
+      id: true,
+      businessId: true,
+      name: true,
+      status: true,
+    },
+  });
+}
 
   async update(id: string, data: Prisma.QRCodeUpdateInput) {
     return prisma.qRCode.update({ where: { id }, data });

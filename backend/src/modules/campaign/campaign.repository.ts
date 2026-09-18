@@ -62,7 +62,100 @@ export class CampaignRepository {
       },
     });
   }
+async findQRCodeById(qrCodeId: string) {
+  return prisma.qRCode.findUnique({
+    where: {
+      id: qrCodeId,
+    },
+    select: {
+      id: true,
+      businessId: true,
+      name: true,
+      shortCode: true,
+      status: true,
+      campaignId: true,
+      campaignName: true,
+      deletedAt: true,
+    },
+  });
+}
 
+async findQRCodesByCampaignId(campaignId: string) {
+  return prisma.qRCode.findMany({
+    where: {
+      campaignId,
+      deletedAt: null,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    select: {
+      id: true,
+      businessId: true,
+      name: true,
+      shortCode: true,
+      status: true,
+      campaignId: true,
+      campaignName: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
+
+async attachQRCodeToCampaign(
+  qrCodeId: string,
+  campaignId: string,
+  campaignName: string
+) {
+  return prisma.qRCode.update({
+    where: {
+      id: qrCodeId,
+    },
+    data: {
+      campaign: {
+        connect: {
+          id: campaignId,
+        },
+      },
+      campaignName,
+    },
+    select: {
+      id: true,
+      businessId: true,
+      name: true,
+      shortCode: true,
+      status: true,
+      campaignId: true,
+      campaignName: true,
+    },
+  });
+}
+
+async detachQRCodeFromCampaign(
+  qrCodeId: string
+) {
+  return prisma.qRCode.update({
+    where: {
+      id: qrCodeId,
+    },
+    data: {
+      campaign: {
+        disconnect: true,
+      },
+      campaignName: null,
+    },
+    select: {
+      id: true,
+      businessId: true,
+      name: true,
+      shortCode: true,
+      status: true,
+      campaignId: true,
+      campaignName: true,
+    },
+  });
+}
   async update(
     id: string,
     data: CampaignUpdateData
