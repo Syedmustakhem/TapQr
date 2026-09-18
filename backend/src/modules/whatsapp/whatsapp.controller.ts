@@ -29,11 +29,11 @@ const getConversationId = (
 };
 
 /**
- * Get business ID from X-Business-Id header.
+ * Business ID comes from X-Business-Id.
  *
  * Business ID is intentionally NOT stored in the JWT.
- * The authenticated user ID comes from the JWT and the
- * WhatsApp service verifies access to this business.
+ * The WhatsApp service verifies that the authenticated
+ * user has access to the requested business.
  */
 const getBusinessId = (
   req: Request,
@@ -50,9 +50,71 @@ const getBusinessId = (
 export class WhatsAppController {
   /**
    * ---------------------------------------------------------
+   * CREATE CONVERSATION
+   * ---------------------------------------------------------
+   * POST /api/whatsapp/conversations
+   * ---------------------------------------------------------
+   */
+  createConversation = async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      const businessId = getBusinessId(req);
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!businessId) {
+        res.status(400).json({
+          success: false,
+          message: "X-Business-Id header is required",
+        });
+        return;
+      }
+
+      const { phoneNumber } = req.body;
+
+      if (
+        typeof phoneNumber !== "string" ||
+        !phoneNumber.trim()
+      ) {
+        res.status(400).json({
+          success: false,
+          message: "Customer phone number is required",
+        });
+        return;
+      }
+
+      const conversation =
+        await whatsappService.createConversation(
+          userId,
+          businessId,
+          phoneNumber,
+        );
+
+      res.status(201).json({
+        success: true,
+        data: conversation,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * ---------------------------------------------------------
    * GET CONVERSATIONS
    * ---------------------------------------------------------
    * GET /api/whatsapp/conversations
+   * ---------------------------------------------------------
    */
   getConversations = async (
     req: AuthenticatedRequest,
@@ -90,7 +152,9 @@ export class WhatsAppController {
         res.status(400).json({
           success: false,
           message: "Invalid conversation status",
-          validStatuses: Object.values(ConversationStatus),
+          validStatuses: Object.values(
+            ConversationStatus,
+          ),
         });
         return;
       }
@@ -116,6 +180,7 @@ export class WhatsAppController {
    * GET SINGLE CONVERSATION
    * ---------------------------------------------------------
    * GET /api/whatsapp/conversations/:id
+   * ---------------------------------------------------------
    */
   getConversation = async (
     req: AuthenticatedRequest,
@@ -172,6 +237,7 @@ export class WhatsAppController {
    * GET MESSAGES
    * ---------------------------------------------------------
    * GET /api/whatsapp/conversations/:id/messages
+   * ---------------------------------------------------------
    */
   getMessages = async (
     req: AuthenticatedRequest,
@@ -228,6 +294,7 @@ export class WhatsAppController {
    * SEND MESSAGE
    * ---------------------------------------------------------
    * POST /api/whatsapp/conversations/:id/messages
+   * ---------------------------------------------------------
    */
   sendMessage = async (
     req: AuthenticatedRequest,
@@ -298,6 +365,7 @@ export class WhatsAppController {
    * UPDATE CONVERSATION STATUS
    * ---------------------------------------------------------
    * PATCH /api/whatsapp/conversations/:id/status
+   * ---------------------------------------------------------
    */
   updateConversationStatus = async (
     req: AuthenticatedRequest,
@@ -344,7 +412,9 @@ export class WhatsAppController {
         res.status(400).json({
           success: false,
           message: "Invalid conversation status",
-          validStatuses: Object.values(ConversationStatus),
+          validStatuses: Object.values(
+            ConversationStatus,
+          ),
         });
         return;
       }
@@ -371,6 +441,7 @@ export class WhatsAppController {
    * ASSIGN CONVERSATION
    * ---------------------------------------------------------
    * POST /api/whatsapp/conversations/:id/assign
+   * ---------------------------------------------------------
    */
   assignConversation = async (
     req: AuthenticatedRequest,
@@ -442,6 +513,7 @@ export class WhatsAppController {
    * UNASSIGN CONVERSATION
    * ---------------------------------------------------------
    * DELETE /api/whatsapp/conversations/:id/assign
+   * ---------------------------------------------------------
    */
   unassignConversation = async (
     req: AuthenticatedRequest,
@@ -499,6 +571,7 @@ export class WhatsAppController {
    * SET HANDLING MODE
    * ---------------------------------------------------------
    * PATCH /api/whatsapp/conversations/:id/handling-mode
+   * ---------------------------------------------------------
    */
   setHandlingMode = async (
     req: AuthenticatedRequest,
@@ -542,7 +615,8 @@ export class WhatsAppController {
       ) {
         res.status(400).json({
           success: false,
-          message: "Handling mode must be AI or HUMAN",
+          message:
+            "Handling mode must be AI or HUMAN",
         });
         return;
       }
@@ -557,7 +631,8 @@ export class WhatsAppController {
 
       res.status(200).json({
         success: true,
-        message: `Conversation handling mode changed to ${handlingMode}`,
+        message:
+          `Conversation handling mode changed to ${handlingMode}`,
         data: result,
       });
     } catch (error) {

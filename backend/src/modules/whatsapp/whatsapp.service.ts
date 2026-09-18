@@ -57,7 +57,99 @@ class WhatsAppService {
       );
     }
   }
+  /**
+   * ---------------------------------------------------------
+   * CREATE / START CONVERSATION
+   * ---------------------------------------------------------
+   * Creates or reuses a WhatsApp contact and creates an OPEN
+   * conversation for the business.
+   *
+   * This does NOT send a WhatsApp message.
+   * The actual outbound message is handled by sendMessage().
+   * ---------------------------------------------------------
+   */
+  async createConversation(
+    userId: string,
+    businessId: string,
+    phoneNumber: string,
+  ) {
+    await this.assertBusinessAccess(
+      userId,
+      businessId,
+    );
 
+    const cleanPhone = phoneNumber
+      ?.trim()
+      .replace(/[^\d+]/g, "")
+      .replace(/^\+/, "");
+
+    if (!cleanPhone) {
+      throw new AppError(
+        "Customer phone number is required",
+        400,
+      );
+    }
+
+    if (!/^\d{10,15}$/.test(cleanPhone)) {
+      throw new AppError(
+        "Enter a valid WhatsApp phone number with country code",
+        400,
+      );
+    }
+
+    const contact =
+      await prisma.whatsAppContact.upsert({
+        where: {
+          businessId_phoneNumber: {
+            businessId,
+            phoneNumber: cleanPhone,
+          },
+        },
+        update: {},
+        create: {
+          businessId,
+          phoneNumber: cleanPhone,
+        },
+      });
+
+    const existingConversation =
+      await prisma.conversation.findFirst({
+        where: {
+          businessId,
+          contactId: contact.id,
+          status: {
+            in: ["OPEN", "PENDING"],
+          },
+        },
+        include: {
+          contact: true,
+          assignedTo: true,
+          qrCode: true,
+        },
+        orderBy: {
+          lastMessageAt: "desc",
+        },
+      });
+
+    if (existingConversation) {
+      return existingConversation;
+    }
+
+    return prisma.conversation.create({
+      data: {
+        businessId,
+        contactId: contact.id,
+        status: "OPEN",
+        priority: "NORMAL",
+        handlingMode: "HUMAN",
+      },
+      include: {
+        contact: true,
+        assignedTo: true,
+        qrCode: true,
+      },
+    });
+  }
   /**
    * ---------------------------------------------------------
    * CONVERSATION ACCESS

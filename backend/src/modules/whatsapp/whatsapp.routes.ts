@@ -16,6 +16,11 @@ const router = Router();
 
 router.use(authenticate);
 
+router.post(
+  "/conversations",
+  whatsappController.createConversation,
+);
+
 router.get(
   "/conversations",
   whatsappController.getConversations,
