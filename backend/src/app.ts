@@ -24,7 +24,7 @@ import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 
 import whatsappWebhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
-
+import whatsappRoutes from "./modules/whatsapp/whatsapp.routes";
 import analyticsRoutes from "./modules/analytics/analytics.routes";
 
 import {
@@ -33,7 +33,7 @@ import {
 
 import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
-
+import webhookRoutes from "./modules/whatsapp/webhook/webhook.routes";
 import qrExperimentsRoutes from "./modules/qr-experiments/qr-experiments.routes";
 
 const app = express();
@@ -130,7 +130,10 @@ app.use(
   "/api/catalogs",
   optionGroupRoutes
 );
-
+app.use(
+  "/api/whatsapp/webhook",
+  webhookRoutes,
+);
 /**
  * Public QR conversion
  */
@@ -189,7 +192,7 @@ app.use(
   "/api/catalogs",
   categoryRoutes
 );
-
+app.use("/api/whatsapp", whatsappRoutes);
 app.use(
   "/api/catalogs",
   itemRoutes

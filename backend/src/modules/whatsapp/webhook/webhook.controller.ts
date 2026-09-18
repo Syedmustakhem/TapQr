@@ -1,88 +1,60 @@
-import { Request, Response } from "express";
-
 import {
-  whatsappWebhookService,
-} from "./webhook.service";
+  Request,
+  Response,
+  NextFunction,
+} from "express";
+import { whatsappWebhookService } from "./webhook.service";
 
 export class WhatsAppWebhookController {
-  /**
-   * GET /api/whatsapp/webhook
-   *
-   * Meta webhook verification
-   */
   verify = (
     req: Request,
-    res: Response
-  ) => {
+    res: Response,
+    next: NextFunction,
+  ): void => {
     try {
       const mode =
-        req.query["hub.mode"] as string | undefined;
+        typeof req.query["hub.mode"] === "string"
+          ? req.query["hub.mode"]
+          : undefined;
 
       const token =
-        req.query["hub.verify_token"] as
-          | string
-          | undefined;
+        typeof req.query["hub.verify_token"] ===
+        "string"
+          ? req.query["hub.verify_token"]
+          : undefined;
 
       const challenge =
-        req.query["hub.challenge"] as
-          | string
-          | undefined;
+        typeof req.query["hub.challenge"] ===
+        "string"
+          ? req.query["hub.challenge"]
+          : undefined;
 
       const result =
         whatsappWebhookService.verifyWebhook(
           mode,
           token,
-          challenge
+          challenge,
         );
 
-      return res
-        .status(200)
-        .send(result);
+      res.status(200).send(result);
     } catch (error) {
-      console.error(
-        "[WHATSAPP WEBHOOK] Verification failed",
-        error
-      );
-
-      return res
-        .status(403)
-        .send("Forbidden");
+      next(error);
     }
   };
 
-  /**
-   * POST /api/whatsapp/webhook
-   *
-   * Incoming WhatsApp events
-   */
   receive = async (
     req: Request,
-    res: Response
-  ) => {
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       await whatsappWebhookService.processWebhook(
-        req.body
+        req.body,
       );
 
-      /*
-       * Meta expects a quick 200 response.
-       */
-      return res
-        .status(200)
-        .send("EVENT_RECEIVED");
+      res.sendStatus(200);
     } catch (error) {
-      console.error(
-        "[WHATSAPP WEBHOOK] Processing failed",
-        error
-      );
-
-      /*
-       * Still acknowledge Meta where possible
-       * to avoid unnecessary retries.
-       */
-      return res
-        .status(200)
-        .send("EVENT_RECEIVED");
+      next(error);
     }
   };
 }

@@ -81,8 +81,8 @@ model Business {
   id String @id @default(uuid())
 
   // Ownership
-  ownerId String
-
+  ownerId     String
+  leads       Lead[]
   // Identity
   name        String
   legalName   String?
@@ -378,6 +378,7 @@ model Campaign {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   qrCodes QRCode[]
+  leads   Lead[]
 
   @@index([businessId])
   @@index([businessId, status])
@@ -442,9 +443,9 @@ model QRCode {
 
   catalog Catalog? @relation(fields: [catalogId], references: [id], onDelete: SetNull)
 
-  branding QRBranding?
-  rules    QRRule[]
-
+  branding    QRBranding?
+  rules       QRRule[]
+  leads       Lead[]
   experiments QRExperiment[]
 
   ruleMatches QRRuleMatch[]
@@ -471,6 +472,58 @@ model QRCode {
   @@index([experienceType])
   @@index([createdAt])
   @@index([businessId, status])
+}
+
+// ============================================================
+// LEAD MANAGEMENT
+// A business-owned lead captured from QR / campaign journeys.
+// ============================================================
+model Lead {
+  id String @id @default(cuid())
+
+  // Ownership
+  businessId String
+
+  // Optional attribution
+  campaignId String?
+  qrCodeId   String?
+
+  // Anonymous visitor linkage
+  visitorKey String?
+
+  // Contact identity
+  name     String?
+  email    String?
+  phone    String?
+  whatsapp String?
+
+  // Lead lifecycle
+  status LeadStatus @default(NEW)
+
+  // Optional capture metadata
+  sourceType String?
+  source     String?
+
+  // Notes / business context
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  qrCode QRCode? @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([campaignId])
+  @@index([qrCodeId])
+  @@index([visitorKey])
+  @@index([email])
+  @@index([phone])
 }
 
 // ============================================================
@@ -812,7 +865,6 @@ model WhatsAppContact {
 // ============================================================
 // WHATSAPP CONVERSATION
 // ============================================================
-
 model Conversation {
   id String @id @default(cuid())
 
@@ -826,12 +878,15 @@ model Conversation {
 
   priority ConversationPriority @default(NORMAL)
 
+  handlingMode ConversationHandlingMode @default(AI)
+
   assignedToId String?
 
-  assignedTo    BusinessMember? @relation("ConversationAssignedMember", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo BusinessMember? @relation("ConversationAssignedMember", fields: [assignedToId], references: [id], onDelete: SetNull)
+
   lastMessageAt DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -846,6 +901,7 @@ model Conversation {
   @@index([qrCodeId])
   @@index([status])
   @@index([priority])
+  @@index([handlingMode])
   @@index([assignedToId])
   @@index([lastMessageAt])
 }
@@ -1791,6 +1847,20 @@ enum QRExperimentStatus {
 enum QRExperimentAllocationType {
   PERCENTAGE
   FIXED
+}
+
+enum ConversationHandlingMode {
+  AI
+  HUMAN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+  ARCHIVED
 }
 
 enum QRRuleMatchStatus {
