@@ -1,10 +1,71 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma";
 
+export interface BusinessCreateData {
+  ownerId: string;
+  name: string;
+  slug: string;
+
+  legalName?: string;
+  displayName?: string;
+
+  businessType?: string;
+  industry?: string;
+  category?: string;
+  subcategory?: string;
+
+  email?: string;
+  phone?: string;
+  website?: string;
+  whatsapp?: string;
+
+  logo?: string;
+  coverImage?: string;
+
+  description?: string;
+
+  timezone?: string;
+  currency?: string;
+  language?: string;
+  country?: string;
+}
+
+export interface BusinessUpdateData {
+  name?: string | null;
+
+  legalName?: string | null;
+  displayName?: string | null;
+
+  businessType?: string | null;
+  industry?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  whatsapp?: string | null;
+
+  logo?: string | null;
+  coverImage?: string | null;
+
+  description?: string | null;
+
+  timezone?: string | null;
+  currency?: string | null;
+  language?: string | null;
+  country?: string | null;
+
+  isVerified?: boolean;
+  isPublished?: boolean;
+  onboardingCompleted?: boolean;
+}
+
 export class BusinessRepository {
   async findById(id: string) {
     return prisma.business.findUnique({
       where: { id },
+
       include: {
         profile: true,
 
@@ -12,6 +73,7 @@ export class BusinessRepository {
           where: {
             deletedAt: null,
           },
+
           orderBy: {
             createdAt: "desc",
           },
@@ -21,6 +83,7 @@ export class BusinessRepository {
           where: {
             isActive: true,
           },
+
           orderBy: {
             sortOrder: "asc",
           },
@@ -35,11 +98,6 @@ export class BusinessRepository {
     });
   }
 
-  /**
-   * Returns all active businesses owned by a user.
-   *
-   * Used by business management/dashboard flows.
-   */
   async findByOwnerId(ownerId: string) {
     return prisma.business.findMany({
       where: {
@@ -54,6 +112,7 @@ export class BusinessRepository {
           where: {
             deletedAt: null,
           },
+
           orderBy: {
             createdAt: "desc",
           },
@@ -66,15 +125,6 @@ export class BusinessRepository {
     });
   }
 
-  /**
-   * Returns the owner's primary/oldest active business.
-   *
-   * StaffService expects a single business rather than
-   * an array of businesses.
-   *
-   * We intentionally keep findByOwnerId() returning an
-   * array so multi-business support remains possible.
-   */
   async findPrimaryByOwnerId(ownerId: string) {
     return prisma.business.findFirst({
       where: {
@@ -89,6 +139,7 @@ export class BusinessRepository {
           where: {
             deletedAt: null,
           },
+
           orderBy: {
             createdAt: "desc",
           },
@@ -109,25 +160,36 @@ export class BusinessRepository {
 
   async create(
     tx: Prisma.TransactionClient,
-    data: {
-      ownerId: string;
-      name: string;
-      slug: string;
-      email?: string;
-      phone?: string;
-      description?: string;
-      logo?: string;
-    }
+    data: BusinessCreateData
   ) {
     return tx.business.create({
       data: {
         ownerId: data.ownerId,
         name: data.name,
         slug: data.slug,
+
+        legalName: data.legalName,
+        displayName: data.displayName,
+
+        businessType: data.businessType,
+        industry: data.industry,
+        category: data.category,
+        subcategory: data.subcategory,
+
         email: data.email,
         phone: data.phone,
-        description: data.description,
+        website: data.website,
+        whatsapp: data.whatsapp,
+
         logo: data.logo,
+        coverImage: data.coverImage,
+
+        description: data.description,
+
+        timezone: data.timezone,
+        currency: data.currency,
+        language: data.language,
+        country: data.country,
       },
     });
   }
@@ -138,32 +200,34 @@ export class BusinessRepository {
     data?: {
       email?: string;
       phone?: string;
+      website?: string;
+      whatsapp?: string;
+      coverImage?: string;
     }
   ) {
     return tx.businessProfile.create({
       data: {
         businessId,
+
         email: data?.email,
         phone: data?.phone,
+        website: data?.website,
+        whatsapp: data?.whatsapp,
+        coverImage: data?.coverImage,
       },
     });
   }
 
-  async createWithProfile(data: {
-    ownerId: string;
-    name: string;
-    slug: string;
-    email?: string;
-    phone?: string;
-    description?: string;
-    logo?: string;
-  }) {
+  async createWithProfile(data: BusinessCreateData) {
     return prisma.$transaction(async (tx) => {
       const business = await this.create(tx, data);
 
       await this.createProfile(tx, business.id, {
         email: data.email,
         phone: data.phone,
+        website: data.website,
+        whatsapp: data.whatsapp,
+        coverImage: data.coverImage,
       });
 
       return business;
@@ -172,17 +236,142 @@ export class BusinessRepository {
 
   async update(
     id: string,
-    data: {
-      name?: string;
-      email?: string | null;
-      phone?: string | null;
-      description?: string | null;
-      logo?: string | null;
-    }
+    data: BusinessUpdateData
   ) {
+    const updateData: Prisma.BusinessUpdateInput = {
+      ...(data.name !== undefined && data.name !== null
+        ? {
+            name: data.name,
+          }
+        : {}),
+
+      ...(data.legalName !== undefined
+        ? {
+            legalName: data.legalName,
+          }
+        : {}),
+
+      ...(data.displayName !== undefined
+        ? {
+            displayName: data.displayName,
+          }
+        : {}),
+
+      ...(data.businessType !== undefined
+        ? {
+            businessType: data.businessType,
+          }
+        : {}),
+
+      ...(data.industry !== undefined
+        ? {
+            industry: data.industry,
+          }
+        : {}),
+
+      ...(data.category !== undefined
+        ? {
+            category: data.category,
+          }
+        : {}),
+
+      ...(data.subcategory !== undefined
+        ? {
+            subcategory: data.subcategory,
+          }
+        : {}),
+
+      ...(data.email !== undefined
+        ? {
+            email: data.email,
+          }
+        : {}),
+
+      ...(data.phone !== undefined
+        ? {
+            phone: data.phone,
+          }
+        : {}),
+
+      ...(data.website !== undefined
+        ? {
+            website: data.website,
+          }
+        : {}),
+
+      ...(data.whatsapp !== undefined
+        ? {
+            whatsapp: data.whatsapp,
+          }
+        : {}),
+
+      ...(data.logo !== undefined
+        ? {
+            logo: data.logo,
+          }
+        : {}),
+
+      ...(data.coverImage !== undefined
+        ? {
+            coverImage: data.coverImage,
+          }
+        : {}),
+
+      ...(data.description !== undefined
+        ? {
+            description: data.description,
+          }
+        : {}),
+
+      // These fields are required by Prisma.
+      // null means "do not update", while a string updates the value.
+      ...(data.timezone !== undefined && data.timezone !== null
+        ? {
+            timezone: data.timezone,
+          }
+        : {}),
+
+      ...(data.currency !== undefined && data.currency !== null
+        ? {
+            currency: data.currency,
+          }
+        : {}),
+
+      ...(data.language !== undefined && data.language !== null
+        ? {
+            language: data.language,
+          }
+        : {}),
+
+      ...(data.country !== undefined && data.country !== null
+        ? {
+            country: data.country,
+          }
+        : {}),
+
+      ...(data.isVerified !== undefined
+        ? {
+            isVerified: data.isVerified,
+          }
+        : {}),
+
+      ...(data.isPublished !== undefined
+        ? {
+            isPublished: data.isPublished,
+          }
+        : {}),
+
+      ...(data.onboardingCompleted !== undefined
+        ? {
+            onboardingCompleted: data.onboardingCompleted,
+          }
+        : {}),
+    };
+
     return prisma.business.update({
       where: { id },
-      data,
+
+      data: updateData,
 
       include: {
         profile: true,
@@ -190,31 +379,10 @@ export class BusinessRepository {
     });
   }
 
-  /**
-   * Create/update business profile.
-   *
-   * businessId is the unique relation key.
-   *
-   * IMPORTANT:
-   * We use the Business relation during CREATE instead of
-   * passing businessId directly together with relation data.
-   */
   async updateProfile(
     businessId: string,
     data: Prisma.BusinessProfileUpdateInput
   ) {
-    /**
-     * BusinessProfileUpdateInput can contain Prisma nested
-     * relation operations such as `business`.
-     *
-     * We must not blindly spread that into the CREATE branch,
-     * because the create input expects the relation in the
-     * correct Prisma shape.
-     *
-     * Build the create object explicitly from supported
-     * profile fields.
-     */
-
     const profileData: Prisma.BusinessProfileCreateInput = {
       business: {
         connect: {
@@ -416,14 +584,14 @@ export class BusinessRepository {
     };
 
     return prisma.businessProfile.upsert({
-  where: {
-    businessId,
-  },
+      where: {
+        businessId,
+      },
 
-  create: profileData,
+      create: profileData,
 
-  update: profileData,
-});
+      update: profileData,
+    });
   }
 
   async softDelete(id: string) {

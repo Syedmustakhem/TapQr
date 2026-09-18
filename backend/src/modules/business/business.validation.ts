@@ -1,10 +1,8 @@
 import { z } from "zod";
 
-/*
-|--------------------------------------------------------------------------
-| COMMON VALIDATORS
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   COMMON VALIDATORS
+   ========================================================================== */
 
 const optionalEmail = z
   .string()
@@ -55,25 +53,30 @@ const nullableUrl = z
   .nullable()
   .optional();
 
-/*
-|--------------------------------------------------------------------------
-| OPENING HOURS
-|--------------------------------------------------------------------------
-|
-| Example:
-|
-| {
-|   monday: {
-|     open: "09:00",
-|     close: "21:00"
-|   },
-|   tuesday: {
-|     open: "09:00",
-|     close: "21:00"
-|   }
-| }
-|
-*/
+const optionalText = (
+  max: number,
+  message?: string
+) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .optional();
+
+const nullableText = (
+  max: number,
+  message?: string
+) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .nullable()
+    .optional();
+
+/* ==========================================================================
+   OPENING HOURS
+   ========================================================================== */
 
 const timeSchema = z
   .string()
@@ -99,11 +102,9 @@ const openingHoursSchema = z
   })
   .strict();
 
-/*
-|--------------------------------------------------------------------------
-| SOCIAL LINKS
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   SOCIAL LINKS
+   ========================================================================== */
 
 const socialLinksSchema = z
   .object({
@@ -117,11 +118,9 @@ const socialLinksSchema = z
   })
   .strict();
 
-/*
-|--------------------------------------------------------------------------
-| CREATE BUSINESS
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   CREATE BUSINESS
+   ========================================================================== */
 
 export const createBusinessSchema = z
   .object({
@@ -137,28 +136,92 @@ export const createBusinessSchema = z
         "Business name must not exceed 100 characters"
       ),
 
+    legalName: optionalText(
+      150,
+      "Legal name must not exceed 150 characters"
+    ),
+
+    displayName: optionalText(
+      100,
+      "Display name must not exceed 100 characters"
+    ),
+
+    businessType: optionalText(
+      100,
+      "Business type must not exceed 100 characters"
+    ),
+
+    industry: optionalText(
+      100,
+      "Industry must not exceed 100 characters"
+    ),
+
+    category: optionalText(
+      100,
+      "Category must not exceed 100 characters"
+    ),
+
+    subcategory: optionalText(
+      100,
+      "Subcategory must not exceed 100 characters"
+    ),
+
     email: optionalEmail,
 
     phone: optionalPhone,
+
+    website: optionalUrl,
+
+    whatsapp: optionalPhone,
+
+    logo: optionalUrl,
+
+    coverImage: optionalUrl,
 
     description: z
       .string()
       .trim()
       .max(
-        500,
-        "Description must not exceed 500 characters"
+        1000,
+        "Description must not exceed 1000 characters"
       )
       .optional(),
 
-    logo: optionalUrl,
+    timezone: z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .optional(),
+
+    currency: z
+      .string()
+      .trim()
+      .length(
+        3,
+        "Currency must be a 3-letter ISO code"
+      )
+      .optional(),
+
+    language: z
+      .string()
+      .trim()
+      .min(2)
+      .max(20)
+      .optional(),
+
+    country: z
+      .string()
+      .trim()
+      .min(2)
+      .max(100)
+      .optional(),
   })
   .strict();
 
-/*
-|--------------------------------------------------------------------------
-| UPDATE BUSINESS
-|--------------------------------------------------------------------------
-*/
+/* ==========================================================================
+   UPDATE BUSINESS
+   ========================================================================== */
 
 export const updateBusinessSchema = z
   .object({
@@ -167,44 +230,100 @@ export const updateBusinessSchema = z
       .trim()
       .min(2)
       .max(100)
+      .nullable()
       .optional(),
+
+    legalName: nullableText(150),
+
+    displayName: nullableText(100),
+
+    businessType: nullableText(100),
+
+    industry: nullableText(100),
+
+    category: nullableText(100),
+
+    subcategory: nullableText(100),
 
     email: nullableEmail,
 
     phone: nullablePhone,
 
-    description: z
+    website: nullableUrl,
+
+    whatsapp: nullablePhone,
+
+    logo: nullableUrl,
+
+    coverImage: nullableUrl,
+
+    description: nullableText(1000),
+
+    timezone: z
       .string()
       .trim()
-      .max(500)
+      .min(1)
+      .max(100)
       .nullable()
       .optional(),
 
-    logo: nullableUrl,
-  })
-  .strict();
+    currency: z
+      .string()
+      .trim()
+      .length(
+        3,
+        "Currency must be a 3-letter ISO code"
+      )
+      .nullable()
+      .optional(),
 
-/*
-|--------------------------------------------------------------------------
-| UPDATE BUSINESS PROFILE
-|--------------------------------------------------------------------------
-*/
+    language: z
+      .string()
+      .trim()
+      .min(2)
+      .max(20)
+      .nullable()
+      .optional(),
+
+    country: z
+      .string()
+      .trim()
+      .min(2)
+      .max(100)
+      .nullable()
+      .optional(),
+
+    isVerified: z
+      .boolean()
+      .optional(),
+
+    isPublished: z
+      .boolean()
+      .optional(),
+
+    onboardingCompleted: z
+      .boolean()
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (data) =>
+      Object.keys(data).length > 0,
+    {
+      message:
+        "At least one business field is required.",
+    }
+  );
+
+/* ==========================================================================
+   UPDATE BUSINESS PROFILE
+   ========================================================================== */
 
 export const updateBusinessProfileSchema = z
   .object({
-    tagline: z
-      .string()
-      .trim()
-      .max(150)
-      .nullable()
-      .optional(),
+    tagline: nullableText(150),
 
-    description: z
-      .string()
-      .trim()
-      .max(1000)
-      .nullable()
-      .optional(),
+    description: nullableText(1000),
 
     website: nullableUrl,
 
@@ -214,47 +333,17 @@ export const updateBusinessProfileSchema = z
 
     whatsapp: nullablePhone,
 
-    addressLine1: z
-      .string()
-      .trim()
-      .max(200)
-      .nullable()
-      .optional(),
+    addressLine1: nullableText(200),
 
-    addressLine2: z
-      .string()
-      .trim()
-      .max(200)
-      .nullable()
-      .optional(),
+    addressLine2: nullableText(200),
 
-    city: z
-      .string()
-      .trim()
-      .max(100)
-      .nullable()
-      .optional(),
+    city: nullableText(100),
 
-    state: z
-      .string()
-      .trim()
-      .max(100)
-      .nullable()
-      .optional(),
+    state: nullableText(100),
 
-    postalCode: z
-      .string()
-      .trim()
-      .max(20)
-      .nullable()
-      .optional(),
+    postalCode: nullableText(20),
 
-    country: z
-      .string()
-      .trim()
-      .max(100)
-      .nullable()
-      .optional(),
+    country: nullableText(100),
 
     latitude: z
       .number()
@@ -272,13 +361,15 @@ export const updateBusinessProfileSchema = z
       .nullable()
       .optional(),
 
-    openingHours: openingHoursSchema
-      .nullable()
-      .optional(),
+    openingHours:
+      openingHoursSchema
+        .nullable()
+        .optional(),
 
-    socialLinks: socialLinksSchema
-      .nullable()
-      .optional(),
+    socialLinks:
+      socialLinksSchema
+        .nullable()
+        .optional(),
 
     coverImage: nullableUrl,
   })
