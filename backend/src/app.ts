@@ -19,7 +19,7 @@ import categoryRoutes from "./modules/catalog/category.routes";
 import itemRoutes from "./modules/catalog/item.routes";
 import optionGroupRoutes from "./modules/catalog/option-group.routes";
 import optionRoutes from "./modules/catalog/option.routes";
-
+import campaignRoutes from "./modules/campaign/campaign.routes"
 import { logger } from "./cores/middleware/logger";
 import { errorHandler } from "./cores/middleware/errorHandler";
 
@@ -120,6 +120,8 @@ app.use(
   "/api/businesses",
   businessRoutes
 );
+
+app.use("/api/campaign",campaignRoutes);
 
 /**
  * Catalog option groups

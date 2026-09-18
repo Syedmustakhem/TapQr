@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 
-import { BusinessRepository } from "./business.repository";
+import {
+  BusinessRepository,
+} from "./business.repository";
+
 import {
   CreateBusinessDTO,
   UpdateBusinessDTO,
@@ -9,7 +12,9 @@ import {
 
 import { AppError } from "../../cores/errors/AppError";
 
-function slugify(value: string): string {
+function slugify(
+  value: string
+): string {
   return value
     .toLowerCase()
     .trim()
@@ -17,7 +22,9 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function normalizeEmail(email?: string | null) {
+function normalizeEmail(
+  email?: string | null
+) {
   if (email == null) {
     return email === null
       ? null
@@ -30,7 +37,9 @@ function normalizeEmail(email?: string | null) {
   return normalized || null;
 }
 
-function normalizePhone(phone?: string | null) {
+function normalizePhone(
+  phone?: string | null
+) {
   if (phone == null) {
     return phone === null
       ? null
@@ -44,6 +53,21 @@ function normalizePhone(phone?: string | null) {
   return normalized || null;
 }
 
+function normalizeText(
+  value?: string | null
+) {
+  if (value == null) {
+    return value === null
+      ? null
+      : undefined;
+  }
+
+  const normalized =
+    value.trim();
+
+  return normalized || null;
+}
+
 export class BusinessService {
   private readonly repository =
     new BusinessRepository();
@@ -52,7 +76,8 @@ export class BusinessService {
     ownerId: string,
     data: CreateBusinessDTO
   ) {
-    let baseSlug = slugify(data.name);
+    let baseSlug =
+      slugify(data.name);
 
     if (!baseSlug) {
       baseSlug = "business";
@@ -62,35 +87,122 @@ export class BusinessService {
     let counter = 2;
 
     while (
-      await this.repository.findBySlug(slug)
+      await this.repository.findBySlug(
+        slug
+      )
     ) {
-      slug = `${baseSlug}-${counter}`;
+      slug =
+        `${baseSlug}-${counter}`;
       counter++;
     }
 
     try {
       const business =
-        await this.repository.createWithProfile({
-          ownerId,
-          name: data.name.trim(),
-          slug,
-          email: normalizeEmail(data.email) ?? undefined,
-          phone: normalizePhone(data.phone) ?? undefined,
-          description:
-            data.description?.trim() || undefined,
-          logo:
-            data.logo?.trim() || undefined,
-        });
+        await this.repository.createWithProfile(
+          {
+            ownerId,
+
+            name:
+              data.name.trim(),
+
+            slug,
+
+            legalName:
+              normalizeText(
+                data.legalName
+              ) ?? undefined,
+
+            displayName:
+              normalizeText(
+                data.displayName
+              ) ?? undefined,
+
+            businessType:
+              normalizeText(
+                data.businessType
+              ) ?? undefined,
+
+            industry:
+              normalizeText(
+                data.industry
+              ) ?? undefined,
+
+            category:
+              normalizeText(
+                data.category
+              ) ?? undefined,
+
+            subcategory:
+              normalizeText(
+                data.subcategory
+              ) ?? undefined,
+
+            email:
+              normalizeEmail(
+                data.email
+              ) ?? undefined,
+
+            phone:
+              normalizePhone(
+                data.phone
+              ) ?? undefined,
+
+            website:
+              normalizeText(
+                data.website
+              ) ?? undefined,
+
+            whatsapp:
+              normalizePhone(
+                data.whatsapp
+              ) ?? undefined,
+
+            logo:
+              normalizeText(
+                data.logo
+              ) ?? undefined,
+
+            coverImage:
+              normalizeText(
+                data.coverImage
+              ) ?? undefined,
+
+            description:
+              normalizeText(
+                data.description
+              ) ?? undefined,
+
+            timezone:
+              normalizeText(
+                data.timezone
+              ) ??
+              "Asia/Kolkata",
+
+            currency:
+              normalizeText(
+                data.currency
+              ) ?? "INR",
+
+            language:
+              normalizeText(
+                data.language
+              ) ?? "en",
+
+            country:
+              normalizeText(
+                data.country
+              ) ?? "India",
+          }
+        );
 
       return this.repository.findById(
         business.id
       );
     } catch (error: any) {
-      if (error?.code === "P2002") {
-        /*
-         * This can happen if another concurrent request
-         * generated the same slug.
-         */
+      if (
+        error?.code ===
+        "P2002"
+      ) {
         throw new AppError(
           "Unable to create the business because its unique identifier is already in use. Please try again.",
           409,
@@ -131,7 +243,8 @@ export class BusinessService {
     }
 
     if (
-      business.ownerId !== ownerId
+      business.ownerId !==
+      ownerId
     ) {
       throw new AppError(
         "You do not have access to this business.",
@@ -158,36 +271,172 @@ export class BusinessService {
         businessId,
         {
           ...(data.name !== undefined && {
-            name: data.name.trim(),
+            name:
+              data.name === null
+                ? null
+                : data.name.trim(),
           }),
 
-          ...(data.email !== undefined && {
-            email: normalizeEmail(
-              data.email
-            ),
+          ...(data.legalName !==
+            undefined && {
+            legalName:
+              normalizeText(
+                data.legalName
+              ),
           }),
 
-          ...(data.phone !== undefined && {
-            phone: normalizePhone(
-              data.phone
-            ),
+          ...(data.displayName !==
+            undefined && {
+            displayName:
+              normalizeText(
+                data.displayName
+              ),
+          }),
+
+          ...(data.businessType !==
+            undefined && {
+            businessType:
+              normalizeText(
+                data.businessType
+              ),
+          }),
+
+          ...(data.industry !==
+            undefined && {
+            industry:
+              normalizeText(
+                data.industry
+              ),
+          }),
+
+          ...(data.category !==
+            undefined && {
+            category:
+              normalizeText(
+                data.category
+              ),
+          }),
+
+          ...(data.subcategory !==
+            undefined && {
+            subcategory:
+              normalizeText(
+                data.subcategory
+              ),
+          }),
+
+          ...(data.email !==
+            undefined && {
+            email:
+              normalizeEmail(
+                data.email
+              ),
+          }),
+
+          ...(data.phone !==
+            undefined && {
+            phone:
+              normalizePhone(
+                data.phone
+              ),
+          }),
+
+          ...(data.website !==
+            undefined && {
+            website:
+              normalizeText(
+                data.website
+              ),
+          }),
+
+          ...(data.whatsapp !==
+            undefined && {
+            whatsapp:
+              normalizePhone(
+                data.whatsapp
+              ),
+          }),
+
+          ...(data.logo !==
+            undefined && {
+            logo:
+              normalizeText(
+                data.logo
+              ),
+          }),
+
+          ...(data.coverImage !==
+            undefined && {
+            coverImage:
+              normalizeText(
+                data.coverImage
+              ),
           }),
 
           ...(data.description !==
             undefined && {
             description:
-              data.description?.trim() ||
-              null,
+              normalizeText(
+                data.description
+              ),
           }),
 
-          ...(data.logo !== undefined && {
-            logo:
-              data.logo?.trim() || null,
+          ...(data.timezone !==
+            undefined && {
+            timezone:
+              normalizeText(
+                data.timezone
+              ),
+          }),
+
+          ...(data.currency !==
+            undefined && {
+            currency:
+              normalizeText(
+                data.currency
+              ),
+          }),
+
+          ...(data.language !==
+            undefined && {
+            language:
+              normalizeText(
+                data.language
+              ),
+          }),
+
+          ...(data.country !==
+            undefined && {
+            country:
+              normalizeText(
+                data.country
+              ),
+          }),
+
+          ...(data.isVerified !==
+            undefined && {
+            isVerified:
+              data.isVerified,
+          }),
+
+          ...(data.isPublished !==
+            undefined && {
+            isPublished:
+              data.isPublished,
+          }),
+
+          ...(data.onboardingCompleted !==
+            undefined && {
+            onboardingCompleted:
+              data.onboardingCompleted,
           }),
         }
       );
     } catch (error: any) {
-      if (error?.code === "P2002") {
+      if (
+        error?.code ===
+        "P2002"
+      ) {
         throw new AppError(
           "Business update conflicts with existing data.",
           409,
@@ -209,7 +458,8 @@ export class BusinessService {
       businessId
     );
 
-    const profileData: Prisma.BusinessProfileUpdateInput =
+    const profileData:
+      Prisma.BusinessProfileUpdateInput =
       {};
 
     if ("tagline" in data) {
@@ -229,17 +479,23 @@ export class BusinessService {
 
     if ("email" in data) {
       profileData.email =
-        normalizeEmail(data.email);
+        normalizeEmail(
+          data.email
+        );
     }
 
     if ("phone" in data) {
       profileData.phone =
-        normalizePhone(data.phone);
+        normalizePhone(
+          data.phone
+        );
     }
 
     if ("whatsapp" in data) {
       profileData.whatsapp =
-        normalizePhone(data.whatsapp);
+        normalizePhone(
+          data.whatsapp
+        );
     }
 
     if ("addressLine1" in data) {
@@ -273,7 +529,8 @@ export class BusinessService {
     }
 
     if (
-      data.latitude !== undefined
+      data.latitude !==
+      undefined
     ) {
       profileData.latitude =
         data.latitude === null
@@ -284,7 +541,8 @@ export class BusinessService {
     }
 
     if (
-      data.longitude !== undefined
+      data.longitude !==
+      undefined
     ) {
       profileData.longitude =
         data.longitude === null
@@ -295,25 +553,34 @@ export class BusinessService {
     }
 
     if (
-      data.openingHours !== undefined
+      data.openingHours !==
+      undefined
     ) {
       profileData.openingHours =
         data.openingHours === null
           ? Prisma.JsonNull
-          : (data.openingHours as Prisma.InputJsonValue);
+          : (
+              data.openingHours as
+              Prisma.InputJsonValue
+            );
     }
 
     if (
-      data.socialLinks !== undefined
+      data.socialLinks !==
+      undefined
     ) {
       profileData.socialLinks =
         data.socialLinks === null
           ? Prisma.JsonNull
-          : (data.socialLinks as Prisma.InputJsonValue);
+          : (
+              data.socialLinks as
+              Prisma.InputJsonValue
+            );
     }
 
     if (
-      data.coverImage !== undefined
+      data.coverImage !==
+      undefined
     ) {
       profileData.coverImage =
         data.coverImage;

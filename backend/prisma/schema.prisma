@@ -78,40 +78,82 @@ model OtpVerification {
 // ============================================================
 
 model Business {
-  id            String         @id @default(uuid())
-  ownerId       String
-  name          String
-  slug          String         @unique
-  email         String?
-  phone         String?
-  logo          String?
-  description   String?
-  status        BusinessStatus @default(ACTIVE)
-  reviews       Review[]
-  reviewReports ReviewReport[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-  notifications Notification[]
-  owner         User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  // Ownership
+  ownerId String
+
+  // Identity
+  name        String
+  legalName   String?
+  displayName String?
+  slug        String  @unique
+
+  // Business classification
+  businessType String?
+  industry     String?
+  category     String?
+  subcategory  String?
+
+  // Primary contact
+  email    String?
+  phone    String?
+  website  String?
+  whatsapp String?
+
+  // Branding / public summary
+  logo        String?
+  coverImage  String?
+  description String?
+
+  // Localization
+  timezone String @default("Asia/Kolkata")
+  currency String @default("INR")
+  language String @default("en")
+  country  String @default("India")
+
+  // Lifecycle / visibility
+  status              BusinessStatus @default(ACTIVE)
+  isVerified          Boolean        @default(false)
+  isPublished         Boolean        @default(true)
+  onboardingCompleted Boolean        @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   profile BusinessProfile?
 
   members BusinessMember[]
 
   whatsappAccounts WhatsAppBusinessAccount[]
-
-  invitations BusinessInvitation[]
+  invitations      BusinessInvitation[]
 
   qrCodes          QRCode[]
+  catalogs         Catalog[]
   whatsappContacts WhatsAppContact[]
   conversations    Conversation[]
   whatsappMessages WhatsAppMessage[]
-  catalogs         Catalog[]
+  notifications    Notification[]
+
+  reviews       Review[]
+  reviewReports ReviewReport[]
+
+  // Campaign relation will be added when Campaign Foundation is wired.
+  // campaigns Campaign[]
+  campaigns Campaign[]
 
   @@index([ownerId])
   @@index([status])
+  @@index([industry])
+  @@index([category])
+  @@index([country])
   @@index([createdAt])
+  @@index([isVerified])
+  @@index([isPublished])
+  @@index([onboardingCompleted])
 }
 
 // ============================================================
@@ -126,12 +168,14 @@ model BusinessProfile {
   tagline           String?
   description       String?
   externalReviewUrl String?
-  website           String?
 
+  // Public contact
+  website  String?
   email    String?
   phone    String?
   whatsapp String?
 
+  // Physical location
   addressLine1 String?
   addressLine2 String?
   city         String?
@@ -142,20 +186,13 @@ model BusinessProfile {
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)
 
-  // Example:
-  // {
-  //   "monday": {"open":"09:00","close":"21:00"},
-  //   "tuesday": {"open":"09:00","close":"21:00"}
-  // }
+  // Operating hours
   openingHours Json?
 
-  // Example:
-  // {
-  //   "instagram":"https://instagram.com/...",
-  //   "facebook":"https://facebook.com/..."
-  // }
+  // Social presence
   socialLinks Json?
 
+  // Public branding
   coverImage String?
 
   createdAt DateTime @default(now())
@@ -165,6 +202,7 @@ model BusinessProfile {
 
   @@index([city])
   @@index([state])
+  @@index([country])
 }
 
 // ============================================================
@@ -317,6 +355,37 @@ model ReviewReport {
   @@index([reviewId])
   @@index([businessId])
   @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// CAMPAIGNS
+// Marketing campaigns that group future QR/UTM/analytics activity.
+// QR mapping and campaign attribution are added in later roadmap steps.
+// ============================================================
+
+model Campaign {
+  id String @id @default(cuid())
+
+  businessId String
+
+  name        String
+  description String?
+
+  status CampaignStatus @default(DRAFT)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([businessId, status])
+  @@index([startsAt])
+  @@index([endsAt])
   @@index([createdAt])
 }
 
@@ -1444,6 +1513,18 @@ model QRRuleAuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@index([action])
+}
+
+// ============================================
+// CAMPAIGN ENUMS
+// ============================================
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
 }
 
 // ============================================================

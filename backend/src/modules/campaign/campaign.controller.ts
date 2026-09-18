@@ -4,25 +4,25 @@ import {
 } from "express";
 
 import {
-  BusinessService,
-} from "./business.service";
+  CampaignService,
+} from "./campaign.service";
 
 import {
-  BusinessAuthRequest,
-} from "./business.types";
+  CampaignAuthRequest,
+} from "./campaign.types";
 
 import {
-  createBusinessSchema,
-  updateBusinessProfileSchema,
-  updateBusinessSchema,
-} from "./business.validation";
+  createCampaignSchema,
+  updateCampaignSchema,
+  updateCampaignStatusSchema,
+} from "./campaign.validation";
 
-export class BusinessController {
+export class CampaignController {
   private readonly service =
-    new BusinessService();
+    new CampaignService();
 
   create = async (
-    req: BusinessAuthRequest,
+    req: CampaignAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
@@ -40,21 +40,22 @@ export class BusinessController {
       }
 
       const data =
-        createBusinessSchema.parse(
+        createCampaignSchema.parse(
           req.body
         );
 
-      const business =
+      const campaign =
         await this.service.create(
           userId,
+          String(req.params.businessId),
           data
         );
 
       return res.status(201).json({
         success: true,
         message:
-          "Business created successfully.",
-        data: business,
+          "Campaign created successfully.",
+        data: campaign,
       });
     } catch (error) {
       next(error);
@@ -62,7 +63,7 @@ export class BusinessController {
   };
 
   getMine = async (
-    req: BusinessAuthRequest,
+    req: CampaignAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
@@ -79,16 +80,17 @@ export class BusinessController {
         });
       }
 
-      const businesses =
-        await this.service.getMyBusinesses(
-          userId
+      const campaigns =
+        await this.service.getByBusinessId(
+          userId,
+          String(req.params.businessId)
         );
 
       return res.status(200).json({
         success: true,
         message:
-          "Businesses retrieved successfully.",
-        data: businesses,
+          "Campaigns retrieved successfully.",
+        data: campaigns,
       });
     } catch (error) {
       next(error);
@@ -96,7 +98,7 @@ export class BusinessController {
   };
 
   getById = async (
-    req: BusinessAuthRequest,
+    req: CampaignAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
@@ -113,17 +115,18 @@ export class BusinessController {
         });
       }
 
-      const business =
+      const campaign =
         await this.service.getById(
           userId,
+          String(req.params.businessId),
           String(req.params.id)
         );
 
       return res.status(200).json({
         success: true,
         message:
-          "Business retrieved successfully.",
-        data: business,
+          "Campaign retrieved successfully.",
+        data: campaign,
       });
     } catch (error) {
       next(error);
@@ -131,7 +134,7 @@ export class BusinessController {
   };
 
   update = async (
-    req: BusinessAuthRequest,
+    req: CampaignAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
@@ -149,13 +152,14 @@ export class BusinessController {
       }
 
       const data =
-        updateBusinessSchema.parse(
+        updateCampaignSchema.parse(
           req.body
         );
 
-      const business =
+      const campaign =
         await this.service.update(
           userId,
+          String(req.params.businessId),
           String(req.params.id),
           data
         );
@@ -163,16 +167,16 @@ export class BusinessController {
       return res.status(200).json({
         success: true,
         message:
-          "Business updated successfully.",
-        data: business,
+          "Campaign updated successfully.",
+        data: campaign,
       });
     } catch (error) {
       next(error);
     }
   };
 
-  updateProfile = async (
-    req: BusinessAuthRequest,
+  updateStatus = async (
+    req: CampaignAuthRequest,
     res: Response,
     next: NextFunction
   ) => {
@@ -190,13 +194,14 @@ export class BusinessController {
       }
 
       const data =
-        updateBusinessProfileSchema.parse(
+        updateCampaignStatusSchema.parse(
           req.body
         );
 
-      const profile =
-        await this.service.updateProfile(
+      const campaign =
+        await this.service.updateStatus(
           userId,
+          String(req.params.businessId),
           String(req.params.id),
           data
         );
@@ -204,41 +209,8 @@ export class BusinessController {
       return res.status(200).json({
         success: true,
         message:
-          "Business profile updated successfully.",
-        data: profile,
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  delete = async (
-    req: BusinessAuthRequest,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const userId =
-        req.user?.id;
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Authentication required.",
-          code: "UNAUTHORIZED",
-        });
-      }
-
-      const result =
-        await this.service.delete(
-          userId,
-          String(req.params.id)
-        );
-
-      return res.status(200).json({
-        success: true,
-        ...result,
+          "Campaign status updated successfully.",
+        data: campaign,
       });
     } catch (error) {
       next(error);
