@@ -30,6 +30,7 @@ export interface CreateQRCodeDTO {
   businessId: string;
   ownerId: string;
   catalogId?: string;
+  campaignId?: string;
   name: string;
   description?: string;
   destinationUrl?: string;
@@ -46,6 +47,7 @@ export interface UpdateQRCodeDTO {
   id: string;
   ownerId: string;
   catalogId?: string | null;
+  campaignId?: string | null;
   name?: string;
   description?: string | null;
   destinationUrl?: string | null;

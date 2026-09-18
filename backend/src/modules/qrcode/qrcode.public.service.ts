@@ -1,5 +1,9 @@
 import { Request } from "express";
 
+import {
+  CampaignStatus,
+} from "@prisma/client";
+
 import { AppError } from "../../cores/errors/AppError";
 import { prisma } from "../../config/prisma";
 
@@ -115,7 +119,62 @@ export class QRCodePublicService {
 
   private readonly routingEngine =
     new QRRoutingEngine();
+  /**
+   * ============================================================
+   * CAMPAIGN LIFECYCLE
+   * ============================================================
+   *
+   * Determines whether a campaign is currently eligible
+   * to participate in QR routing.
+   *
+   * Rules:
+   *
+   * ACTIVE + no dates
+   *     -> active
+   *
+   * ACTIVE + before startsAt
+   *     -> inactive
+   *
+   * ACTIVE + within time window
+   *     -> active
+   *
+   * ACTIVE + after endsAt
+   *     -> inactive
+   *
+   * Any non-ACTIVE status
+   *     -> inactive
+   */
+  private isCampaignCurrentlyActive(
+    campaign: {
+      status: CampaignStatus;
+      startsAt: Date | null;
+      endsAt: Date | null;
+    },
+    now: Date = new Date()
+  ): boolean {
+    if (
+      campaign.status !==
+      CampaignStatus.ACTIVE
+    ) {
+      return false;
+    }
 
+    if (
+      campaign.startsAt &&
+      now < campaign.startsAt
+    ) {
+      return false;
+    }
+
+    if (
+      campaign.endsAt &&
+      now > campaign.endsAt
+    ) {
+      return false;
+    }
+
+    return true;
+  }
   /**
    * ============================================================
    * GET PUBLIC QR EXPERIENCE
@@ -161,7 +220,7 @@ export class QRCodePublicService {
      * ==========================================================
      */
 
-    const baseQR =
+        const baseQR =
       await prisma.qRCode.findUnique({
         where: {
           shortCode: code,
@@ -169,7 +228,9 @@ export class QRCodePublicService {
 
         select: {
           id: true,
+
           status: true,
+
           deletedAt: true,
 
           catalogId: true,
@@ -186,9 +247,21 @@ export class QRCodePublicService {
 
           locationLabel: true,
 
+          campaignId: true,
+
           campaignName: true,
 
           scanCount: true,
+
+          campaign: {
+            select: {
+              id: true,
+              name: true,
+              status: true,
+              startsAt: true,
+              endsAt: true,
+            },
+          },
         },
       });
 
@@ -217,7 +290,34 @@ export class QRCodePublicService {
         "QR_NOT_ACTIVE"
       );
     }
+    /**
+     * ==========================================================
+     * STEP 2 — CAMPAIGN LIFECYCLE
+     * ==========================================================
+     *
+     * A QR may remain active even when its campaign
+     * is not currently active.
+     *
+     * In that case the QR continues to work normally,
+     * but campaign-specific Smart Rules must not match.
+     */
 
+    const now = new Date();
+
+    const campaignIsActive =
+      baseQR.campaign
+        ? this.isCampaignCurrentlyActive(
+            baseQR.campaign,
+            now
+          )
+        : false;
+
+    const activeCampaignName =
+      campaignIsActive
+        ? baseQR.campaign?.name ??
+          baseQR.campaignName ??
+          null
+        : null;
     /**
      * ==========================================================
      * STEP 2 — LOAD BUSINESS ROUTING DATA
@@ -266,7 +366,7 @@ export class QRCodePublicService {
       | null = null;
 
     try {
-      const routingContext =
+           const routingContext =
         buildQRRoutingContext({
           req,
 
@@ -289,11 +389,10 @@ export class QRCodePublicService {
             baseQR.locationLabel,
 
           campaignName:
-            baseQR.campaignName,
+            activeCampaignName,
 
           catalogId:
             baseQR.catalogId,
-
 
           /**
            * We deliberately don't infer
@@ -309,6 +408,7 @@ export class QRCodePublicService {
           businessState:
             undefined,
         });
+
 
       routingResult =
         await this.routingEngine.resolve({
@@ -572,7 +672,30 @@ export class QRCodePublicService {
           qrCode.locationLabel,
 
         campaignName:
-          qrCode.campaignName,
+          activeCampaignName,
+
+        campaign:
+          baseQR.campaign
+            ? {
+                id:
+                  baseQR.campaign.id,
+
+                name:
+                  baseQR.campaign.name,
+
+                status:
+                  baseQR.campaign.status,
+
+                startsAt:
+                  baseQR.campaign.startsAt,
+
+                endsAt:
+                  baseQR.campaign.endsAt,
+
+                currentlyActive:
+                  campaignIsActive,
+              }
+            : null,
       },
 
       /**

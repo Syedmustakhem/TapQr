@@ -365,22 +365,19 @@ model ReviewReport {
 // ============================================================
 
 model Campaign {
-  id String @id @default(cuid())
-
-  businessId String
-
+  id          String         @id @default(cuid())
+  businessId  String
   name        String
   description String?
-
-  status CampaignStatus @default(DRAFT)
-
-  startsAt DateTime?
-  endsAt   DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status      CampaignStatus @default(DRAFT)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  qrCodes QRCode[]
 
   @@index([businessId])
   @@index([businessId, status])
@@ -462,7 +459,10 @@ model QRCode {
   locationLabel  String?
   campaignName   String?
   lastScannedAt  DateTime?
+  campaignId     String?
+  campaign       Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
+  @@index([campaignId])
   @@index([businessId, sourceType])
   @@index([lastScannedAt])
   @@index([businessId])

@@ -1,158 +1,631 @@
 import { QRSourceType } from "@prisma/client";
 import { AppError } from "../../cores/errors/AppError";
 import { generateShortCode } from "../../utils/generateShortCode";
-import { CreateQRCodeDTO, UpdateQRCodeDTO } from "./qrcode.types";
+import {
+  CreateQRCodeDTO,
+  UpdateQRCodeDTO,
+} from "./qrcode.types";
 import { QRCodeRepository } from "./qrcode.repository";
 import { BusinessRepository } from "../business/business.repository";
 
-const CATALOG_EXPERIENCES = ["CATALOG", "MENU", "SERVICES", "PRODUCTS"] as const;
+const CATALOG_EXPERIENCES = [
+  "CATALOG",
+  "MENU",
+  "SERVICES",
+  "PRODUCTS",
+] as const;
 
 export class QRCodeService {
-  private readonly qrRepository = new QRCodeRepository();
-  private readonly businessRepository = new BusinessRepository();
+  private readonly qrRepository =
+    new QRCodeRepository();
 
-  private async verifyCatalogOwnership(catalogId: string, businessId: string, ownerId: string) {
-    const catalog = await this.qrRepository.findCatalogById(catalogId);
-    if (!catalog) throw new AppError("Catalog not found.", 404);
-    if (catalog.businessId !== businessId) throw new AppError("Catalog does not belong to this business.", 400);
+  private readonly businessRepository =
+    new BusinessRepository();
 
-    const business = await this.businessRepository.findById(businessId);
-    if (!business) throw new AppError("Business not found.", 404);
-    if (business.ownerId !== ownerId) throw new AppError("You are not authorized to use this catalog.", 403);
-    if (!catalog.isActive) throw new AppError("Catalog is inactive.", 400);
+  private async verifyCatalogOwnership(
+    catalogId: string,
+    businessId: string,
+    ownerId: string
+  ) {
+    const catalog =
+      await this.qrRepository.findCatalogById(catalogId);
+
+    if (!catalog) {
+      throw new AppError(
+        "Catalog not found.",
+        404
+      );
+    }
+
+    if (catalog.businessId !== businessId) {
+      throw new AppError(
+        "Catalog does not belong to this business.",
+        400
+      );
+    }
+
+    const business =
+      await this.businessRepository.findById(
+        businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
+    if (business.ownerId !== ownerId) {
+      throw new AppError(
+        "You are not authorized to use this catalog.",
+        403
+      );
+    }
+
+    if (!catalog.isActive) {
+      throw new AppError(
+        "Catalog is inactive.",
+        400
+      );
+    }
 
     return catalog;
   }
 
-  async createQRCode(data: CreateQRCodeDTO) {
-    const business = await this.businessRepository.findById(data.businessId);
-    if (!business) throw new AppError("Business not found.", 404);
-    if (business.ownerId !== data.ownerId) {
-      throw new AppError("You are not authorized to create QR Codes for this business.", 403);
+  private async resolveCampaign(
+    campaignId: string,
+    businessId: string
+  ) {
+    const campaign =
+      await this.qrRepository.findCampaignById(
+        campaignId
+      );
+
+    if (!campaign) {
+      throw new AppError(
+        "Campaign not found.",
+        404
+      );
     }
 
-    const experienceType = data.experienceType ?? "BUSINESS";
+    if (campaign.businessId !== businessId) {
+      throw new AppError(
+        "Campaign does not belong to this business.",
+        400
+      );
+    }
 
-    if (CATALOG_EXPERIENCES.includes(experienceType as (typeof CATALOG_EXPERIENCES)[number]) && !data.catalogId) {
-      throw new AppError("Catalog is required for this QR experience.", 400);
+    return campaign;
+  }
+
+  async createQRCode(
+    data: CreateQRCodeDTO
+  ) {
+    const business =
+      await this.businessRepository.findById(
+        data.businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
+    if (business.ownerId !== data.ownerId) {
+      throw new AppError(
+        "You are not authorized to create QR Codes for this business.",
+        403
+      );
+    }
+
+    const experienceType =
+      data.experienceType ?? "BUSINESS";
+
+    if (
+      CATALOG_EXPERIENCES.includes(
+        experienceType as (typeof CATALOG_EXPERIENCES)[number]
+      ) &&
+      !data.catalogId
+    ) {
+      throw new AppError(
+        "Catalog is required for this QR experience.",
+        400
+      );
     }
 
     if (data.catalogId) {
-      await this.verifyCatalogOwnership(data.catalogId, data.businessId, data.ownerId);
+      await this.verifyCatalogOwnership(
+        data.catalogId,
+        data.businessId,
+        data.ownerId
+      );
     }
 
-    if (experienceType === "REDIRECT" && !data.destinationUrl) {
-      throw new AppError("Destination URL is required for redirect QR codes.", 400);
+    let campaignName =
+      data.campaignName?.trim() || undefined;
+
+    if (data.campaignId) {
+      const campaign =
+        await this.resolveCampaign(
+          data.campaignId,
+          data.businessId
+        );
+
+      campaignName = campaign.name;
     }
 
-    let shortCode = generateShortCode();
-    while (await this.qrRepository.findByShortCode(shortCode)) {
-      shortCode = generateShortCode();
+    if (
+      experienceType === "REDIRECT" &&
+      !data.destinationUrl
+    ) {
+      throw new AppError(
+        "Destination URL is required for redirect QR codes.",
+        400
+      );
+    }
+
+    let shortCode =
+      generateShortCode();
+
+    while (
+      await this.qrRepository.findByShortCode(
+        shortCode
+      )
+    ) {
+      shortCode =
+        generateShortCode();
     }
 
     return this.qrRepository.create({
-      business: { connect: { id: data.businessId } },
-      ...(data.catalogId ? { catalog: { connect: { id: data.catalogId } } } : {}),
+      business: {
+        connect: {
+          id: data.businessId,
+        },
+      },
+
+      ...(data.catalogId
+        ? {
+            catalog: {
+              connect: {
+                id: data.catalogId,
+              },
+            },
+          }
+        : {}),
+
+      ...(data.campaignId
+        ? {
+            campaign: {
+              connect: {
+                id: data.campaignId,
+              },
+            },
+          }
+        : {}),
+
       name: data.name,
-      description: data.description,
+
+      description:
+        data.description,
+
       type: data.type,
-      destinationUrl: data.destinationUrl,
+
+      destinationUrl:
+        data.destinationUrl,
+
       shortCode,
+
       experienceType,
-      enabledSections: data.enabledSections,
-      sourceType: data.sourceType ?? QRSourceType.OTHER,
-      placementLabel: data.placementLabel?.trim() || undefined,
-      locationLabel: data.locationLabel?.trim() || undefined,
-      campaignName: data.campaignName?.trim() || undefined,
+
+      enabledSections:
+        data.enabledSections,
+
+      sourceType:
+        data.sourceType ??
+        QRSourceType.OTHER,
+
+      placementLabel:
+        data.placementLabel?.trim() ||
+        undefined,
+
+      locationLabel:
+        data.locationLabel?.trim() ||
+        undefined,
+
+      campaignName,
     });
   }
 
-  async resolveQRCode(shortCode: string) {
-    const qrCode = await this.qrRepository.findByShortCode(shortCode.trim());
-    if (!qrCode || qrCode.deletedAt) throw new AppError("QR Code not found.", 404);
-    if (qrCode.status !== "ACTIVE") throw new AppError("QR Code is not active.", 410);
+  async resolveQRCode(
+    shortCode: string
+  ) {
+    const qrCode =
+      await this.qrRepository.findByShortCode(
+        shortCode.trim()
+      );
+
+    if (
+      !qrCode ||
+      qrCode.deletedAt
+    ) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (qrCode.status !== "ACTIVE") {
+      throw new AppError(
+        "QR Code is not active.",
+        410
+      );
+    }
+
     return qrCode;
   }
 
-  async getBusinessQRCodes(businessId: string, ownerId: string) {
-    const business = await this.businessRepository.findById(businessId);
-    if (!business) throw new AppError("Business not found.", 404);
-    if (business.ownerId !== ownerId) throw new AppError("You are not authorized to access this business.", 403);
-    return this.qrRepository.findByBusinessId(businessId);
+  async getBusinessQRCodes(
+    businessId: string,
+    ownerId: string
+  ) {
+    const business =
+      await this.businessRepository.findById(
+        businessId
+      );
+
+    if (!business) {
+      throw new AppError(
+        "Business not found.",
+        404
+      );
+    }
+
+    if (business.ownerId !== ownerId) {
+      throw new AppError(
+        "You are not authorized to access this business.",
+        403
+      );
+    }
+
+    return this.qrRepository.findByBusinessId(
+      businessId
+    );
   }
 
-  async getQRCodeById(id: string, ownerId: string) {
-    const qrCode = await this.qrRepository.findById(id);
-    if (!qrCode) throw new AppError("QR Code not found.", 404);
-    if (qrCode.business.ownerId !== ownerId) throw new AppError("You are not authorized to access this QR Code.", 403);
+  async getQRCodeById(
+    id: string,
+    ownerId: string
+  ) {
+    const qrCode =
+      await this.qrRepository.findById(id);
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (
+      qrCode.business.ownerId !== ownerId
+    ) {
+      throw new AppError(
+        "You are not authorized to access this QR Code.",
+        403
+      );
+    }
+
     return qrCode;
   }
 
-  async updateQRCode(data: UpdateQRCodeDTO) {
-    const qrCode = await this.qrRepository.findById(data.id);
-    if (!qrCode) throw new AppError("QR Code not found.", 404);
-    if (qrCode.business.ownerId !== data.ownerId) {
-      throw new AppError("You are not authorized to update this QR Code.", 403);
+  async updateQRCode(
+    data: UpdateQRCodeDTO
+  ) {
+    const qrCode =
+      await this.qrRepository.findById(
+        data.id
+      );
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
     }
 
-    const businessId = qrCode.businessId;
-
-    if (data.catalogId !== undefined && data.catalogId !== null) {
-      await this.verifyCatalogOwnership(data.catalogId, businessId, data.ownerId);
+    if (
+      qrCode.business.ownerId !==
+      data.ownerId
+    ) {
+      throw new AppError(
+        "You are not authorized to update this QR Code.",
+        403
+      );
     }
 
-    const experienceType = data.experienceType ?? qrCode.experienceType;
-    const catalogId = data.catalogId !== undefined ? data.catalogId : qrCode.catalogId;
+    const businessId =
+      qrCode.businessId;
 
-    if (CATALOG_EXPERIENCES.includes(experienceType as (typeof CATALOG_EXPERIENCES)[number]) && !catalogId) {
-      throw new AppError("Catalog is required for this QR experience.", 400);
+    if (
+      data.catalogId !== undefined &&
+      data.catalogId !== null
+    ) {
+      await this.verifyCatalogOwnership(
+        data.catalogId,
+        businessId,
+        data.ownerId
+      );
     }
 
-    if (experienceType === "REDIRECT") {
-      const destination = data.destinationUrl !== undefined ? data.destinationUrl : qrCode.destinationUrl;
-      if (!destination) throw new AppError("Destination URL is required for redirect QR codes.", 400);
+    const experienceType =
+      data.experienceType ??
+      qrCode.experienceType;
+
+    const catalogId =
+      data.catalogId !== undefined
+        ? data.catalogId
+        : qrCode.catalogId;
+
+    if (
+      CATALOG_EXPERIENCES.includes(
+        experienceType as (typeof CATALOG_EXPERIENCES)[number]
+      ) &&
+      !catalogId
+    ) {
+      throw new AppError(
+        "Catalog is required for this QR experience.",
+        400
+      );
     }
 
-    if (data.status === "ACTIVE" && qrCode.status === "EXPIRED") {
-      throw new AppError("Expired QR codes cannot be activated.", 409, "QR_EXPIRED");
+    if (
+      experienceType === "REDIRECT"
+    ) {
+      const destination =
+        data.destinationUrl !==
+        undefined
+          ? data.destinationUrl
+          : qrCode.destinationUrl;
+
+      if (!destination) {
+        throw new AppError(
+          "Destination URL is required for redirect QR codes.",
+          400
+        );
+      }
     }
 
-    return this.qrRepository.update(data.id, {
-      ...(data.catalogId !== undefined && {
-        catalog: data.catalogId === null ? { disconnect: true } : { connect: { id: data.catalogId } },
-      }),
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.description !== undefined && { description: data.description }),
-      ...(data.destinationUrl !== undefined && { destinationUrl: data.destinationUrl }),
-      ...(data.experienceType !== undefined && { experienceType: data.experienceType }),
-      ...(data.enabledSections !== undefined && { enabledSections: data.enabledSections }),
-      ...(data.status !== undefined && { status: data.status }),
-      ...(data.sourceType !== undefined && { sourceType: data.sourceType }),
-      ...(data.placementLabel !== undefined && { placementLabel: data.placementLabel?.trim() || null }),
-      ...(data.locationLabel !== undefined && { locationLabel: data.locationLabel?.trim() || null }),
-      ...(data.campaignName !== undefined && { campaignName: data.campaignName?.trim() || null }),
-    });
+    if (
+      data.status === "ACTIVE" &&
+      qrCode.status === "EXPIRED"
+    ) {
+      throw new AppError(
+        "Expired QR codes cannot be activated.",
+        409,
+        "QR_EXPIRED"
+      );
+    }
+
+    let campaignName:
+      | string
+      | null
+      | undefined;
+
+    if (
+      data.campaignId !== undefined
+    ) {
+      if (data.campaignId === null) {
+        campaignName = null;
+      } else {
+        const campaign =
+          await this.resolveCampaign(
+            data.campaignId,
+            businessId
+          );
+
+        campaignName =
+          campaign.name;
+      }
+    } else if (
+      data.campaignName !==
+      undefined
+    ) {
+      campaignName =
+        data.campaignName?.trim() ||
+        null;
+    }
+
+    return this.qrRepository.update(
+      data.id,
+      {
+        ...(data.catalogId !==
+          undefined && {
+          catalog:
+            data.catalogId === null
+              ? {
+                  disconnect: true,
+                }
+              : {
+                  connect: {
+                    id: data.catalogId,
+                  },
+                },
+        }),
+
+        ...(data.campaignId !==
+          undefined && {
+          campaign:
+            data.campaignId === null
+              ? {
+                  disconnect: true,
+                }
+              : {
+                  connect: {
+                    id: data.campaignId,
+                  },
+                },
+        }),
+
+        ...(data.name !==
+          undefined && {
+          name: data.name,
+        }),
+
+        ...(data.description !==
+          undefined && {
+          description:
+            data.description,
+        }),
+
+        ...(data.destinationUrl !==
+          undefined && {
+          destinationUrl:
+            data.destinationUrl,
+        }),
+
+        ...(data.experienceType !==
+          undefined && {
+          experienceType:
+            data.experienceType,
+        }),
+
+        ...(data.enabledSections !==
+          undefined && {
+          enabledSections:
+            data.enabledSections,
+        }),
+
+        ...(data.status !==
+          undefined && {
+          status: data.status,
+        }),
+
+        ...(data.sourceType !==
+          undefined && {
+          sourceType:
+            data.sourceType,
+        }),
+
+        ...(data.placementLabel !==
+          undefined && {
+          placementLabel:
+            data.placementLabel?.trim() ||
+            null,
+        }),
+
+        ...(data.locationLabel !==
+          undefined && {
+          locationLabel:
+            data.locationLabel?.trim() ||
+            null,
+        }),
+
+        ...(campaignName !==
+          undefined && {
+          campaignName,
+        }),
+      }
+    );
   }
 
-  async deleteQRCode(id: string, ownerId: string) {
-    const qrCode = await this.qrRepository.findById(id);
-    if (!qrCode) throw new AppError("QR Code not found.", 404);
-    if (qrCode.business.ownerId !== ownerId) throw new AppError("You are not authorized to delete this QR Code.", 403);
-    await this.qrRepository.softDelete(id);
-    return { message: "QR Code deleted successfully." };
+  async deleteQRCode(
+    id: string,
+    ownerId: string
+  ) {
+    const qrCode =
+      await this.qrRepository.findById(id);
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (
+      qrCode.business.ownerId !==
+      ownerId
+    ) {
+      throw new AppError(
+        "You are not authorized to delete this QR Code.",
+        403
+      );
+    }
+
+    await this.qrRepository.softDelete(
+      id
+    );
+
+    return {
+      message:
+        "QR Code deleted successfully.",
+    };
   }
 
-  async getQRBranding(qrCodeId: string, ownerId: string) {
-    const qrCode = await this.qrRepository.findById(qrCodeId);
-    if (!qrCode) throw new AppError("QR Code not found.", 404);
-    if (qrCode.business.ownerId !== ownerId) throw new AppError("You are not authorized to access this QR Code.", 403);
-    return this.qrRepository.findBranding(qrCodeId);
+  async getQRBranding(
+    qrCodeId: string,
+    ownerId: string
+  ) {
+    const qrCode =
+      await this.qrRepository.findById(
+        qrCodeId
+      );
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (
+      qrCode.business.ownerId !==
+      ownerId
+    ) {
+      throw new AppError(
+        "You are not authorized to access this QR Code.",
+        403
+      );
+    }
+
+    return this.qrRepository.findBranding(
+      qrCodeId
+    );
   }
 
-  async updateQRBranding(qrCodeId: string, ownerId: string, data: Record<string, unknown>) {
-    const qrCode = await this.qrRepository.findById(qrCodeId);
-    if (!qrCode) throw new AppError("QR Code not found.", 404);
-    if (qrCode.business.ownerId !== ownerId) throw new AppError("You are not authorized to update this QR Code.", 403);
-    return this.qrRepository.upsertBranding(qrCodeId, data as any);
+  async updateQRBranding(
+    qrCodeId: string,
+    ownerId: string,
+    data: Record<string, unknown>
+  ) {
+    const qrCode =
+      await this.qrRepository.findById(
+        qrCodeId
+      );
+
+    if (!qrCode) {
+      throw new AppError(
+        "QR Code not found.",
+        404
+      );
+    }
+
+    if (
+      qrCode.business.ownerId !==
+      ownerId
+    ) {
+      throw new AppError(
+        "You are not authorized to update this QR Code.",
+        403
+      );
+    }
+
+    return this.qrRepository.upsertBranding(
+      qrCodeId,
+      data as any
+    );
   }
 }
