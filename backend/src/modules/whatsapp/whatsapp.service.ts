@@ -6,7 +6,9 @@ import {
 
 import { prisma } from "../../config/prisma";
 import { AppError } from "../../cores/errors/AppError";
-
+import {
+  whatsappAutomationService,
+} from "./automation/automation.service";
 class WhatsAppService {
   /**
    * ---------------------------------------------------------
@@ -496,7 +498,173 @@ try {
     );
   }
 }
+  /**
+   * ---------------------------------------------------------
+   * SEND AUTOMATED WHATSAPP MESSAGE
+   * ---------------------------------------------------------
+   * Used internally by the WhatsApp automation engine.
+   *
+   * This method intentionally does not require a dashboard
+   * userId because it is triggered by an inbound WhatsApp
+   * webhook rather than a dashboard user.
+   * ---------------------------------------------------------
+   */
+  async sendAutomatedMessage(
+    businessId: string,
+    conversationId: string,
+    text: string,
+  ) {
+    const conversation =
+      await this.getConversationForBusiness(
+        businessId,
+        conversationId,
+      );
 
+    const cleanText = text?.trim();
+
+    if (!cleanText) {
+      throw new AppError(
+        "Automated message text is required",
+        400,
+      );
+    }
+
+    const accessToken =
+      process.env.WHATSAPP_ACCESS_TOKEN;
+
+    const phoneNumberId =
+      process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    const apiVersion =
+      process.env.WHATSAPP_API_VERSION ||
+      "v22.0";
+
+    if (!accessToken) {
+      throw new AppError(
+        "WhatsApp access token is not configured",
+        500,
+      );
+    }
+
+    if (!phoneNumberId) {
+      throw new AppError(
+        "WhatsApp phone number ID is not configured",
+        500,
+      );
+    }
+
+    const customerPhone =
+      conversation.contact.phoneNumber;
+
+    if (!customerPhone) {
+      throw new AppError(
+        "Customer phone number is missing",
+        400,
+      );
+    }
+
+    console.log(
+      "[WHATSAPP AUTOMATED SEND] Starting",
+      {
+        businessId,
+        conversationId,
+        customerPhone,
+        textLength: cleanText.length,
+      },
+    );
+
+    let response;
+
+    try {
+      response = await axios.post(
+        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: customerPhone,
+          type: "text",
+          text: {
+            body: cleanText,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    } catch (error: any) {
+      const metaError =
+        error?.response?.data;
+
+      console.error(
+        "[WHATSAPP AUTOMATED META ERROR]",
+        {
+          status: error?.response?.status,
+          response: metaError,
+          message: error?.message,
+        },
+      );
+
+      throw new AppError(
+        metaError?.error?.message ||
+          "Failed to send automated WhatsApp message",
+        error?.response?.status >= 400 &&
+        error?.response?.status < 600
+          ? error.response.status
+          : 502,
+      );
+    }
+
+    const whatsappMessageId =
+      response?.data?.messages?.[0]?.id ||
+      null;
+
+    if (!whatsappMessageId) {
+      throw new AppError(
+        "WhatsApp automated message was accepted without a message ID",
+        502,
+      );
+    }
+
+    const message =
+      await prisma.whatsAppMessage.create({
+        data: {
+          businessId,
+          conversationId,
+          direction: "OUTBOUND",
+          type: "TEXT",
+          text: cleanText,
+          whatsappMessageId,
+          status: "SENT",
+          metadata: response?.data,
+        },
+      });
+
+    await prisma.conversation.updateMany({
+      where: {
+        id: conversationId,
+        businessId,
+      },
+
+      data: {
+        lastMessageAt: new Date(),
+        status: "OPEN",
+      },
+    });
+
+    console.log(
+      "[WHATSAPP AUTOMATED SEND] Success",
+      {
+        conversationId,
+        whatsappMessageId,
+        messageId: message.id,
+      },
+    );
+
+    return message;
+  }
 /**
  * ---------------------------------------------------------
  * SEND WHATSAPP TEMPLATE MESSAGE
@@ -971,3 +1139,17 @@ async sendTemplateMessage(
 
 export const whatsappService =
   new WhatsAppService();
+
+whatsappAutomationService.setReplySender(
+  async (
+    businessId,
+    conversationId,
+    text,
+  ) => {
+    return whatsappService.sendAutomatedMessage(
+      businessId,
+      conversationId,
+      text,
+    );
+  },
+);
