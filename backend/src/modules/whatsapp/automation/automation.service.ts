@@ -17,6 +17,18 @@ interface AutomationRule {
   response: string;
 }
 
+interface AutomationConversation {
+  id: string;
+  businessId: string;
+  handlingMode: ConversationHandlingMode;
+}
+
+type WhatsAppReplySender = (
+  businessId: string,
+  conversationId: string,
+  text: string,
+) => Promise<unknown>;
+
 export class WhatsAppAutomationService {
   private readonly rules: AutomationRule[] = [
     {
@@ -88,10 +100,22 @@ export class WhatsAppAutomationService {
     },
   ];
 
+  private replySender:
+    | WhatsAppReplySender
+    | null = null;
+
+  setReplySender(
+    sender: WhatsAppReplySender,
+  ): void {
+    this.replySender = sender;
+
+    console.log(
+      "[WHATSAPP AUTOMATION] Reply sender connected",
+    );
+  }
+
   shouldAutoReply(
-    conversation: {
-      handlingMode: ConversationHandlingMode;
-    },
+    conversation: AutomationConversation,
     message: WhatsAppMessage,
   ): boolean {
     if (
@@ -132,7 +156,9 @@ export class WhatsAppAutomationService {
       const matched =
         rule.keywords.some((keyword) => {
           const normalizedKeyword =
-            keyword.toLowerCase();
+            keyword
+              .toLowerCase()
+              .trim();
 
           if (
             normalizedText ===
@@ -167,19 +193,15 @@ export class WhatsAppAutomationService {
   }
 
   async processIncomingMessage(
-    conversation: {
-      id: string;
-      handlingMode: ConversationHandlingMode;
-    },
+    conversation: AutomationConversation,
     message: WhatsAppMessage,
   ): Promise<void> {
-    const shouldReply =
-      this.shouldAutoReply(
+    if (
+      !this.shouldAutoReply(
         conversation,
         message,
-      );
-
-    if (!shouldReply) {
+      )
+    ) {
       console.log(
         "[WHATSAPP AUTOMATION] Auto-reply skipped",
         {
@@ -229,35 +251,55 @@ export class WhatsAppAutomationService {
             conversation.id,
           messageId:
             message.id,
-          text,
+          intent,
         },
       );
 
       return;
     }
 
-    console.log(
-      "[WHATSAPP AUTOMATION] Reply prepared",
-      {
-        conversationId:
-          conversation.id,
-        messageId:
-          message.id,
-        intent,
-        response,
-      },
-    );
+    if (!this.replySender) {
+      console.warn(
+        "[WHATSAPP AUTOMATION] Reply sender is not connected",
+        {
+          conversationId:
+            conversation.id,
+        },
+      );
 
-    /*
-     * IMPORTANT:
-     *
-     * We intentionally do not send the WhatsApp
-     * response from this service yet.
-     *
-     * The next connection step will inject/use
-     * WhatsAppService.sendMessage() here while
-     * preventing circular dependencies.
-     */
+      return;
+    }
+
+    try {
+      await this.replySender(
+        conversation.businessId,
+        conversation.id,
+        response,
+      );
+
+      console.log(
+        "[WHATSAPP AUTOMATION] Reply sent successfully",
+        {
+          conversationId:
+            conversation.id,
+          messageId:
+            message.id,
+          intent,
+        },
+      );
+    } catch (error) {
+      console.error(
+        "[WHATSAPP AUTOMATION] Reply failed",
+        {
+          conversationId:
+            conversation.id,
+          messageId:
+            message.id,
+          intent,
+          error,
+        },
+      );
+    }
   }
 }
 
