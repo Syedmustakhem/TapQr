@@ -499,6 +499,268 @@ class WhatsAppService {
     );
   }
 }
+
+/**
+ * ---------------------------------------------------------
+ * SEND WHATSAPP TEMPLATE MESSAGE
+ * ---------------------------------------------------------
+ * Used when the WhatsApp customer-service window is closed.
+ *
+ * Current test template:
+ * tapqr_security_alert
+ *
+ * Variables:
+ * {{1}} = customer name
+ * {{2}} = notification text
+ * ---------------------------------------------------------
+ */
+async sendTemplateMessage(
+  userId: string,
+  businessId: string,
+  conversationId: string,
+) {
+  try {
+    await this.assertBusinessAccess(
+      userId,
+      businessId,
+    );
+
+    const conversation =
+      await this.getConversationForBusiness(
+        businessId,
+        conversationId,
+      );
+
+    const accessToken =
+      process.env.WHATSAPP_ACCESS_TOKEN;
+
+    const phoneNumberId =
+      process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    const apiVersion =
+      process.env.WHATSAPP_API_VERSION ||
+      "v22.0";
+
+    const templateName =
+      process.env.WHATSAPP_SUPPORT_TEMPLATE_NAME ||
+      "tapqr_security_alert";
+
+    const templateLanguage =
+      process.env.WHATSAPP_SUPPORT_TEMPLATE_LANG ||
+      "en";
+
+    if (!accessToken) {
+      throw new AppError(
+        "WhatsApp access token is not configured",
+        500,
+      );
+    }
+
+    if (!phoneNumberId) {
+      throw new AppError(
+        "WhatsApp phone number ID is not configured",
+        500,
+      );
+    }
+
+    const customerPhone =
+      conversation.contact.phoneNumber;
+
+    if (!customerPhone) {
+      throw new AppError(
+        "Customer phone number is missing",
+        400,
+      );
+    }
+
+    const customerName =
+      conversation.contact.displayName ||
+      conversation.contact.profileName ||
+      "Customer";
+
+    const notificationText =
+      "A support request requires your attention on TapQR.";
+
+    console.log(
+      "[WHATSAPP TEMPLATE SEND] Starting",
+      {
+        businessId,
+        conversationId,
+        customerPhone,
+        templateName,
+        templateLanguage,
+      },
+    );
+
+    let response;
+
+    try {
+      response = await axios.post(
+        `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: customerPhone,
+          type: "template",
+          template: {
+            name: templateName,
+            language: {
+              code: templateLanguage,
+            },
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  {
+                    type: "text",
+                    text: customerName,
+                  },
+                  {
+                    type: "text",
+                    text: notificationText,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    } catch (error: any) {
+      const metaError =
+        error?.response?.data;
+
+      console.error(
+        "[WHATSAPP TEMPLATE META ERROR]",
+        {
+          status: error?.response?.status,
+          response: metaError,
+          message: error?.message,
+        },
+      );
+
+      throw new AppError(
+        metaError?.error?.message ||
+          "Failed to send WhatsApp template",
+        error?.response?.status >= 400 &&
+        error?.response?.status < 600
+          ? error.response.status
+          : 502,
+      );
+    }
+
+    const whatsappMessageId =
+      response?.data?.messages?.[0]?.id ||
+      null;
+
+    console.log(
+      "[WHATSAPP TEMPLATE SEND SUCCESS]",
+      {
+        conversationId,
+        whatsappMessageId,
+        response: response?.data,
+      },
+    );
+
+    if (!whatsappMessageId) {
+      throw new AppError(
+        "WhatsApp template was accepted without a message ID",
+        502,
+      );
+    }
+
+    const messageText =
+      `Template: ${templateName}\n` +
+      `Customer: ${customerName}\n` +
+      `Notification: ${notificationText}`;
+
+    let message;
+
+    try {
+      message =
+        await prisma.whatsAppMessage.create({
+          data: {
+            businessId,
+            conversationId,
+            contactId:
+              conversation.contactId,
+            direction: "OUTBOUND",
+            type: "TEXT",
+            content: messageText,
+            whatsappMessageId,
+            status: "SENT",
+            templateName,
+            metadata: response?.data,
+          },
+        });
+    } catch (error: any) {
+      console.error(
+        "[WHATSAPP TEMPLATE DATABASE ERROR]",
+        {
+          conversationId,
+          whatsappMessageId,
+          error,
+          message: error?.message,
+          code: error?.code,
+          meta: error?.meta,
+        },
+      );
+
+      throw new AppError(
+        "WhatsApp template was sent, but could not be saved locally.",
+        500,
+      );
+    }
+
+    try {
+      await prisma.conversation.updateMany({
+        where: {
+          id: conversationId,
+          businessId,
+        },
+        data: {
+          lastMessageAt: new Date(),
+          status: "OPEN",
+        },
+      });
+    } catch (error: any) {
+      console.error(
+        "[WHATSAPP TEMPLATE CONVERSATION UPDATE ERROR]",
+        {
+          conversationId,
+          error,
+          message: error?.message,
+          code: error?.code,
+        },
+      );
+    }
+
+    return message;
+  } catch (error: any) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    console.error(
+      "[WHATSAPP TEMPLATE UNEXPECTED ERROR]",
+      {
+        error,
+        message: error?.message,
+        stack: error?.stack,
+      },
+    );
+
+    throw new AppError(
+      "Failed to send WhatsApp template",
+      500,
+    );
+  }
+}
   /**
    * ---------------------------------------------------------
    * UPDATE CONVERSATION STATUS
