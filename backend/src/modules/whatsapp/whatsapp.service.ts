@@ -281,20 +281,21 @@ class WhatsAppService {
    * ---------------------------------------------------------
    */
   async sendMessage(
-    userId: string,
-    businessId: string,
-    conversationId: string,
-    text: string
-  ) {
+  userId: string,
+  businessId: string,
+  conversationId: string,
+  text: string,
+) {
+  try {
     await this.assertBusinessAccess(
       userId,
-      businessId
+      businessId,
     );
 
     const conversation =
       await this.getConversationForBusiness(
         businessId,
-        conversationId
+        conversationId,
       );
 
     const cleanText = text?.trim();
@@ -302,7 +303,7 @@ class WhatsAppService {
     if (!cleanText) {
       throw new AppError(
         "Message text is required",
-        400
+        400,
       );
     }
 
@@ -319,14 +320,14 @@ class WhatsAppService {
     if (!accessToken) {
       throw new AppError(
         "WhatsApp access token is not configured",
-        500
+        500,
       );
     }
 
     if (!phoneNumberId) {
       throw new AppError(
         "WhatsApp phone number ID is not configured",
-        500
+        500,
       );
     }
 
@@ -336,9 +337,22 @@ class WhatsAppService {
     if (!customerPhone) {
       throw new AppError(
         "Customer phone number is missing",
-        400
+        400,
       );
     }
+
+    console.log(
+      "[WHATSAPP SEND] Starting outbound message",
+      {
+        businessId,
+        conversationId,
+        contactId: conversation.contactId,
+        customerPhone,
+        phoneNumberId,
+        apiVersion,
+        textLength: cleanText.length,
+      },
+    );
 
     let response;
 
@@ -359,55 +373,132 @@ class WhatsAppService {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
     } catch (error: any) {
       const metaError =
         error?.response?.data;
 
       console.error(
-        "[WHATSAPP SEND ERROR]",
-        metaError || error?.message || error
+        "[WHATSAPP META SEND ERROR]",
+        {
+          status: error?.response?.status,
+          statusText: error?.response?.statusText,
+          response: metaError,
+          message: error?.message,
+        },
       );
 
       throw new AppError(
         metaError?.error?.message ||
           "Failed to send WhatsApp message",
-        502
+        error?.response?.status >= 400 &&
+        error?.response?.status < 600
+          ? error.response.status
+          : 502,
       );
     }
 
     const whatsappMessageId =
       response?.data?.messages?.[0]?.id || null;
 
-    const message =
-      await prisma.whatsAppMessage.create({
-        data: {
-          businessId,
+    console.log(
+      "[WHATSAPP META SEND SUCCESS]",
+      {
+        conversationId,
+        whatsappMessageId,
+        response: response?.data,
+      },
+    );
+
+    let message;
+
+    try {
+      message =
+        await prisma.whatsAppMessage.create({
+          data: {
+            businessId,
+            conversationId,
+            contactId:
+              conversation.contactId,
+            direction: "OUTBOUND",
+            type: "TEXT",
+            content: cleanText,
+            whatsappMessageId,
+            status: "SENT",
+          },
+        });
+    } catch (error: any) {
+      console.error(
+        "[WHATSAPP DATABASE MESSAGE ERROR]",
+        {
           conversationId,
           contactId: conversation.contactId,
-          direction: "OUTBOUND",
-          type: "TEXT",
-          content: cleanText,
           whatsappMessageId,
-          status: "SENT",
+          error,
+          message: error?.message,
+          code: error?.code,
+          meta: error?.meta,
+        },
+      );
+
+      throw new AppError(
+        "WhatsApp message was sent, but could not be saved locally.",
+        500,
+      );
+    }
+
+    try {
+      await prisma.conversation.updateMany({
+        where: {
+          id: conversationId,
+          businessId,
+        },
+        data: {
+          lastMessageAt: new Date(),
+          status: "OPEN",
         },
       });
+    } catch (error: any) {
+      console.error(
+        "[WHATSAPP CONVERSATION UPDATE ERROR]",
+        {
+          conversationId,
+          error,
+          message: error?.message,
+          code: error?.code,
+          meta: error?.meta,
+        },
+      );
 
-    await prisma.conversation.updateMany({
-      where: {
-        id: conversationId,
-        businessId,
-      },
-      data: {
-        lastMessageAt: new Date(),
-        status: "OPEN",
-      },
-    });
+      // Do not fail the whole send operation here.
+      // The WhatsApp message has already been successfully
+      // delivered to Meta and saved locally.
+    }
 
     return message;
-  }
+  } catch (error: any) {
+    if (error instanceof AppError) {
+      throw error;
+    }
 
+    console.error(
+      "[WHATSAPP SEND UNEXPECTED ERROR]",
+      {
+        error,
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta,
+      },
+    );
+
+    throw new AppError(
+      "Failed to send WhatsApp message",
+      500,
+    );
+  }
+}
   /**
    * ---------------------------------------------------------
    * UPDATE CONVERSATION STATUS
