@@ -54,6 +54,7 @@ export class WhatsAppWebhookService {
       console.log(
         "[WHATSAPP WEBHOOK] Ignoring unknown object",
       );
+
       return;
     }
 
@@ -72,16 +73,40 @@ export class WhatsAppWebhookService {
         const messages = value?.messages ?? [];
 
         for (const message of messages) {
-          await this.processIncomingMessage(
-            value,
-            message,
-          );
+          try {
+            await this.processIncomingMessage(
+              value,
+              message,
+            );
+          } catch (error) {
+            console.error(
+              "[WHATSAPP INCOMING MESSAGE ERROR]",
+              {
+                messageId: message?.id,
+                error,
+              },
+            );
+          }
         }
 
         const statuses = value?.statuses ?? [];
 
         for (const status of statuses) {
-          await this.processMessageStatus(status);
+          try {
+            await this.processMessageStatus(
+              value,
+              status,
+            );
+          } catch (error) {
+            console.error(
+              "[WHATSAPP STATUS PROCESSING ERROR]",
+              {
+                messageId: status?.id,
+                status: status?.status,
+                error,
+              },
+            );
+          }
         }
       }
     }
@@ -106,6 +131,7 @@ export class WhatsAppWebhookService {
       console.warn(
         "[WHATSAPP WEBHOOK] Missing message information",
       );
+
       return;
     }
 
@@ -123,6 +149,7 @@ export class WhatsAppWebhookService {
           phoneNumberId,
         },
       );
+
       return;
     }
 
@@ -133,6 +160,7 @@ export class WhatsAppWebhookService {
           phoneNumberId,
         },
       );
+
       return;
     }
 
@@ -251,8 +279,18 @@ export class WhatsAppWebhookService {
           type: messageType,
           text,
           mediaId,
+
+          /*
+           * WhatsAppMessageStatus does not have
+           * RECEIVED in the Prisma schema.
+           *
+           * PENDING is used while the inbound
+           * message enters our local processing
+           * pipeline.
+           */
           status:
-            WhatsAppMessageStatus.RECEIVED,
+            WhatsAppMessageStatus.PENDING,
+
           metadata: message,
         },
       });
@@ -282,14 +320,6 @@ export class WhatsAppWebhookService {
       },
     );
 
-    /*
-     * Send the persisted inbound message
-     * to the automation layer.
-     *
-     * The automation service decides whether
-     * the conversation is controlled by AI
-     * or a human agent.
-     */
     await whatsappAutomationService.processIncomingMessage(
       conversation,
       savedMessage,
@@ -360,18 +390,337 @@ export class WhatsAppWebhookService {
     return null;
   }
 
+  private mapMessageStatus(
+    status?: string,
+  ): WhatsAppMessageStatus | null {
+    switch (status) {
+      case "sent":
+        return WhatsAppMessageStatus.SENT;
+
+      case "delivered":
+        return WhatsAppMessageStatus.DELIVERED;
+
+      case "read":
+        return WhatsAppMessageStatus.READ;
+
+      case "failed":
+        return WhatsAppMessageStatus.FAILED;
+
+      default:
+        return null;
+    }
+  }
+
+  private extractStatusError(
+    status: any,
+  ): {
+    errorCode: string | null;
+    errorMessage: string | null;
+  } {
+    const error =
+      status?.errors?.[0];
+
+    if (!error) {
+      return {
+        errorCode: null,
+        errorMessage: null,
+      };
+    }
+
+    const parts = [
+      error?.title,
+      error?.message,
+      error?.error_data?.details,
+    ].filter(Boolean);
+
+    return {
+      errorCode:
+        error?.code != null
+          ? String(error.code)
+          : null,
+
+      errorMessage:
+        parts.length > 0
+          ? parts.join(" | ")
+          : "WhatsApp message failed",
+    };
+  }
+
   private async processMessageStatus(
+    value: any,
     status: any,
   ): Promise<void> {
+    const whatsappMessageId =
+      status?.id;
+
+    const rawStatus =
+      status?.status;
+
+    if (!whatsappMessageId || !rawStatus) {
+      console.warn(
+        "[WHATSAPP] Invalid message status payload",
+        {
+          status,
+        },
+      );
+
+      return;
+    }
+
     console.log(
       "[WHATSAPP] Message status",
       {
-        messageId: status?.id,
-        status: status?.status,
+        messageId:
+          whatsappMessageId,
+        status: rawStatus,
         recipientId:
           status?.recipient_id,
       },
     );
+
+    const mappedStatus =
+      this.mapMessageStatus(
+        rawStatus,
+      );
+
+    if (!mappedStatus) {
+      console.log(
+        "[WHATSAPP] Unsupported message status",
+        {
+          messageId:
+            whatsappMessageId,
+          status: rawStatus,
+        },
+      );
+
+      return;
+    }
+
+    const {
+      errorCode,
+      errorMessage,
+    } =
+      this.extractStatusError(status);
+
+    /*
+     * First try to update the outbound
+     * message that was already saved locally.
+     */
+    const existingMessage =
+      await prisma.whatsAppMessage.findUnique({
+        where: {
+          whatsappMessageId,
+        },
+      });
+
+    if (existingMessage) {
+      await prisma.whatsAppMessage.update({
+        where: {
+          id: existingMessage.id,
+        },
+
+        data: {
+          status: mappedStatus,
+          errorCode,
+          errorMessage,
+          metadata: status,
+        },
+      });
+
+      await prisma.conversation.update({
+        where: {
+          id: existingMessage.conversationId,
+        },
+
+        data: {
+          lastMessageAt:
+            new Date(),
+        },
+      });
+
+      console.log(
+        "[WHATSAPP] Message status updated",
+        {
+          messageId:
+            existingMessage.id,
+          whatsappMessageId,
+          status: mappedStatus,
+          errorCode,
+        },
+      );
+
+      return;
+    }
+
+    /*
+     * A status webhook can arrive before the
+     * outbound message is persisted locally.
+     *
+     * In that case create a fallback record.
+     */
+    const phoneNumberId =
+      value?.metadata?.phone_number_id;
+
+    const recipientPhone =
+      status?.recipient_id;
+
+    if (
+      !phoneNumberId ||
+      !recipientPhone
+    ) {
+      console.warn(
+        "[WHATSAPP] Cannot create fallback status message",
+        {
+          whatsappMessageId,
+          phoneNumberId,
+          recipientPhone,
+        },
+      );
+
+      return;
+    }
+
+    const whatsappAccount =
+      await prisma.whatsAppBusinessAccount.findUnique({
+        where: {
+          phoneNumberId,
+        },
+      });
+
+    if (!whatsappAccount) {
+      console.warn(
+        "[WHATSAPP] WhatsApp account not found for status",
+        {
+          phoneNumberId,
+          whatsappMessageId,
+        },
+      );
+
+      return;
+    }
+
+    const businessId =
+      whatsappAccount.businessId;
+
+    const contact =
+      await prisma.whatsAppContact.findUnique({
+        where: {
+          businessId_phoneNumber: {
+            businessId,
+            phoneNumber:
+              recipientPhone,
+          },
+        },
+      });
+
+    if (!contact) {
+      console.warn(
+        "[WHATSAPP] Contact not found for status",
+        {
+          businessId,
+          recipientPhone,
+          whatsappMessageId,
+        },
+      );
+
+      return;
+    }
+
+    const conversation =
+      await prisma.conversation.findFirst({
+        where: {
+          businessId,
+          contactId: contact.id,
+        },
+
+        orderBy: {
+          updatedAt: "desc",
+        },
+      });
+
+    if (!conversation) {
+      console.warn(
+        "[WHATSAPP] Conversation not found for status",
+        {
+          businessId,
+          contactId: contact.id,
+          whatsappMessageId,
+        },
+      );
+
+      return;
+    }
+
+    try {
+      const fallbackMessage =
+        await prisma.whatsAppMessage.create({
+          data: {
+            businessId,
+            conversationId:
+              conversation.id,
+            whatsappMessageId,
+            direction:
+              WhatsAppMessageDirection.OUTBOUND,
+            type:
+              WhatsAppMessageType.TEXT,
+            status: mappedStatus,
+            errorCode,
+            errorMessage,
+            metadata: status,
+          },
+        });
+
+      console.log(
+        "[WHATSAPP] Fallback status message created",
+        {
+          messageId:
+            fallbackMessage.id,
+          whatsappMessageId,
+          status: mappedStatus,
+          errorCode,
+        },
+      );
+    } catch (error: any) {
+      /*
+       * P2002 means another request won
+       * the race and already created this
+       * whatsappMessageId.
+       */
+      if (error?.code === "P2002") {
+        console.log(
+          "[WHATSAPP] Status message already persisted",
+          {
+            whatsappMessageId,
+          },
+        );
+
+        const racedMessage =
+          await prisma.whatsAppMessage.findUnique({
+            where: {
+              whatsappMessageId,
+            },
+          });
+
+        if (racedMessage) {
+          await prisma.whatsAppMessage.update({
+            where: {
+              id: racedMessage.id,
+            },
+
+            data: {
+              status: mappedStatus,
+              errorCode,
+              errorMessage,
+              metadata: status,
+            },
+          });
+        }
+
+        return;
+      }
+
+      throw error;
+    }
   }
 }
 
