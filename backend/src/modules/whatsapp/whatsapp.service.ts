@@ -411,42 +411,39 @@ class WhatsAppService {
       },
     );
 
-    let message;
+let message;
 
-    try {
-      message =
-        await prisma.whatsAppMessage.create({
-          data: {
-            businessId,
-            conversationId,
-            contactId:
-              conversation.contactId,
-            direction: "OUTBOUND",
-            type: "TEXT",
-            content: cleanText,
-            whatsappMessageId,
-            status: "SENT",
-          },
-        });
-    } catch (error: any) {
-      console.error(
-        "[WHATSAPP DATABASE MESSAGE ERROR]",
-        {
-          conversationId,
-          contactId: conversation.contactId,
-          whatsappMessageId,
-          error,
-          message: error?.message,
-          code: error?.code,
-          meta: error?.meta,
-        },
-      );
+try {
+  message =
+    await prisma.whatsAppMessage.create({
+      data: {
+        businessId,
+        conversationId,
+        direction: "OUTBOUND",
+        type: "TEXT",
+        text: cleanText,
+        whatsappMessageId,
+        status: "SENT",
+      },
+    });
+} catch (error: any) {
+  console.error(
+    "[WHATSAPP DATABASE MESSAGE ERROR]",
+    {
+      conversationId,
+      whatsappMessageId,
+      error,
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+    },
+  );
 
-      throw new AppError(
-        "WhatsApp message was sent, but could not be saved locally.",
-        500,
-      );
-    }
+  throw new AppError(
+    "WhatsApp message was sent, but could not be saved locally.",
+    500,
+  );
+}
 
     try {
       await prisma.conversation.updateMany({
@@ -687,11 +684,9 @@ async sendTemplateMessage(
           data: {
             businessId,
             conversationId,
-            contactId:
-              conversation.contactId,
             direction: "OUTBOUND",
-            type: "TEXT",
-            content: messageText,
+            type: "TEMPLATE",
+            text: messageText,
             whatsappMessageId,
             status: "SENT",
             templateName,
