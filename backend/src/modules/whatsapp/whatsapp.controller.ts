@@ -359,7 +359,65 @@ export class WhatsAppController {
       next(error);
     }
   };
+/**
+ * ---------------------------------------------------------
+ * SEND TEMPLATE MESSAGE
+ * ---------------------------------------------------------
+ * POST /api/whatsapp/conversations/:id/template
+ * ---------------------------------------------------------
+ */
+sendTemplateMessage = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const businessId = getBusinessId(req);
+    const conversationId =
+      getConversationId(req);
 
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    if (!businessId) {
+      res.status(400).json({
+        success: false,
+        message:
+          "X-Business-Id header is required",
+      });
+      return;
+    }
+
+    if (!conversationId) {
+      res.status(400).json({
+        success: false,
+        message:
+          "Conversation ID is required",
+      });
+      return;
+    }
+
+    const message =
+      await whatsappService.sendTemplateMessage(
+        userId,
+        businessId,
+        conversationId,
+      );
+
+    res.status(201).json({
+      success: true,
+      data: message,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
   /**
    * ---------------------------------------------------------
    * UPDATE CONVERSATION STATUS

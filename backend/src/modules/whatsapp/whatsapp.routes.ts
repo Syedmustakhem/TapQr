@@ -15,6 +15,10 @@ const router = Router();
 */
 
 router.use(authenticate);
+router.post(
+  "/conversations/:id/template",
+  whatsappController.sendTemplateMessage,
+);
 
 router.post(
   "/conversations",
