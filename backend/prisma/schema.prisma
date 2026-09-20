@@ -894,7 +894,8 @@ model Conversation {
 
   qrCode QRCode? @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
 
-  messages WhatsAppMessage[]
+  messages    WhatsAppMessage[]
+  conversions QRConversion[]
 
   @@index([businessId])
   @@index([contactId])
@@ -1453,11 +1454,11 @@ model QRRuleMatch {
 // ============================================
 // QR CONVERSION
 // ============================================
-
 model QRConversion {
   id String @id @default(cuid())
 
-  qrCodeId String
+  qrCodeId       String
+  conversationId String?
 
   ruleId      String?
   ruleVersion Int?
@@ -1488,9 +1489,12 @@ model QRConversion {
 
   qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
 
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
   rule QRRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
 
   @@index([qrCodeId])
+  @@index([conversationId])
   @@index([ruleId])
   @@index([experimentId])
   @@index([variantId])
