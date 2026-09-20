@@ -880,6 +880,8 @@ model Conversation {
 
   handlingMode ConversationHandlingMode @default(AI)
 
+  flowState Json?
+
   assignedToId String?
 
   assignedTo BusinessMember? @relation("ConversationAssignedMember", fields: [assignedToId], references: [id], onDelete: SetNull)

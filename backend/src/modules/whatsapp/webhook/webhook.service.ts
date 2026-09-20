@@ -1,4 +1,3 @@
-import { prisma } from "../../../config/prisma";
 import {
   ConversationStatus,
   WhatsAppMessageDirection,
@@ -6,23 +5,46 @@ import {
   WhatsAppMessageType,
 } from "@prisma/client";
 
-import { whatsappAutomationService } from "../automation/automation.service";
-import { customerPriorityService } from "../priority/customer-priority.service";
-import { whatsappQRAttributionService } from "../qr/whatsapp-qr-attribution.service";
-import { qrConversationConversionService } from "../../qrcode/qr-conversation-conversion.service";
+import { prisma } from "../../../config/prisma";
+
+import {
+  whatsappAutomationService,
+} from "../automation/automation.service";
+
+import {
+  customerPriorityService,
+} from "../priority/customer-priority.service";
+
+import {
+  whatsappQRAttributionService,
+} from "../qr/whatsapp-qr-attribution.service";
+
+import {
+  qrConversationConversionService,
+} from "../../qrcode/qr-conversation-conversion.service";
+
+import {
+  whatsappFlowService,
+} from "../flows/whatsapp-flow.service";
+
+import {
+  whatsappInteractiveService,
+} from "../interactive/whatsapp-interactive.service";
+
+import {
+  whatsappService,
+} from "../whatsapp.service";
 
 export class WhatsAppWebhookService {
-  // ============================================================
-  // META WEBHOOK VERIFICATION
-  // ============================================================
-
   verifyWebhook(
     mode?: string,
     token?: string,
     challenge?: string,
   ): string {
     const verifyToken =
-      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
+      process.env
+        .WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        ?.trim();
 
     if (!verifyToken) {
       throw new Error(
@@ -31,15 +53,24 @@ export class WhatsAppWebhookService {
     }
 
     if (mode !== "subscribe") {
-      throw new Error("Invalid webhook mode");
+      throw new Error(
+        "Invalid webhook mode",
+      );
     }
 
-    if (!token || token.trim() !== verifyToken) {
-      throw new Error("Invalid webhook verify token");
+    if (
+      !token ||
+      token.trim() !== verifyToken
+    ) {
+      throw new Error(
+        "Invalid webhook verify token",
+      );
     }
 
     if (!challenge) {
-      throw new Error("Missing webhook challenge");
+      throw new Error(
+        "Missing webhook challenge",
+      );
     }
 
     console.log(
@@ -49,14 +80,16 @@ export class WhatsAppWebhookService {
     return challenge;
   }
 
-  // ============================================================
-  // WEBHOOK PROCESSOR
-  // ============================================================
-
-  async processWebhook(body: any): Promise<void> {
+  async processWebhook(
+    body: any,
+  ): Promise<void> {
     console.log(
       "[WHATSAPP WEBHOOK] Incoming event:",
-      JSON.stringify(body, null, 2),
+      JSON.stringify(
+        body,
+        null,
+        2,
+      ),
     );
 
     if (
@@ -70,25 +103,31 @@ export class WhatsAppWebhookService {
       return;
     }
 
-    const entries = body?.entry ?? [];
+    const entries =
+      body?.entry ?? [];
 
-    for (const entry of entries) {
-      const changes = entry?.changes ?? [];
+    for (
+      const entry of entries
+    ) {
+      const changes =
+        entry?.changes ?? [];
 
-      for (const change of changes) {
-        const value = change?.value;
+      for (
+        const change of changes
+      ) {
+        const value =
+          change?.value;
 
         if (!value) {
           continue;
         }
 
-        // --------------------------------------------------------
-        // INCOMING MESSAGES
-        // --------------------------------------------------------
+        const messages =
+          value?.messages ?? [];
 
-        const messages = value?.messages ?? [];
-
-        for (const message of messages) {
+        for (
+          const message of messages
+        ) {
           try {
             await this.processIncomingMessage(
               value,
@@ -98,20 +137,21 @@ export class WhatsAppWebhookService {
             console.error(
               "[WHATSAPP INCOMING MESSAGE ERROR]",
               {
-                messageId: message?.id,
+                messageId:
+                  message?.id,
+
                 error,
               },
             );
           }
         }
 
-        // --------------------------------------------------------
-        // MESSAGE STATUS EVENTS
-        // --------------------------------------------------------
+        const statuses =
+          value?.statuses ?? [];
 
-        const statuses = value?.statuses ?? [];
-
-        for (const status of statuses) {
+        for (
+          const status of statuses
+        ) {
           try {
             await this.processMessageStatus(
               value,
@@ -121,8 +161,12 @@ export class WhatsAppWebhookService {
             console.error(
               "[WHATSAPP STATUS PROCESSING ERROR]",
               {
-                messageId: status?.id,
-                status: status?.status,
+                messageId:
+                  status?.id,
+
+                status:
+                  status?.status,
+
                 error,
               },
             );
@@ -132,16 +176,13 @@ export class WhatsAppWebhookService {
     }
   }
 
-  // ============================================================
-  // INCOMING MESSAGE
-  // ============================================================
-
   private async processIncomingMessage(
     value: any,
     message: any,
   ): Promise<void> {
     const phoneNumberId =
-      value?.metadata?.phone_number_id;
+      value?.metadata
+        ?.phone_number_id;
 
     const customerPhone =
       message?.from;
@@ -161,16 +202,14 @@ export class WhatsAppWebhookService {
       return;
     }
 
-    // ----------------------------------------------------------
-    // FIND WHATSAPP BUSINESS ACCOUNT
-    // ----------------------------------------------------------
-
     const whatsappAccount =
-      await prisma.whatsAppBusinessAccount.findUnique({
-        where: {
-          phoneNumberId,
+      await prisma.whatsAppBusinessAccount.findUnique(
+        {
+          where: {
+            phoneNumberId,
+          },
         },
-      });
+      );
 
     if (!whatsappAccount) {
       console.warn(
@@ -183,7 +222,9 @@ export class WhatsAppWebhookService {
       return;
     }
 
-    if (!whatsappAccount.isActive) {
+    if (
+      !whatsappAccount.isActive
+    ) {
       console.warn(
         "[WHATSAPP WEBHOOK] WhatsApp account inactive",
         {
@@ -197,124 +238,141 @@ export class WhatsAppWebhookService {
     const businessId =
       whatsappAccount.businessId;
 
-    // ----------------------------------------------------------
-    // CONTACT
-    // ----------------------------------------------------------
-
     const profileName =
-      value?.contacts?.[0]?.profile?.name ??
+      value?.contacts?.[0]
+        ?.profile?.name ??
       null;
 
     const contact =
-      await prisma.whatsAppContact.upsert({
-        where: {
-          businessId_phoneNumber: {
+      await prisma.whatsAppContact.upsert(
+        {
+          where: {
+            businessId_phoneNumber: {
+              businessId,
+
+              phoneNumber:
+                customerPhone,
+            },
+          },
+
+          create: {
             businessId,
-            phoneNumber: customerPhone,
+
+            phoneNumber:
+              customerPhone,
+
+            profileName,
+
+            displayName:
+              profileName,
+
+            lastSeenAt:
+              new Date(),
+          },
+
+          update: {
+            ...(profileName
+              ? {
+                  profileName,
+                  displayName:
+                    profileName,
+                }
+              : {}),
+
+            lastSeenAt:
+              new Date(),
           },
         },
+      );
 
-        create: {
-          businessId,
-          phoneNumber: customerPhone,
-          profileName,
-          displayName: profileName,
-          lastSeenAt: new Date(),
-        },
-
-        update: {
-          ...(profileName
-            ? {
-                profileName,
-                displayName: profileName,
-              }
-            : {}),
-
-          lastSeenAt: new Date(),
-        },
-      });
-
-    // ==========================================================
-    // FEATURE #12
-    // QR → WHATSAPP ATTRIBUTION
-    // ==========================================================
+    /*
+     * --------------------------------------------------
+     * TEXT / INTERACTIVE EXTRACTION
+     * --------------------------------------------------
+     */
 
     const rawText =
-      typeof message?.text?.body === "string"
-        ? message.text.body
-        : null;
+      this.extractText(
+        message,
+      );
+
+    /*
+     * --------------------------------------------------
+     * QR ATTRIBUTION
+     * --------------------------------------------------
+     */
 
     const qrShortCode =
-      whatsappQRAttributionService.extractShortCode(
-        rawText,
-      );
+      whatsappQRAttributionService
+        .extractShortCode(
+          rawText,
+        );
 
     const attributedQRCode =
-      await whatsappQRAttributionService.resolveQRCode(
-        businessId,
-        qrShortCode,
-      );
+      await whatsappQRAttributionService
+        .resolveQRCode(
+          businessId,
+          qrShortCode,
+        );
 
     const cleanedText =
-      whatsappQRAttributionService.cleanCustomerText(
-        rawText,
-      );
+      whatsappQRAttributionService
+        .cleanCustomerText(
+          rawText,
+        );
 
-    console.log(
-      "[WHATSAPP QR ATTRIBUTION]",
-      {
-        businessId,
-        customerPhone,
-        qrShortCode,
-        qrCodeId:
-          attributedQRCode?.id ?? null,
-      },
-    );
-
-    // ----------------------------------------------------------
-    // FIND EXISTING OPEN/PENDING CONVERSATION
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * FIND / CREATE CONVERSATION
+     * --------------------------------------------------
+     */
 
     let conversation =
-      await prisma.conversation.findFirst({
-        where: {
-          businessId,
-          contactId: contact.id,
-          status: {
-            in: [
-              ConversationStatus.OPEN,
-              ConversationStatus.PENDING,
-            ],
+      await prisma.conversation.findFirst(
+        {
+          where: {
+            businessId,
+
+            contactId:
+              contact.id,
+
+            status: {
+              in: [
+                ConversationStatus.OPEN,
+                ConversationStatus.PENDING,
+              ],
+            },
+          },
+
+          orderBy: {
+            updatedAt:
+              "desc",
           },
         },
-
-        orderBy: {
-          updatedAt: "desc",
-        },
-      });
-
-    // ----------------------------------------------------------
-    // CREATE CONVERSATION
-    // ----------------------------------------------------------
+      );
 
     if (!conversation) {
       conversation =
-        await prisma.conversation.create({
-          data: {
-            businessId,
-            contactId: contact.id,
+        await prisma.conversation.create(
+          {
+            data: {
+              businessId,
 
-            // Feature #12:
-            // Store the QR that initiated the conversation.
-            qrCodeId:
-              attributedQRCode?.id ?? null,
+              contactId:
+                contact.id,
 
-            status:
-              ConversationStatus.OPEN,
+              qrCodeId:
+                attributedQRCode?.id ??
+                null,
 
-            lastMessageAt: new Date(),
+              status:
+                ConversationStatus.OPEN,
+
+              lastMessageAt:
+                new Date(),
+            },
           },
-        });
+        );
 
       console.log(
         "[WHATSAPP] Conversation created",
@@ -328,53 +386,44 @@ export class WhatsAppWebhookService {
           businessId,
 
           qrCodeId:
-            conversation.qrCodeId ?? null,
+            attributedQRCode?.id ??
+            null,
         },
       );
-    }
-
-    // ----------------------------------------------------------
-    // ATTACH QR TO EXISTING CONVERSATION
-    // ----------------------------------------------------------
-
-    if (
-      attributedQRCode &&
-      !conversation.qrCodeId
+    } else if (
+      !conversation.qrCodeId &&
+      attributedQRCode
     ) {
       conversation =
-        await prisma.conversation.update({
-          where: {
-            id: conversation.id,
+        await prisma.conversation.update(
+          {
+            where: {
+              id:
+                conversation.id,
+            },
+
+            data: {
+              qrCodeId:
+                attributedQRCode.id,
+            },
           },
-
-          data: {
-            qrCodeId:
-              attributedQRCode.id,
-          },
-        });
-
-      console.log(
-        "[WHATSAPP QR ATTRIBUTION] QR attached to existing conversation",
-        {
-          conversationId:
-            conversation.id,
-
-          qrCodeId:
-            attributedQRCode.id,
-        },
-      );
+        );
     }
 
-    // ----------------------------------------------------------
-    // DUPLICATE MESSAGE PROTECTION
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * DUPLICATE MESSAGE PROTECTION
+     * --------------------------------------------------
+     */
 
     const existingMessage =
-      await prisma.whatsAppMessage.findUnique({
-        where: {
-          whatsappMessageId,
+      await prisma.whatsAppMessage.findUnique(
+        {
+          where: {
+            whatsappMessageId,
+          },
         },
-      });
+      );
 
     if (existingMessage) {
       console.log(
@@ -387,155 +436,193 @@ export class WhatsAppWebhookService {
       return;
     }
 
-    // ----------------------------------------------------------
-    // MESSAGE TYPE / CONTENT
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * MESSAGE TYPE
+     * --------------------------------------------------
+     */
 
     const messageType =
       this.getMessageType(
         message?.type,
       );
 
-    const text =
-      rawText !== null
-        ? cleanedText
-        : this.extractText(message);
-
     const mediaId =
-      this.extractMediaId(message);
+      this.extractMediaId(
+        message,
+      );
 
-    // ----------------------------------------------------------
-    // SAVE INBOUND MESSAGE
-    // ----------------------------------------------------------
+    /*
+     * IMPORTANT:
+     *
+     * For ordinary text:
+     *   cleanedText is stored.
+     *
+     * For interactive replies:
+     *   extractText() returns button/list
+     *   ID so the Flow Engine can understand it.
+     */
+
+    const text =
+      cleanedText ??
+      rawText;
+
+    /*
+     * --------------------------------------------------
+     * SAVE INBOUND MESSAGE
+     * --------------------------------------------------
+     */
 
     const savedMessage =
-      await prisma.whatsAppMessage.create({
-        data: {
-          businessId,
+      await prisma.whatsAppMessage.create(
+        {
+          data: {
+            businessId,
 
-          conversationId:
-            conversation.id,
+            conversationId:
+              conversation.id,
 
-          whatsappMessageId,
+            whatsappMessageId,
 
-          direction:
-            WhatsAppMessageDirection.INBOUND,
+            direction:
+              WhatsAppMessageDirection.INBOUND,
 
-          type: messageType,
+            type:
+              messageType,
 
-          text,
+            text,
 
-          mediaId,
+            mediaId,
 
-          status:
-            WhatsAppMessageStatus.PENDING,
+            status:
+              WhatsAppMessageStatus.PENDING,
 
-          metadata: {
-            rawMessage: message,
+            metadata: {
+              rawMessage:
+                message,
 
-            qrAttribution:
-              attributedQRCode
-                ? {
-                    shortCode:
-                      attributedQRCode.shortCode,
+              qrAttribution:
+                attributedQRCode
+                  ? {
+                      id:
+                        attributedQRCode.id,
 
-                    qrCodeId:
-                      attributedQRCode.id,
+                      shortCode:
+                        attributedQRCode.shortCode,
 
-                    campaignId:
-                      attributedQRCode.campaignId ??
-                      null,
+                      name:
+                        attributedQRCode.name,
 
-                    campaignName:
-                      attributedQRCode.campaignName ??
-                      null,
+                      campaignId:
+                        attributedQRCode.campaignId,
 
-                    sourceType:
-                      attributedQRCode.sourceType ??
-                      null,
+                      campaignName:
+                        attributedQRCode.campaignName,
 
-                    placementLabel:
-                      attributedQRCode.placementLabel ??
-                      null,
+                      sourceType:
+                        attributedQRCode.sourceType,
 
-                    locationLabel:
-                      attributedQRCode.locationLabel ??
-                      null,
-                  }
-                : null,
+                      placementLabel:
+                        attributedQRCode.placementLabel,
 
-            media: mediaId
-              ? {
-                  id: mediaId,
+                      locationLabel:
+                        attributedQRCode.locationLabel,
+                    }
+                  : null,
 
-                  mimeType:
-                    message?.[
-                      message?.type
-                    ]?.mime_type ??
-                    null,
+              interactive:
+                message?.type ===
+                "interactive"
+                  ? message
+                      ?.interactive ??
+                    null
+                  : null,
 
-                  caption:
-                    message?.[
-                      message?.type
-                    ]?.caption ??
-                    null,
+              media:
+                mediaId
+                  ? {
+                      id:
+                        mediaId,
 
-                  filename:
-                    message?.[
-                      message?.type
-                    ]?.filename ??
-                    null,
+                      mimeType:
+                        message?.[
+                          message?.type
+                        ]?.mime_type ??
+                        null,
 
-                  sha256:
-                    message?.[
-                      message?.type
-                    ]?.sha256 ??
-                    null,
-                }
-              : null,
+                      caption:
+                        message?.[
+                          message?.type
+                        ]?.caption ??
+                        null,
+
+                      filename:
+                        message?.[
+                          message?.type
+                        ]?.filename ??
+                        null,
+
+                      sha256:
+                        message?.[
+                          message?.type
+                        ]?.sha256 ??
+                        null,
+                    }
+                  : null,
+            },
           },
         },
-      });
+      );
 
-    // ==========================================================
-    // CUSTOMER PRIORITY ENGINE
-    // ==========================================================
+    /*
+     * --------------------------------------------------
+     * CUSTOMER PRIORITY ENGINE
+     * --------------------------------------------------
+     */
 
     const conversationMessageCount =
-      await prisma.whatsAppMessage.count({
-        where: {
-          conversationId:
-            conversation.id,
+      await prisma.whatsAppMessage.count(
+        {
+          where: {
+            conversationId:
+              conversation.id,
+          },
         },
-      });
+      );
 
     const priorityResult =
-      customerPriorityService.evaluate({
-        message: savedMessage,
+      customerPriorityService.evaluate(
+        {
+          message:
+            savedMessage,
 
-        conversationMessageCount,
+          conversationMessageCount,
 
-        previousPriority:
-          conversation.priority,
-      });
+          previousPriority:
+            conversation.priority,
+        },
+      );
 
     conversation =
-      await prisma.conversation.update({
-        where: {
-          id: conversation.id,
+      await prisma.conversation.update(
+        {
+          where: {
+            id:
+              conversation.id,
+          },
+
+          data: {
+            lastMessageAt:
+              new Date(),
+
+            status:
+              ConversationStatus.OPEN,
+
+            priority:
+              priorityResult.priority,
+          },
         },
-
-        data: {
-          lastMessageAt:
-            new Date(),
-
-          status:
-            ConversationStatus.OPEN,
-
-          priority:
-            priorityResult.priority,
-        },
-      });
+      );
 
     console.log(
       "[WHATSAPP PRIORITY]",
@@ -554,22 +641,27 @@ export class WhatsAppWebhookService {
       },
     );
 
-    // ==========================================================
-    // FEATURE #12
-    // QR → CONVERSATION → CONVERSION
-    // ==========================================================
+    /*
+     * --------------------------------------------------
+     * QR -> WHATSAPP CONVERSION
+     * --------------------------------------------------
+     */
 
-    if (conversation.qrCodeId) {
+    if (
+      conversation.qrCodeId
+    ) {
       try {
         const conversion =
           await qrConversationConversionService
-            .recordWhatsAppConversationConversion({
-              qrCodeId:
-                conversation.qrCodeId,
+            .recordWhatsAppConversationConversion(
+              {
+                qrCodeId:
+                  conversation.qrCodeId,
 
-              conversationId:
-                conversation.id,
-            });
+                conversationId:
+                  conversation.id,
+              },
+            );
 
         console.log(
           "[WHATSAPP QR CONVERSION]",
@@ -581,25 +673,23 @@ export class WhatsAppWebhookService {
               conversation.qrCodeId,
 
             conversionId:
-              conversion.conversion.id,
+              conversion
+                .conversion.id,
 
             duplicate:
-              conversion.duplicate,
+              conversion
+                .duplicate,
           },
         );
-      } catch (conversionError) {
-        // Conversion attribution must never
-        // break WhatsApp message processing.
+      } catch (
+        conversionError
+      ) {
         console.error(
           "[WHATSAPP QR CONVERSION ERROR]",
           conversionError,
         );
       }
     }
-
-    // ----------------------------------------------------------
-    // MESSAGE PERSISTED
-    // ----------------------------------------------------------
 
     console.log(
       "[WHATSAPP] Message persisted successfully",
@@ -617,27 +707,217 @@ export class WhatsAppWebhookService {
 
         businessId,
 
-        qrCodeId:
-          conversation.qrCodeId ?? null,
-
         handlingMode:
           conversation.handlingMode,
       },
     );
 
-    // ----------------------------------------------------------
-    // AUTOMATION
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * FLOW ENGINE
+     * --------------------------------------------------
+     *
+     * Flow Engine gets first chance.
+     *
+     * This allows:
+     *
+     * hello
+     * account
+     * orders
+     * payments
+     * QR support
+     * interactive button IDs
+     * interactive list IDs
+     * human
+     *
+     * to be handled by the new
+     * conversational state machine.
+     */
 
-    await whatsappAutomationService.processIncomingMessage(
-      conversation,
-      savedMessage,
-    );
+    if (text?.trim()) {
+      try {
+        const flowResult =
+          await whatsappFlowService
+            .handleMessage(
+              {
+                businessId,
+
+                conversationId:
+                  conversation.id,
+
+                customerPhone,
+
+                text:
+                  text.trim(),
+              },
+            );
+
+        console.log(
+          "[WHATSAPP FLOW]",
+          {
+            conversationId:
+              conversation.id,
+
+            state:
+              flowResult.state,
+
+            handled:
+              flowResult.handled,
+
+            handoff:
+              flowResult.handoff ??
+              false,
+
+            requiresVerification:
+              flowResult
+                .requiresVerification ??
+              false,
+
+            hasInteractive:
+              Boolean(
+                flowResult.interactive,
+              ),
+          },
+        );
+
+        if (
+          flowResult.handled
+        ) {
+          /*
+           * Prefer interactive WhatsApp
+           * messages when the Flow Engine
+           * produced one.
+           */
+          if (
+            flowResult.interactive
+          ) {
+            try {
+              await whatsappInteractiveService
+                .sendInteractive(
+                  {
+                    businessId,
+
+                    conversationId:
+                      conversation.id,
+
+                    type:
+                      flowResult
+                        .interactive
+                        .type,
+
+                    body:
+                      flowResult
+                        .interactive
+                        .body,
+
+                    footer:
+                      flowResult
+                        .interactive
+                        .footer,
+
+                    buttons:
+                      flowResult
+                        .interactive
+                        .buttons,
+
+                    sections:
+                      flowResult
+                        .interactive
+                        .sections,
+                  },
+                );
+
+              return;
+            } catch (
+              interactiveError
+            ) {
+              /*
+               * If interactive delivery
+               * fails, fall back to text.
+               *
+               * This is especially useful
+               * while the WhatsApp business
+               * conversation window is being
+               * tested.
+               */
+              console.error(
+                "[WHATSAPP FLOW INTERACTIVE ERROR]",
+                interactiveError,
+              );
+            }
+          }
+
+          if (
+            flowResult.responseText
+          ) {
+            try {
+              await whatsappService
+                .sendAutomatedMessage(
+                  businessId,
+                  conversation.id,
+                  flowResult
+                    .responseText,
+                );
+
+              return;
+            } catch (
+              flowSendError
+            ) {
+              console.error(
+                "[WHATSAPP FLOW TEXT SEND ERROR]",
+                flowSendError,
+              );
+
+              /*
+               * Do not run the old
+               * automation again after
+               * the Flow Engine already
+               * handled the message.
+               */
+              return;
+            }
+          }
+
+          return;
+        }
+      } catch (
+        flowError
+      ) {
+        /*
+         * Flow Engine failures must
+         * not kill the webhook.
+         *
+         * Existing automation remains
+         * the fallback.
+         */
+        console.error(
+          "[WHATSAPP FLOW ERROR]",
+          {
+            conversationId:
+              conversation.id,
+
+            messageId:
+              savedMessage.id,
+
+            error:
+              flowError,
+          },
+        );
+      }
+    }
+
+    /*
+     * --------------------------------------------------
+     * EXISTING AUTOMATION ENGINE
+     * --------------------------------------------------
+     */
+
+    await whatsappAutomationService
+      .processIncomingMessage(
+        conversation,
+        savedMessage,
+      );
   }
-
-  // ============================================================
-  // MESSAGE TYPE
-  // ============================================================
 
   private getMessageType(
     type?: string,
@@ -676,23 +956,63 @@ export class WhatsAppWebhookService {
     }
   }
 
-  // ============================================================
-  // TEXT EXTRACTION
-  // ============================================================
-
   private extractText(
     message: any,
   ): string | null {
-    if (message?.type === "text") {
-      return message?.text?.body ?? null;
+    /*
+     * Normal WhatsApp text.
+     */
+    if (
+      message?.type ===
+      "text"
+    ) {
+      return (
+        message?.text?.body ??
+        null
+      );
+    }
+
+    /*
+     * Interactive reply:
+     *
+     * button_reply.id
+     * button_reply.title
+     *
+     * list_reply.id
+     * list_reply.title
+     */
+
+    if (
+      message?.type ===
+      "interactive"
+    ) {
+      const buttonReply =
+        message?.interactive
+          ?.button_reply;
+
+      if (buttonReply) {
+        return (
+          buttonReply?.id ??
+          buttonReply?.title ??
+          null
+        );
+      }
+
+      const listReply =
+        message?.interactive
+          ?.list_reply;
+
+      if (listReply) {
+        return (
+          listReply?.id ??
+          listReply?.title ??
+          null
+        );
+      }
     }
 
     return null;
   }
-
-  // ============================================================
-  // MEDIA EXTRACTION
-  // ============================================================
 
   private extractMediaId(
     message: any,
@@ -715,10 +1035,6 @@ export class WhatsAppWebhookService {
     return null;
   }
 
-  // ============================================================
-  // MESSAGE STATUS MAPPING
-  // ============================================================
-
   private mapMessageStatus(
     status?: string,
   ): WhatsAppMessageStatus | null {
@@ -740,10 +1056,6 @@ export class WhatsAppWebhookService {
     }
   }
 
-  // ============================================================
-  // STATUS ERROR EXTRACTION
-  // ============================================================
-
   private extractStatusError(
     status: any,
   ): {
@@ -763,13 +1075,16 @@ export class WhatsAppWebhookService {
     const parts = [
       error?.title,
       error?.message,
-      error?.error_data?.details,
+      error?.error_data
+        ?.details,
     ].filter(Boolean);
 
     return {
       errorCode:
         error?.code != null
-          ? String(error.code)
+          ? String(
+              error.code,
+            )
           : null,
 
       errorMessage:
@@ -778,10 +1093,6 @@ export class WhatsAppWebhookService {
           : "WhatsApp message failed",
     };
   }
-
-  // ============================================================
-  // MESSAGE STATUS PROCESSING
-  // ============================================================
 
   private async processMessageStatus(
     value: any,
@@ -849,47 +1160,57 @@ export class WhatsAppWebhookService {
         status,
       );
 
-    // ----------------------------------------------------------
-    // UPDATE EXISTING MESSAGE
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * EXISTING LOCAL MESSAGE
+     * --------------------------------------------------
+     */
 
     const existingMessage =
-      await prisma.whatsAppMessage.findUnique({
-        where: {
-          whatsappMessageId,
+      await prisma.whatsAppMessage.findUnique(
+        {
+          where: {
+            whatsappMessageId,
+          },
         },
-      });
+      );
 
     if (existingMessage) {
-      await prisma.whatsAppMessage.update({
-        where: {
-          id: existingMessage.id,
+      await prisma.whatsAppMessage.update(
+        {
+          where: {
+            id:
+              existingMessage.id,
+          },
+
+          data: {
+            status:
+              mappedStatus,
+
+            errorCode,
+
+            errorMessage,
+
+            metadata:
+              status,
+          },
         },
+      );
 
-        data: {
-          status:
-            mappedStatus,
+      await prisma.conversation.update(
+        {
+          where: {
+            id:
+              existingMessage
+                .conversationId,
+          },
 
-          errorCode,
-
-          errorMessage,
-
-          metadata:
-            status,
+          data: {
+            lastMessageAt:
+              new Date(),
+          },
         },
-      });
-
-      await prisma.conversation.update({
-        where: {
-          id:
-            existingMessage.conversationId,
-        },
-
-        data: {
-          lastMessageAt:
-            new Date(),
-        },
-      });
+      );
 
       console.log(
         "[WHATSAPP] Message status updated",
@@ -909,15 +1230,19 @@ export class WhatsAppWebhookService {
       return;
     }
 
-    // ----------------------------------------------------------
-    // FALLBACK STATUS MESSAGE
-    //
-    // Meta can send a status event before the local
-    // outbound message has finished being persisted.
-    // ----------------------------------------------------------
+    /*
+     * --------------------------------------------------
+     * RACE CONDITION FALLBACK
+     * --------------------------------------------------
+     *
+     * Meta can sometimes deliver the
+     * status webhook before our outbound
+     * database write completes.
+     */
 
     const phoneNumberId =
-      value?.metadata?.phone_number_id;
+      value?.metadata
+        ?.phone_number_id;
 
     const recipientPhone =
       status?.recipient_id;
@@ -941,11 +1266,13 @@ export class WhatsAppWebhookService {
     }
 
     const whatsappAccount =
-      await prisma.whatsAppBusinessAccount.findUnique({
-        where: {
-          phoneNumberId,
+      await prisma.whatsAppBusinessAccount.findUnique(
+        {
+          where: {
+            phoneNumberId,
+          },
         },
-      });
+      );
 
     if (!whatsappAccount) {
       console.warn(
@@ -964,16 +1291,18 @@ export class WhatsAppWebhookService {
       whatsappAccount.businessId;
 
     const contact =
-      await prisma.whatsAppContact.findUnique({
-        where: {
-          businessId_phoneNumber: {
-            businessId,
+      await prisma.whatsAppContact.findUnique(
+        {
+          where: {
+            businessId_phoneNumber: {
+              businessId,
 
-            phoneNumber:
-              recipientPhone,
+              phoneNumber:
+                recipientPhone,
+            },
           },
         },
-      });
+      );
 
     if (!contact) {
       console.warn(
@@ -991,19 +1320,21 @@ export class WhatsAppWebhookService {
     }
 
     const conversation =
-      await prisma.conversation.findFirst({
-        where: {
-          businessId,
+      await prisma.conversation.findFirst(
+        {
+          where: {
+            businessId,
 
-          contactId:
-            contact.id,
-        },
+            contactId:
+              contact.id,
+          },
 
-        orderBy: {
-          updatedAt:
-            "desc",
+          orderBy: {
+            updatedAt:
+              "desc",
+          },
         },
-      });
+      );
 
     if (!conversation) {
       console.warn(
@@ -1023,32 +1354,34 @@ export class WhatsAppWebhookService {
 
     try {
       const fallbackMessage =
-        await prisma.whatsAppMessage.create({
-          data: {
-            businessId,
+        await prisma.whatsAppMessage.create(
+          {
+            data: {
+              businessId,
 
-            conversationId:
-              conversation.id,
+              conversationId:
+                conversation.id,
 
-            whatsappMessageId,
+              whatsappMessageId,
 
-            direction:
-              WhatsAppMessageDirection.OUTBOUND,
+              direction:
+                WhatsAppMessageDirection.OUTBOUND,
 
-            type:
-              WhatsAppMessageType.TEXT,
+              type:
+                WhatsAppMessageType.TEXT,
 
-            status:
-              mappedStatus,
+              status:
+                mappedStatus,
 
-            errorCode,
+              errorCode,
 
-            errorMessage,
+              errorMessage,
 
-            metadata:
-              status,
+              metadata:
+                status,
+            },
           },
-        });
+        );
 
       console.log(
         "[WHATSAPP] Fallback status message created",
@@ -1065,11 +1398,16 @@ export class WhatsAppWebhookService {
         },
       );
     } catch (error: any) {
-      // --------------------------------------------------------
-      // P2002 = another webhook/request already persisted it
-      // --------------------------------------------------------
+      /*
+       * Prisma P2002 =
+       * another request already
+       * inserted this message.
+       */
 
-      if (error?.code === "P2002") {
+      if (
+        error?.code ===
+        "P2002"
+      ) {
         console.log(
           "[WHATSAPP] Status message already persisted",
           {
@@ -1078,31 +1416,35 @@ export class WhatsAppWebhookService {
         );
 
         const racedMessage =
-          await prisma.whatsAppMessage.findUnique({
-            where: {
-              whatsappMessageId,
+          await prisma.whatsAppMessage.findUnique(
+            {
+              where: {
+                whatsappMessageId,
+              },
             },
-          });
+          );
 
         if (racedMessage) {
-          await prisma.whatsAppMessage.update({
-            where: {
-              id:
-                racedMessage.id,
+          await prisma.whatsAppMessage.update(
+            {
+              where: {
+                id:
+                  racedMessage.id,
+              },
+
+              data: {
+                status:
+                  mappedStatus,
+
+                errorCode,
+
+                errorMessage,
+
+                metadata:
+                  status,
+              },
             },
-
-            data: {
-              status:
-                mappedStatus,
-
-              errorCode,
-
-              errorMessage,
-
-              metadata:
-                status,
-            },
-          });
+          );
         }
 
         return;
