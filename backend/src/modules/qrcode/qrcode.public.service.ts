@@ -176,7 +176,24 @@ export class QRCodePublicService {
     }
 
     return true;
+  }private buildWhatsAppUrl(
+  whatsappNumber: string | null | undefined,
+  shortCode: string
+): string | null {
+  if (!whatsappNumber) {
+    return null;
   }
+
+  const phoneNumber = whatsappNumber.replace(/\D/g, "");
+
+  if (!phoneNumber) {
+    return null;
+  }
+
+  const message = `TapQR QR:${shortCode}`;
+
+  return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+}
   /**
    * ============================================================
    * GET PUBLIC QR EXPERIENCE
@@ -640,7 +657,16 @@ const qrIntent = qrIntentService.detectIntent({
 
     const business =
       qrCode.business;
+const whatsappNumber =
+  business.profile?.whatsapp ??
+  business.whatsapp ??
+  null;
 
+const whatsappUrl =
+  this.buildWhatsAppUrl(
+    whatsappNumber,
+    qrCode.shortCode
+  );
     /**
      * ==========================================================
      * STEP 7 — PUBLIC RESPONSE
@@ -785,7 +811,7 @@ intent: qrIntent,
 
         description:
           business.description,
-
+  whatsappUrl,
         profile:
           business.profile
             ? {
