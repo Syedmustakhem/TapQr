@@ -6,7 +6,7 @@ import {
   WhatsAppMessageType,
 } from "@prisma/client";
 import { whatsappAutomationService } from "../automation/automation.service";
-
+import { customerPriorityService } from "../priority/customer-priority.service";
 export class WhatsAppWebhookService {
   verifyWebhook(
     mode?: string,
@@ -266,45 +266,111 @@ export class WhatsAppWebhookService {
 
     const mediaId =
       this.extractMediaId(message);
+const savedMessage =
+  await prisma.whatsAppMessage.create({
+    data: {
+      businessId,
 
-    const savedMessage =
-      await prisma.whatsAppMessage.create({
-        data: {
-          businessId,
-          conversationId:
-            conversation.id,
-          whatsappMessageId,
-          direction:
-            WhatsAppMessageDirection.INBOUND,
-          type: messageType,
-          text,
-          mediaId,
+      conversationId:
+        conversation.id,
 
-          /*
-           * WhatsAppMessageStatus does not have
-           * RECEIVED in the Prisma schema.
-           *
-           * PENDING is used while the inbound
-           * message enters our local processing
-           * pipeline.
-           */
-          status:
-            WhatsAppMessageStatus.PENDING,
+      whatsappMessageId,
 
-          metadata: message,
-        },
-      });
+      direction:
+        WhatsAppMessageDirection.INBOUND,
 
-    await prisma.conversation.update({
-      where: {
-        id: conversation.id,
+      type: messageType,
+
+      text,
+
+      mediaId,
+
+      status:
+        WhatsAppMessageStatus.PENDING,
+
+      metadata: {
+        rawMessage: message,
+
+        media: mediaId
+          ? {
+              id: mediaId,
+
+              mimeType:
+                message?.[message?.type]
+                  ?.mime_type ?? null,
+
+              caption:
+                message?.[message?.type]
+                  ?.caption ?? null,
+
+              filename:
+                message?.[message?.type]
+                  ?.filename ?? null,
+
+              sha256:
+                message?.[message?.type]
+                  ?.sha256 ?? null,
+            }
+          : null,
       },
+    },
+  });
 
-      data: {
-        lastMessageAt: new Date(),
-        status: ConversationStatus.OPEN,
-      },
-    });
+// =========================================================
+// CUSTOMER PRIORITY ENGINE
+// =========================================================
+
+const conversationMessageCount =
+  await prisma.whatsAppMessage.count({
+    where: {
+      conversationId:
+        conversation.id,
+    },
+  });
+
+const priorityResult =
+  customerPriorityService.evaluate({
+    message: savedMessage,
+
+    conversationMessageCount,
+
+    previousPriority:
+      conversation.priority,
+  });
+
+conversation =
+  await prisma.conversation.update({
+    where: {
+      id: conversation.id,
+    },
+
+    data: {
+      lastMessageAt: new Date(),
+
+      status:
+        ConversationStatus.OPEN,
+
+      priority:
+        priorityResult.priority,
+    },
+  });
+
+console.log(
+  "[WHATSAPP PRIORITY]",
+  {
+    conversationId:
+      conversation.id,
+
+    priority:
+      priorityResult.priority,
+
+    score:
+      priorityResult.score,
+
+    reasons:
+      priorityResult.reasons,
+  },
+);
 
     console.log(
       "[WHATSAPP] Message persisted successfully",

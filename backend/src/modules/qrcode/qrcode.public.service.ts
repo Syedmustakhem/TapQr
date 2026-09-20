@@ -3,7 +3,9 @@ import { Request } from "express";
 import {
   CampaignStatus,
 } from "@prisma/client";
-
+import {
+  qrIntentService,
+} from "./qrcode-intent.service";
 import { AppError } from "../../cores/errors/AppError";
 import { prisma } from "../../config/prisma";
 
@@ -548,7 +550,19 @@ export class QRCodePublicService {
           break;
       }
     }
+/**
+ * ============================================================
+ * QR INTENT DETECTION
+ * ============================================================
+ */
 
+const qrIntent = qrIntentService.detectIntent({
+  experienceType: resolvedExperienceType,
+  sourceType: baseQR.sourceType,
+  placementLabel: baseQR.placementLabel,
+  locationLabel: baseQR.locationLabel,
+  campaignName: activeCampaignName,
+});
     /**
      * ==========================================================
      * STEP 5 — DETERMINE CATALOG
@@ -705,8 +719,9 @@ export class QRCodePublicService {
        * The complete evaluator trace is never
        * exposed to the public client.
        */
-      routing:
-        routingMetadata,
+     routing: routingMetadata,
+
+intent: qrIntent,
 
       branding:
         qrCode.branding

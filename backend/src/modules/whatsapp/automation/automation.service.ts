@@ -1,7 +1,10 @@
 import {
   ConversationHandlingMode,
+  ConversationPriority,
   WhatsAppMessage,
 } from "@prisma/client";
+
+import { prisma } from "../../../config/prisma";
 
 type AutomationIntent =
   | "GREETING"
@@ -104,6 +107,12 @@ export class WhatsAppAutomationService {
     | WhatsAppReplySender
     | null = null;
 
+  /**
+   * ---------------------------------------------------------
+   * CONNECT REPLY SENDER
+   * ---------------------------------------------------------
+   */
+
   setReplySender(
     sender: WhatsAppReplySender,
   ): void {
@@ -113,6 +122,12 @@ export class WhatsAppAutomationService {
       "[WHATSAPP AUTOMATION] Reply sender connected",
     );
   }
+
+  /**
+   * ---------------------------------------------------------
+   * CHECK WHETHER AI SHOULD PROCESS MESSAGE
+   * ---------------------------------------------------------
+   */
 
   shouldAutoReply(
     conversation: AutomationConversation,
@@ -138,6 +153,90 @@ export class WhatsAppAutomationService {
     return true;
   }
 
+  /**
+   * ---------------------------------------------------------
+   * DETECT HUMAN HANDOFF REQUEST
+   * ---------------------------------------------------------
+   */
+
+  private shouldHandoffToHuman(
+    text: string,
+  ): boolean {
+    const normalized = text
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) {
+      return false;
+    }
+
+    const handoffPatterns = [
+      /\bhuman\b/,
+      /\bagent\b/,
+      /\bstaff\b/,
+      /\brepresentative\b/,
+      /\bperson\b/,
+      /\breal person\b/,
+      /\btalk to someone\b/,
+      /\btalk to a person\b/,
+      /\bspeak to someone\b/,
+      /\bspeak to a person\b/,
+      /\bcustomer service\b/,
+      /\bsupport agent\b/,
+      /\bconnect me\b/,
+      /\btransfer me\b/,
+    ];
+
+    return handoffPatterns.some(
+      (pattern) =>
+        pattern.test(normalized),
+    );
+  }
+
+  /**
+   * ---------------------------------------------------------
+   * HAND OFF CONVERSATION TO HUMAN
+   * ---------------------------------------------------------
+   */
+
+  private async handoffToHuman(
+    conversation: AutomationConversation,
+  ): Promise<void> {
+    await prisma.conversation.update({
+      where: {
+        id: conversation.id,
+      },
+
+      data: {
+        handlingMode:
+          ConversationHandlingMode.HUMAN,
+
+        priority:
+          ConversationPriority.HIGH,
+      },
+    });
+
+    console.log(
+      "[WHATSAPP HUMAN HANDOFF]",
+      {
+        conversationId:
+          conversation.id,
+
+        businessId:
+          conversation.businessId,
+
+        reason:
+          "CUSTOMER_REQUESTED_HUMAN",
+      },
+    );
+  }
+
+  /**
+   * ---------------------------------------------------------
+   * DETECT AUTOMATION INTENT
+   * ---------------------------------------------------------
+   */
+
   detectIntent(
     text: string,
   ): AutomationIntent {
@@ -154,23 +253,25 @@ export class WhatsAppAutomationService {
 
     for (const rule of this.rules) {
       const matched =
-        rule.keywords.some((keyword) => {
-          const normalizedKeyword =
-            keyword
-              .toLowerCase()
-              .trim();
+        rule.keywords.some(
+          (keyword) => {
+            const normalizedKeyword =
+              keyword
+                .toLowerCase()
+                .trim();
 
-          if (
-            normalizedText ===
-            normalizedKeyword
-          ) {
-            return true;
-          }
+            if (
+              normalizedText ===
+              normalizedKeyword
+            ) {
+              return true;
+            }
 
-          return normalizedText.includes(
-            ` ${normalizedKeyword} `,
-          );
-        });
+            return normalizedText.includes(
+              ` ${normalizedKeyword} `,
+            );
+          },
+        );
 
       if (matched) {
         return rule.intent;
@@ -179,6 +280,12 @@ export class WhatsAppAutomationService {
 
     return "UNKNOWN";
   }
+
+  /**
+   * ---------------------------------------------------------
+   * GET AUTOMATION RESPONSE
+   * ---------------------------------------------------------
+   */
 
   getResponse(
     intent: AutomationIntent,
@@ -192,10 +299,22 @@ export class WhatsAppAutomationService {
     return rule?.response ?? null;
   }
 
+  /**
+   * ---------------------------------------------------------
+   * PROCESS INCOMING MESSAGE
+   * ---------------------------------------------------------
+   */
+
   async processIncomingMessage(
     conversation: AutomationConversation,
     message: WhatsAppMessage,
   ): Promise<void> {
+    /*
+     * -------------------------------------------------------
+     * 1. CHECK WHETHER AI CAN PROCESS THIS MESSAGE
+     * -------------------------------------------------------
+     */
+
     if (
       !this.shouldAutoReply(
         conversation,
@@ -207,8 +326,10 @@ export class WhatsAppAutomationService {
         {
           conversationId:
             conversation.id,
+
           handlingMode:
             conversation.handlingMode,
+
           messageId:
             message.id,
         },
@@ -217,6 +338,12 @@ export class WhatsAppAutomationService {
       return;
     }
 
+    /*
+     * -------------------------------------------------------
+     * 2. EXTRACT MESSAGE TEXT
+     * -------------------------------------------------------
+     */
+
     const text =
       message.text?.trim();
 
@@ -224,8 +351,40 @@ export class WhatsAppAutomationService {
       return;
     }
 
+    /*
+     * -------------------------------------------------------
+     * 3. CHECK HUMAN HANDOFF
+     * -------------------------------------------------------
+     *
+     * This must happen BEFORE normal intent detection.
+     */
+
+    if (
+      this.shouldHandoffToHuman(
+        text,
+      )
+    ) {
+      await this.handoffToHuman(
+        conversation,
+      );
+
+      return;
+    }
+
+    /*
+     * -------------------------------------------------------
+     * 4. DETECT AUTOMATION INTENT
+     * -------------------------------------------------------
+     */
+
     const intent =
       this.detectIntent(text);
+
+    /*
+     * -------------------------------------------------------
+     * 5. GET AUTOMATED RESPONSE
+     * -------------------------------------------------------
+     */
 
     const response =
       this.getResponse(intent);
@@ -235,13 +394,22 @@ export class WhatsAppAutomationService {
       {
         conversationId:
           conversation.id,
+
         messageId:
           message.id,
+
         intent,
+
         hasResponse:
           Boolean(response),
       },
     );
+
+    /*
+     * -------------------------------------------------------
+     * 6. NO MATCHING RESPONSE
+     * -------------------------------------------------------
+     */
 
     if (!response) {
       console.log(
@@ -249,14 +417,22 @@ export class WhatsAppAutomationService {
         {
           conversationId:
             conversation.id,
+
           messageId:
             message.id,
+
           intent,
         },
       );
 
       return;
     }
+
+    /*
+     * -------------------------------------------------------
+     * 7. CHECK REPLY SENDER
+     * -------------------------------------------------------
+     */
 
     if (!this.replySender) {
       console.warn(
@@ -270,6 +446,12 @@ export class WhatsAppAutomationService {
       return;
     }
 
+    /*
+     * -------------------------------------------------------
+     * 8. SEND AUTOMATED RESPONSE
+     * -------------------------------------------------------
+     */
+
     try {
       await this.replySender(
         conversation.businessId,
@@ -282,8 +464,10 @@ export class WhatsAppAutomationService {
         {
           conversationId:
             conversation.id,
+
           messageId:
             message.id,
+
           intent,
         },
       );
@@ -293,9 +477,12 @@ export class WhatsAppAutomationService {
         {
           conversationId:
             conversation.id,
+
           messageId:
             message.id,
+
           intent,
+
           error,
         },
       );
