@@ -1,4 +1,5 @@
 import {
+  Request,
   Response,
   NextFunction,
 } from "express";
@@ -240,6 +241,46 @@ export class BusinessController {
         success: true,
         ...result,
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+  getPublicBySlug = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const slug = String(
+        req.params.slug ??
+          ""
+      ).trim();
+
+      if (!slug) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Business slug is required.",
+            code:
+              "BUSINESS_SLUG_REQUIRED",
+          });
+      }
+
+      const business =
+        await this.service.getPublicBySlug(
+          slug
+        );
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message:
+            "Business retrieved successfully.",
+          data: business,
+        });
     } catch (error) {
       next(error);
     }

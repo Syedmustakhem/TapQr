@@ -39,7 +39,10 @@ router.use(
 | Business
 |--------------------------------------------------------------------------
 */
-
+router.get(
+  "/public/:slug",
+  controller.getPublicBySlug
+);
 router.post(
   "/",
   validate(createBusinessSchema),
