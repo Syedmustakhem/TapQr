@@ -9,6 +9,7 @@ import { NotificationsService } from "./notifications.service";
 import {
   notificationIdSchema,
   notificationListQuerySchema,
+  updatePreferencesSchema,
 } from "./notification.validation";
 
 const notificationService =
@@ -257,6 +258,72 @@ export class NotificationController {
         success: true,
         message:
           "Notification delivery queued for retry.",
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+
+  static async getPreferences(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      if (!req.user?.id) {
+        throw new AppError(
+          "Authenticated user is required.",
+          401,
+          "AUTHENTICATION_REQUIRED"
+        );
+      }
+
+      const result =
+        await notificationService.getPreferences(
+          req.user.id
+        );
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/notifications/preferences
+   */
+  static async updatePreferences(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      if (!req.user?.id) {
+        throw new AppError(
+          "Authenticated user is required.",
+          401,
+          "AUTHENTICATION_REQUIRED"
+        );
+      }
+
+      const body =
+        updatePreferencesSchema.parse(
+          req.body ?? {}
+        );
+
+      const result =
+        await notificationService.updatePreferences(
+          req.user.id,
+          body
+        );
+
+      return res.status(200).json({
+        success: true,
         data: result,
       });
     } catch (error) {

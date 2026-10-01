@@ -158,6 +158,45 @@ export class AuthController {
     }
   };
 
+  updateMe = async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user?.id) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Authentication required",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const result =
+        await this.authService.updateMe(
+          req.user.id,
+          req.body ?? {}
+        );
+
+      return ResponseHandler.success(
+        res,
+        "Profile Updated Successfully",
+        result
+      );
+    } catch (error: any) {
+      return res.status(
+        error.statusCode || 500
+      ).json({
+        success: false,
+        message:
+          error.message ||
+          "Internal Server Error",
+        code:
+          error.code ||
+          "INTERNAL_ERROR",
+      });
+    }
+  };
   /*
   |--------------------------------------------------------------------------
   | LOGOUT

@@ -33,6 +33,18 @@ export class AuthRepository {
       where: { id },
     });
   }
+   async updateUserById(
+    id: string,
+    data: {
+      fullName?: string;
+      phone?: string | null;
+    }
+  ) {
+    return prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
 
   async findUserWithAuth(email: string) {
     return prisma.user.findUnique({
