@@ -157,7 +157,58 @@ export class BusinessRepository {
       where: { slug },
     });
   }
+ async findPublicBySlug(
+    slug: string
+  ) {
+    return prisma.business.findUnique({
+      where: { slug },
 
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logo: true,
+        coverImage: true,
+        description: true,
+        phone: true,
+        email: true,
+        website: true,
+        whatsapp: true,
+        status: true,
+        isPublished: true,
+        deletedAt: true,
+        country: true,
+
+        profile: {
+          select: {
+            tagline: true,
+            description: true,
+            website: true,
+            email: true,
+            phone: true,
+            whatsapp: true,
+            externalReviewUrl:
+              true,
+            addressLine1:
+              true,
+            addressLine2:
+              true,
+            city: true,
+            state: true,
+            postalCode: true,
+            country: true,
+            latitude: true,
+            longitude: true,
+            openingHours:
+              true,
+            socialLinks:
+              true,
+            coverImage: true,
+          },
+        },
+      },
+    });
+  }
   async create(
     tx: Prisma.TransactionClient,
     data: BusinessCreateData

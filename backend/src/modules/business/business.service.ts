@@ -255,7 +255,37 @@ export class BusinessService {
 
     return business;
   }
+async getPublicBySlug(
+    slug: string
+  ) {
+    const business =
+      await this.repository.findPublicBySlug(
+        slug
+      );
 
+    if (
+      !business ||
+      business.deletedAt ||
+      !business.isPublished ||
+      business.status !==
+        "ACTIVE"
+    ) {
+      throw new AppError(
+        "Business not found.",
+        404,
+        "BUSINESS_NOT_FOUND"
+      );
+    }
+
+    const {
+      status: _status,
+      isPublished: _isPublished,
+      deletedAt: _deletedAt,
+      ...publicBusiness
+    } = business;
+
+    return publicBusiness;
+  }
   async update(
     ownerId: string,
     businessId: string,

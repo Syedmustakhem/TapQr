@@ -12,7 +12,7 @@ import {
 } from "@prisma/client";;
 import { randomUUID } from "crypto";
 import { prisma } from "../../config/prisma";
-
+import { AppError } from "../../cores/errors/AppError";
 export class QRRulesRepository {
   /**
    * Load the QR required by the routing engine.
@@ -1195,9 +1195,12 @@ export class QRRulesRepository {
             id: ruleId,
           },
         });
-
       if (!rule) {
-        throw new Error("QR rule not found.");
+        throw new AppError(
+          "QR rule not found.",
+          404,
+          "QR_RULE_NOT_FOUND"
+        );
       }
 
       const draft =
@@ -1213,8 +1216,47 @@ export class QRRulesRepository {
         });
 
       if (!draft) {
-        throw new Error(
-          "No draft version available to publish."
+        /**
+         * Idempotent publish: the rule is already
+         * live and there is nothing new to publish.
+         * Return the current state instead of
+         * throwing — re-clicking Publish must not
+         * 500.
+         */
+        if (
+          rule.status ===
+            QRRuleStatus.ACTIVE &&
+          rule.publishedVersion !=
+            null
+        ) {
+          const published =
+            await tx.qRRuleVersion.findFirst(
+              {
+                where: {
+                  ruleId,
+                  status:
+                    QRRuleVersionStatus.PUBLISHED,
+                },
+
+                orderBy: {
+                  version:
+                    "desc",
+                },
+              }
+            );
+
+          return {
+            rule,
+            version: published,
+            alreadyPublished:
+              true,
+          };
+        }
+
+        throw new AppError(
+          "No draft version available to publish.",
+          409,
+          "QR_RULE_NO_DRAFT"
         );
       }
 
