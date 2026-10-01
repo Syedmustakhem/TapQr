@@ -285,7 +285,62 @@ export class AuthService {
 
     return user;
   }
+ async updateMe(
+    userId: string,
+    input: {
+      fullName?: string;
+      phone?: string;
+    }
+  ) {
+    const user =
+      await this.authRepository.findUserById(
+        userId
+      );
 
+    if (!user) {
+      throw new AppError(
+        "User not found",
+        404,
+        "USER_NOT_FOUND"
+      );
+    }
+
+    if (
+      input.phone &&
+      input.phone !== user.phone
+    ) {
+      const existing =
+        await this.authRepository.findUserByPhone(
+          input.phone
+        );
+
+      if (
+        existing &&
+        existing.id !== userId
+      ) {
+        throw new AppError(
+          "This phone number is already in use.",
+          409,
+          "PHONE_IN_USE"
+        );
+      }
+    }
+
+    return this.authRepository.updateUserById(
+      userId,
+      {
+        ...(input.fullName !==
+          undefined && {
+          fullName:
+            input.fullName,
+        }),
+        ...(input.phone !==
+          undefined && {
+          phone: input.phone,
+        }),
+      }
+    );
+  }
   /*
   |--------------------------------------------------------------------------
   | REFRESH TOKEN

@@ -205,3 +205,39 @@ export const googleLoginSchema =
 
     mode: authModeSchema,
   });
+  
+export const updateMeSchema =
+  z
+    .object({
+      fullName: z
+        .string()
+        .trim()
+        .min(
+          3,
+          "Full name must be at least 3 characters"
+        )
+        .max(
+          100,
+          "Full name is too long"
+        )
+        .optional(),
+
+      phone: z
+        .string()
+        .regex(
+          E164_REGEX,
+          "Phone must be in international format, e.g. +14155552671"
+        )
+        .optional(),
+    })
+    .refine(
+      (data) =>
+        data.fullName !==
+          undefined ||
+        data.phone !==
+          undefined,
+      {
+        message:
+          "Provide fullName or phone to update.",
+      }
+    );

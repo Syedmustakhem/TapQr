@@ -50,7 +50,74 @@ export class NotificationsService {
 
     return notification;
   }
+ async getPreferences(
+    userId: string
+  ) {
+    const preference =
+      await this.repository.findPreference(
+        userId
+      );
 
+    return (
+      preference ?? {
+        userId,
+        emailEnabled: true,
+        whatsappEnabled: true,
+        securityEnabled: true,
+        authEnabled: true,
+        businessEnabled: true,
+        qrEnabled: true,
+        staffEnabled: true,
+        reviewEnabled: true,
+        analyticsEnabled: true,
+        billingEnabled: true,
+        systemEnabled: true,
+      }
+    );
+  }
+
+   async updatePreferences(
+    userId: string,
+    input: Record<
+      string,
+      boolean | undefined
+    >
+  ) {
+    const data: Record<
+      string,
+      boolean
+    > = {};
+
+    for (const [
+      key,
+      value,
+    ] of Object.entries(
+      input
+    )) {
+      if (
+        typeof value ===
+        "boolean"
+      ) {
+        data[key] = value;
+      }
+    }
+
+    if (
+      Object.keys(data)
+        .length === 0
+    ) {
+      throw new AppError(
+        "Provide at least one preference to update.",
+        400,
+        "EMPTY_PREFERENCES"
+      );
+    }
+
+    return this.repository.upsertPreference(
+      userId,
+      data
+    );
+  }
   /**
    * Retry all failed deliveries for a notification.
    *

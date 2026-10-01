@@ -53,6 +53,19 @@ export class NotificationsRepository {
       },
     });
   }
+   async upsertPreference(
+    userId: string,
+    data: Record<string, boolean>
+  ) {
+    return prisma.notificationPreference.upsert({
+      where: { userId },
+      create: {
+        userId,
+        ...data,
+      },
+      update: data,
+    });
+  }
 
   /**
    * Create a notification and its delivery records.

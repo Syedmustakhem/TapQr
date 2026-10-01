@@ -15,7 +15,9 @@ import {
   verifyWhatsappOtpSchema,
   googleLoginSchema,
   identifyAccountSchema,
+  updateMeSchema,
 } from "./auth.validation";
+
 
 const router = Router();
 
@@ -53,6 +55,12 @@ router.post(
   authController.refresh
 );
 
+router.patch(
+  "/me",
+  authenticate,
+  validate(updateMeSchema),
+  authController.updateMe
+);
 /*
 |--------------------------------------------------------------------------
 | Public Routes — Email OTP (NEW)

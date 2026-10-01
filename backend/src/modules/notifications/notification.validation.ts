@@ -62,6 +62,7 @@ export const notificationIdSchema =
       ),
   });
 
+  
 /**
  * Type inferred from the query schema.
  */
@@ -69,3 +70,40 @@ export type NotificationListQueryInput =
   z.infer<
     typeof notificationListQuerySchema
   >;
+
+  export const updatePreferencesSchema =
+  z.object({
+    emailEnabled: z
+      .boolean()
+      .optional(),
+    whatsappEnabled: z
+      .boolean()
+      .optional(),
+    securityEnabled: z
+      .boolean()
+      .optional(),
+    authEnabled: z
+      .boolean()
+      .optional(),
+    businessEnabled: z
+      .boolean()
+      .optional(),
+    qrEnabled: z
+      .boolean()
+      .optional(),
+    staffEnabled: z
+      .boolean()
+      .optional(),
+    reviewEnabled: z
+      .boolean()
+      .optional(),
+    analyticsEnabled: z
+      .boolean()
+      .optional(),
+    billingEnabled: z
+      .boolean()
+      .optional(),
+    systemEnabled: z
+      .boolean()
+      .optional(),
+  });

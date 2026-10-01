@@ -34,6 +34,16 @@ router.post(
   NotificationController.markAllRead
 );
 
+
+router.get(
+  "/preferences",
+  NotificationController.getPreferences
+);
+
+router.patch(
+  "/preferences",
+  NotificationController.updatePreferences
+);
 router.get(
   "/",
   NotificationController.list
