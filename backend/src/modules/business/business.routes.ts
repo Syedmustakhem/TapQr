@@ -26,6 +26,22 @@ const controller =
 
 /*
 |--------------------------------------------------------------------------
+| Public routes (NO authentication)
+|--------------------------------------------------------------------------
+|
+| IMPORTANT: these MUST be registered BEFORE router.use(authenticate).
+| The public business page (tapqr.shop/<slug>) is server-rendered with no
+| login token — if this route sits behind authenticate, the API returns 401
+| and the public page crashes with "This page couldn't load".
+|
+*/
+router.get(
+  "/public/:slug",
+  controller.getPublicBySlug
+);
+
+/*
+|--------------------------------------------------------------------------
 | Authentication
 |--------------------------------------------------------------------------
 */
@@ -36,13 +52,9 @@ router.use(
 
 /*
 |--------------------------------------------------------------------------
-| Business
+| Business (authenticated)
 |--------------------------------------------------------------------------
 */
-router.get(
-  "/public/:slug",
-  controller.getPublicBySlug
-);
 router.post(
   "/",
   validate(createBusinessSchema),
