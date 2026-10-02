@@ -28,6 +28,8 @@ model User {
   businesses              Business[]
   sentInvitations         BusinessInvitation[]
   memberships             BusinessMember[]
+  subscriptions           Subscription[]
+  payments                Payment[]
 
   invitedMembers BusinessMember[] @relation("InvitedBy")
 }
@@ -71,6 +73,69 @@ model OtpVerification {
   @@index([identifier, channel])
   @@index([expiresAt])
   @@index([consumed])
+}
+
+/**
+ * ============================================================
+ * BILLING MODELS — append to backend/prisma/schema.prisma
+ * ============================================================
+ * Also add the two back-reference lines to the User model
+ * (see billing-user-relations.patch.txt).
+ */
+
+model Plan {
+  id             String   @id @default(uuid())
+  code           String   @unique // FREE, PRO_MONTHLY, PRO_YEARLY
+  name           String
+  pricePaise     Int      @default(0)
+  currency       String   @default("INR")
+  interval       String? // MONTHLY, YEARLY, null for FREE
+  maxQrs         Int      @default(1)
+  maxBusinesses  Int      @default(1)
+  maxSeats       Int      @default(1)
+  features       Json     @default("[]") // ["smart_rules","branding","advanced_analytics","campaigns"]
+  razorpayPlanId String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  userId                 String
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planCode               String
+  plan                   Plan               @relation(fields: [planCode], references: [code])
+  status                 SubscriptionStatus @default(PENDING)
+  razorpaySubscriptionId String?            @unique
+  razorpayCustomerId     String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  payments Payment[]
+
+  @@index([userId, status])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId    String?
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  razorpayPaymentId String?       @unique
+  razorpayOrderId   String?
+  amountPaise       Int
+  currency          String        @default("INR")
+  status            String // captured, failed, refunded
+  createdAt         DateTime      @default(now())
+
+  @@index([userId])
 }
 
 // ============================================================
@@ -1982,6 +2047,15 @@ enum QRRuleConditionType {
   SUBSCRIPTION_PLAN
 
   CUSTOM
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  HALTED
+  CANCELLED
+  EXPIRED
 }
 
 enum QRRuleAuditAction {

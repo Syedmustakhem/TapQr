@@ -18,6 +18,8 @@ import {
   updateBusinessSchema,
 } from "./business.validation";
 
+import { assertCanCreateBusiness } from "../billing/entitlements";
+
 export class BusinessController {
   private readonly service =
     new BusinessService();
@@ -44,6 +46,8 @@ export class BusinessController {
         createBusinessSchema.parse(
           req.body
         );
+
+      await assertCanCreateBusiness(userId);
 
       const business =
         await this.service.create(

@@ -14,7 +14,7 @@ import qrConversionRoutes from "./modules/qrcode/qr-conversion.routes";
 import advancedAnalyticsRoutes from "./modules/analytics/analytics-advanced.routes";
 import staffRoutes from "./modules/staff/routes/staff.routes";
 import visitorAnalyticsRoutes from "./modules/analytics/analytics-visitors.routes";
-
+import billingRoutes from "./modules/billing/billing.routes";
 import variantRoutes from "./modules/catalog/variant.routes";
 import catalogRoutes from "./modules/catalog/catalog.routes";
 import categoryRoutes from "./modules/catalog/category.routes";
@@ -127,8 +127,20 @@ app.use(logger);
 |--------------------------------------------------------------------------
 | BODY PARSER
 |--------------------------------------------------------------------------
-*/
 
+|--------------------------------------------------------------------------
+| RAZORPAY WEBHOOK — raw body (must come before express.json())
+|--------------------------------------------------------------------------
+|
+| Razorpay verifies webhooks against the raw request bytes, so this
+| path skips the JSON parser. The billing controller verifies the
+| x-razorpay-signature header and parses the JSON itself.
+|
+*/
+app.use(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" })
+);
 app.use(express.json());
 
 /*
@@ -180,6 +192,7 @@ app.use(
   "/api/campaign",
   campaignRoutes
 );
+app.use("/api/billing", billingRoutes);
 
 /*
 |--------------------------------------------------------------------------

@@ -10,6 +10,8 @@ import { ResponseHandler } from "../../cores/responses/ResponseHandler";
 
 import { QRRulesService } from "./qr-rules.service";
 
+import { assertCanUseSmartRules } from "../billing/entitlements";
+
 import {
   QRRuleMatchStatus,
 } from "@prisma/client";
@@ -27,6 +29,8 @@ export class QRRulesController {
     next: NextFunction
   ) => {
     try {
+      await assertCanUseSmartRules(req.user!.id);
+
       const result =
         await this.service.createRule(
           req.user!.id,
