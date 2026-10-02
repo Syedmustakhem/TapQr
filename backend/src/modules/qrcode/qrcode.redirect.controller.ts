@@ -7,7 +7,7 @@ export class QRCodeRedirectController {
   redirect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const shortCode = String(req.params.shortCode ?? "").trim();
-      const qr = await this.service.getRedirectTarget(shortCode);
+      const qr = await this.service.getRedirectTarget(shortCode, req);
 
       const forwardedFor = req.headers["x-forwarded-for"];
       const ipAddress = typeof forwardedFor === "string"

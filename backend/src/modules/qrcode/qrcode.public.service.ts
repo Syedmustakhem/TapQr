@@ -2,6 +2,8 @@ import { Request } from "express";
 
 import {
   CampaignStatus,
+  QRRuleActionType,
+  QRRuleMatchStatus,
 } from "@prisma/client";
 import {
   qrIntentService,
@@ -1209,7 +1211,8 @@ intent: qrIntent,
    */
 
   async getRedirectTarget(
-    shortCode: string
+    shortCode: string,
+    req?: Request
   ) {
     const code =
       shortCode.trim();
@@ -1231,7 +1234,11 @@ intent: qrIntent,
         select: {
           id: true,
 
+          businessId: true,
+
           status: true,
+
+          scanCount: true,
 
           deletedAt: true,
 
@@ -1264,6 +1271,60 @@ intent: qrIntent,
         409,
         "QR_DESTINATION_MISSING"
       );
+    }
+
+    /**
+     * SMART RULES — REDIRECT PATH
+     *
+     * The /r/:shortCode endpoint must consult the routing engine,
+     * otherwise published Smart Rules never steer redirect scans
+     * and the QR always falls back to its static destinationUrl.
+     *
+     * Engine failure must never break the redirect: on any error
+     * we fall back to the static destinationUrl (same guarantee
+     * the experience path already provides).
+     */
+    if (req) {
+      try {
+        const routingContext = buildQRRoutingContext({
+          req,
+
+          qrCodeId: qrCode.id,
+
+          businessId: qrCode.businessId,
+
+          scanCount: qrCode.scanCount ?? 0,
+        });
+
+        const routingResult = await this.routingEngine.resolve({
+          qrCodeId: qrCode.id,
+
+          context: routingContext,
+
+          options: {
+            includeTrace: false,
+          },
+        });
+
+        const action = routingResult?.action;
+
+        if (
+          routingResult?.status === QRRuleMatchStatus.MATCHED &&
+          action?.type === QRRuleActionType.REDIRECT &&
+          typeof action.value === "string" &&
+          action.value.trim().length > 0
+        ) {
+          return {
+            ...qrCode,
+            destinationUrl: action.value.trim(),
+          };
+        }
+      } catch (error) {
+        console.error(
+          "[QR Routing] Redirect engine failed. Falling back to static destination.",
+          error
+        );
+      }
     }
 
     return qrCode;
