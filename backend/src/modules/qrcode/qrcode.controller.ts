@@ -1,14 +1,20 @@
-import { Response } from "express";
+import { Response, NextFunction } from "express";
 import { AuthRequest } from "../auth/auth.types";
 import { ResponseHandler } from "../../cores/responses/ResponseHandler";
 import { QRCodeService } from "./qrcode.service";
+import { assertCanCreateQR } from "../billing/entitlements";
 
 export class QRCodeController {
   private readonly qrCodeService = new QRCodeService();
 
-  createQRCode = async (req: AuthRequest, res: Response) => {
-    const result = await this.qrCodeService.createQRCode({ ownerId: req.user!.id, ...req.body });
-    return ResponseHandler.created(res, "QR Code created successfully.", result);
+  createQRCode = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      await assertCanCreateQR(req.user!.id);
+      const result = await this.qrCodeService.createQRCode({ ownerId: req.user!.id, ...req.body });
+      return ResponseHandler.created(res, "QR Code created successfully.", result);
+    } catch (error) {
+      next(error);
+    }
   };
 
   getBusinessQRCodes = async (req: AuthRequest, res: Response) => {
