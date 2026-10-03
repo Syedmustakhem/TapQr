@@ -191,6 +191,10 @@ export class BusinessRepository {
               true,
             reviewFunnelEnabled:
               true,
+              specialsBannerEnabled: true,
+            specialsTitle: true,
+            specialsDescription: true,
+            specialsValidUntil: true,
             addressLine1:
               true,
             addressLine2:
@@ -539,6 +543,60 @@ export class BusinessRepository {
               "boolean"
                 ? data.reviewFunnelEnabled
                 : undefined,
+          }
+        : {}),
+
+      ...(data.specialsBannerEnabled !==
+      undefined
+        ? {
+            specialsBannerEnabled:
+              typeof data.specialsBannerEnabled ===
+              "boolean"
+                ? data.specialsBannerEnabled
+                : undefined,
+          }
+        : {}),
+
+      ...(data.specialsTitle !==
+      undefined
+        ? {
+            specialsTitle:
+              typeof data.specialsTitle ===
+              "string"
+                ? data.specialsTitle
+                : data.specialsTitle ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
+      ...(data.specialsDescription !==
+      undefined
+        ? {
+            specialsDescription:
+              typeof data.specialsDescription ===
+              "string"
+                ? data.specialsDescription
+                : data.specialsDescription ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
+      ...(data.specialsValidUntil !==
+      undefined
+        ? {
+            specialsValidUntil:
+              data.specialsValidUntil ===
+              null
+                ? null
+                : new Date(
+                    data.specialsValidUntil as
+                      | string
+                      | Date
+                  ),
           }
         : {}),
 

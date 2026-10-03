@@ -849,6 +849,24 @@ intent: qrIntent,
                   business.profile
                     .reviewFunnelEnabled ??
                   false,
+                  specialsBannerEnabled:
+                  business.profile
+                    .specialsBannerEnabled ??
+                  false,
+
+                specialsTitle:
+                  business.profile
+                    .specialsTitle,
+
+                specialsDescription:
+                  business.profile
+                    .specialsDescription,
+
+                specialsValidUntil:
+                  business.profile
+                    .specialsValidUntil
+                    ? business.profile.specialsValidUntil.toISOString()
+                    : null,
 
                 address: {
                   line1:

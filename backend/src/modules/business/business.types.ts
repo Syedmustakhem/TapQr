@@ -86,7 +86,10 @@ export interface UpdateBusinessProfileDTO {
 
   externalReviewUrl?: string | null;
   reviewFunnelEnabled?: boolean;
-
+specialsBannerEnabled?: boolean;
+    specialsTitle?: string | null;
+    specialsDescription?: string | null;
+    specialsValidUntil?: string | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
 

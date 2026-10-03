@@ -161,7 +161,19 @@ export async function assertCanUseReviewFunnel(
     throw upgradeError("Review Funnel");
   }
 }
+export async function assertCanUseSpecialsBanner(
+  userId: string
+): Promise<void> {
+  const plan = await getEffectivePlan(
+    userId
+  );
 
+  if (!hasFeature(plan, "specials_banner")) {
+    throw upgradeError(
+      "Today's Specials Banner"
+    );
+  }
+}
 export async function assertCanUseBranding(
   userId: string
 ): Promise<void> {

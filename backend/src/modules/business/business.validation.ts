@@ -338,7 +338,19 @@ export const updateBusinessProfileSchema = z
     reviewFunnelEnabled: z
       .boolean()
       .optional(),
+ specialsBannerEnabled: z
+      .boolean()
+      .optional(),
 
+    specialsTitle: nullableText(120),
+
+    specialsDescription: nullableText(500),
+
+    specialsValidUntil: z
+      .string()
+      .datetime({ offset: true })
+      .nullable()
+      .optional(),
     addressLine1: nullableText(200),
 
     addressLine2: nullableText(200),
