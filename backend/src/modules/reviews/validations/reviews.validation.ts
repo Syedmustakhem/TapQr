@@ -33,6 +33,9 @@ export const createReviewSchema = z.object({
 
   title: optionalText(120, 2),
   comment: optionalText(2000, 2),
+    isPrivateFeedback: z
+    .boolean()
+    .optional(),
 }).strict().superRefine((data, ctx) => {
   if (!data.reviewerName && !data.reviewerEmail) {
     ctx.addIssue({

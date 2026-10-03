@@ -84,6 +84,9 @@ export interface UpdateBusinessProfileDTO {
   phone?: string | null;
   whatsapp?: string | null;
 
+  externalReviewUrl?: string | null;
+  reviewFunnelEnabled?: boolean;
+
   addressLine1?: string | null;
   addressLine2?: string | null;
 

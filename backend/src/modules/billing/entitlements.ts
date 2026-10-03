@@ -150,6 +150,18 @@ export async function assertCanUseSmartRules(
   }
 }
 
+export async function assertCanUseReviewFunnel(
+  userId: string
+) {
+  const plan = await getEffectivePlan(
+    userId
+  );
+
+  if (!hasFeature(plan, "review_funnel")) {
+    throw upgradeError("Review Funnel");
+  }
+}
+
 export async function assertCanUseBranding(
   userId: string
 ): Promise<void> {

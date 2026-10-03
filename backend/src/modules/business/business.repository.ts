@@ -189,6 +189,8 @@ export class BusinessRepository {
             whatsapp: true,
             externalReviewUrl:
               true,
+            reviewFunnelEnabled:
+              true,
             addressLine1:
               true,
             addressLine2:
@@ -513,6 +515,30 @@ export class BusinessRepository {
                 : data.whatsapp === null
                   ? null
                   : undefined,
+          }
+        : {}),
+
+      ...(data.externalReviewUrl !== undefined
+        ? {
+            externalReviewUrl:
+              typeof data.externalReviewUrl ===
+              "string"
+                ? data.externalReviewUrl
+                : data.externalReviewUrl ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
+      ...(data.reviewFunnelEnabled !==
+      undefined
+        ? {
+            reviewFunnelEnabled:
+              typeof data.reviewFunnelEnabled ===
+              "boolean"
+                ? data.reviewFunnelEnabled
+                : undefined,
           }
         : {}),
 
