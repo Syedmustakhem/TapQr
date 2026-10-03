@@ -195,6 +195,10 @@ export class BusinessRepository {
             specialsTitle: true,
             specialsDescription: true,
             specialsValidUntil: true,
+            loyaltyCardEnabled: true,
+            loyaltyCardTitle: true,
+            loyaltyStampsRequired: true,
+            loyaltyRewardDescription: true,
             addressLine1:
               true,
             addressLine2:
@@ -600,6 +604,59 @@ export class BusinessRepository {
           }
         : {}),
 
+      ...(data.loyaltyCardEnabled !==
+      undefined
+        ? {
+            loyaltyCardEnabled:
+              typeof data.loyaltyCardEnabled ===
+              "boolean"
+                ? data.loyaltyCardEnabled
+                : undefined,
+          }
+        : {}),
+
+      ...(data.loyaltyCardTitle !==
+      undefined
+        ? {
+            loyaltyCardTitle:
+              typeof data.loyaltyCardTitle ===
+              "string"
+                ? data.loyaltyCardTitle
+                : data.loyaltyCardTitle ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
+      ...(data.loyaltyStampsRequired !==
+      undefined
+        ? {
+            loyaltyStampsRequired:
+              typeof data.loyaltyStampsRequired ===
+              "number"
+                ? data.loyaltyStampsRequired
+                : data.loyaltyStampsRequired ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
+      ...(data.loyaltyRewardDescription !==
+      undefined
+        ? {
+            loyaltyRewardDescription:
+              typeof data.loyaltyRewardDescription ===
+              "string"
+                ? data.loyaltyRewardDescription
+                : data.loyaltyRewardDescription ===
+                    null
+                  ? null
+                  : undefined,
+          }
+        : {}),
+
       ...(data.addressLine1 !== undefined
         ? {
             addressLine1:
@@ -735,7 +792,6 @@ export class BusinessRepository {
 
       data: {
         deletedAt: new Date(),
-        status: "INACTIVE",
       },
     });
   }

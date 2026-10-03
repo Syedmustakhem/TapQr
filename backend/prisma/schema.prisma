@@ -309,17 +309,21 @@ model BusinessProfile {
   externalReviewUrl String?
 
   // Pro: Review Funnel — star-first rating gate on the scan experience.
-  reviewFunnelEnabled Boolean @default(false)
-// Pro: Today's Specials Banner — promotional strip on the scan experience.
-  specialsBannerEnabled Boolean  @default(false)
-  specialsTitle         String?
-  specialsDescription   String?
-  specialsValidUntil    DateTime?
+  reviewFunnelEnabled      Boolean   @default(false)
+  // Pro: Today's Specials Banner — promotional strip on the scan experience.
+  specialsBannerEnabled    Boolean   @default(false)
+  specialsTitle            String?
+  specialsDescription      String?
+  specialsValidUntil       DateTime?
+  loyaltyCardEnabled       Boolean   @default(false)
+  loyaltyCardTitle         String?
+  loyaltyStampsRequired    Int?
+  loyaltyRewardDescription String?
   // Public contact
-  website  String?
-  email    String?
-  phone    String?
-  whatsapp String?
+  website                  String?
+  email                    String?
+  phone                    String?
+  whatsapp                 String?
 
   // Physical location
   addressLine1 String?

@@ -90,6 +90,10 @@ specialsBannerEnabled?: boolean;
     specialsTitle?: string | null;
     specialsDescription?: string | null;
     specialsValidUntil?: string | null;
+      loyaltyCardEnabled?: boolean;
+    loyaltyCardTitle?: string | null;
+    loyaltyStampsRequired?: number | null;
+    loyaltyRewardDescription?: string | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
 
