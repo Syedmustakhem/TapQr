@@ -10,6 +10,7 @@ export interface CreateReviewInput {
   rating: number;
   title?: string | null;
   comment?: string | null;
+  isPrivateFeedback?: boolean;
   verificationToken?: string | null;
 }
 

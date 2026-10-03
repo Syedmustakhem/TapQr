@@ -333,6 +333,12 @@ export const updateBusinessProfileSchema = z
 
     whatsapp: nullablePhone,
 
+    externalReviewUrl: nullableUrl,
+
+    reviewFunnelEnabled: z
+      .boolean()
+      .optional(),
+
     addressLine1: nullableText(200),
 
     addressLine2: nullableText(200),

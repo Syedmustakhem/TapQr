@@ -182,6 +182,9 @@ export class ReviewsService {
       title: data.title ?? null,
       comment: data.comment ?? null,
       isVerified: verified,
+      isPrivateFeedback:
+        data.isPrivateFeedback ??
+        false,
       verifiedAt,
     });
 

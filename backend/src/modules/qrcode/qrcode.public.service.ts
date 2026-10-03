@@ -845,6 +845,11 @@ intent: qrIntent,
                   business.profile
                     .externalReviewUrl,
 
+                    reviewFunnelEnabled:
+                  business.profile
+                    .reviewFunnelEnabled ??
+                  false,
+
                 address: {
                   line1:
                     business.profile

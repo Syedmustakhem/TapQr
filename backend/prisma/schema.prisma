@@ -93,7 +93,7 @@ model Plan {
   maxQrs         Int      @default(1)
   maxBusinesses  Int      @default(1)
   maxSeats       Int      @default(1)
-  features       Json     @default("[]") // ["smart_rules","branding","advanced_analytics","campaigns"]
+  features       Json     @default("[]") // ["smart_rules","branding","advanced_analytics","campaigns","agent_os"]
   razorpayPlanId String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -308,6 +308,9 @@ model BusinessProfile {
   description       String?
   externalReviewUrl String?
 
+  // Pro: Review Funnel — star-first rating gate on the scan experience.
+  reviewFunnelEnabled Boolean @default(false)
+
   // Public contact
   website  String?
   email    String?
@@ -428,6 +431,10 @@ model Review {
 
   title   String?
   comment String?
+
+  // True when submitted through the funnel's low-rating (private) path.
+  // Never shown on the public review list.
+  isPrivateFeedback Boolean @default(false)
 
   status ReviewStatus @default(PENDING)
 

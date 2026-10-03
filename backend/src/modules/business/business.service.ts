@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import {
   BusinessRepository,
 } from "./business.repository";
-
+import { assertCanUseReviewFunnel } from "../billing/entitlements";
 import {
   CreateBusinessDTO,
   UpdateBusinessDTO,
@@ -487,7 +487,16 @@ async getPublicBySlug(
       ownerId,
       businessId
     );
-
+if (
+      data.reviewFunnelEnabled ===
+        true ||
+      data.externalReviewUrl !==
+        undefined
+    ) {
+      await assertCanUseReviewFunnel(
+        ownerId
+      );
+    }
     const profileData:
       Prisma.BusinessProfileUpdateInput =
       {};
@@ -528,6 +537,19 @@ async getPublicBySlug(
         );
     }
 
+    if (
+      "externalReviewUrl" in data
+    ) {
+      profileData.externalReviewUrl =
+        data.externalReviewUrl;
+    }
+
+    if (
+      "reviewFunnelEnabled" in data
+    ) {
+      profileData.reviewFunnelEnabled =
+        data.reviewFunnelEnabled;
+    }
     if ("addressLine1" in data) {
       profileData.addressLine1 =
         data.addressLine1;

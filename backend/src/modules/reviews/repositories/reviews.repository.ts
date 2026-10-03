@@ -14,6 +14,7 @@ const publicReviewSelect = {
   isVerified: true,
   verifiedAt: true,
   ownerResponse: true,
+   isPrivateFeedback: true,
   respondedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -102,6 +103,7 @@ export class ReviewsRepository {
     title?: string | null;
     comment?: string | null;
     isVerified: boolean;
+    isPrivateFeedback?: boolean;
     verifiedAt?: Date | null;
   }) {
     return prisma.review.create({
@@ -114,6 +116,7 @@ export class ReviewsRepository {
     const where: Prisma.ReviewWhereInput = {
       businessId,
       status: ReviewStatus.PUBLISHED,
+      isPrivateFeedback: false,
     };
     const skip = (page - 1) * limit;
 
