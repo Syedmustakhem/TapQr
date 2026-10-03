@@ -9,7 +9,7 @@ import {
   UpdateBusinessDTO,
   UpdateBusinessProfileDTO,
 } from "./business.types";
-
+import { assertCanUseSpecialsBanner } from "../billing/entitlements";
 import { AppError } from "../../cores/errors/AppError";
 
 function slugify(
@@ -496,6 +496,20 @@ if (
       await assertCanUseReviewFunnel(
         ownerId
       );
+      if (
+      data.specialsBannerEnabled ===
+        true ||
+      data.specialsTitle !==
+        undefined ||
+      data.specialsDescription !==
+        undefined ||
+      data.specialsValidUntil !==
+        undefined
+    ) {
+      await assertCanUseSpecialsBanner(
+        ownerId
+      );
+    }
     }
     const profileData:
       Prisma.BusinessProfileUpdateInput =
@@ -549,6 +563,33 @@ if (
     ) {
       profileData.reviewFunnelEnabled =
         data.reviewFunnelEnabled;
+    }
+    if (
+      "specialsBannerEnabled" in data
+    ) {
+      profileData.specialsBannerEnabled =
+        data.specialsBannerEnabled;
+    }
+
+    if (
+      "specialsTitle" in data
+    ) {
+      profileData.specialsTitle =
+        data.specialsTitle;
+    }
+
+    if (
+      "specialsDescription" in data
+    ) {
+      profileData.specialsDescription =
+        data.specialsDescription;
+    }
+
+    if (
+      "specialsValidUntil" in data
+    ) {
+      profileData.specialsValidUntil =
+        data.specialsValidUntil ?? null;
     }
     if ("addressLine1" in data) {
       profileData.addressLine1 =

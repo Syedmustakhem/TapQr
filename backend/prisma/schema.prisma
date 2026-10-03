@@ -310,7 +310,11 @@ model BusinessProfile {
 
   // Pro: Review Funnel — star-first rating gate on the scan experience.
   reviewFunnelEnabled Boolean @default(false)
-
+// Pro: Today's Specials Banner — promotional strip on the scan experience.
+  specialsBannerEnabled Boolean  @default(false)
+  specialsTitle         String?
+  specialsDescription   String?
+  specialsValidUntil    DateTime?
   // Public contact
   website  String?
   email    String?
