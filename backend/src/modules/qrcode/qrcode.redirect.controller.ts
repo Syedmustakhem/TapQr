@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { QRCodePublicService } from "./qrcode.public.service";
+import { resolveGeoLocation } from "../../utils/geoip";
 
 export class QRCodeRedirectController {
+
   private readonly service = new QRCodePublicService();
 
   redirect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -14,9 +16,17 @@ export class QRCodeRedirectController {
         ? forwardedFor.split(",")[0]?.trim() || req.ip || undefined
         : req.ip || undefined;
 
-      await this.service.recordScan(shortCode, {
-        ipAddress,
-        userAgent: req.get("user-agent") || undefined,
+      const geo = await resolveGeoLocation(
+  req.headers as Record<string, unknown>,
+  ipAddress
+);
+
+await this.service.recordScan(shortCode, {
+  ipAddress,
+  country: geo.country,
+  city: geo.city,
+  userAgent: req.get("user-agent") || undefined,
+
         referrer: req.get("referer") || undefined,
         browser: req.get("sec-ch-ua") || undefined,
         device: req.get("sec-ch-ua-mobile") || undefined,

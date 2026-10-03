@@ -19,7 +19,12 @@ export interface RecordScanInput {
 
   ipAddress?: string;
 
-  userAgent?: string;
+country?: string;
+
+city?: string;
+
+userAgent?: string;
+
 
   referrer?: string;
 

@@ -213,13 +213,25 @@ export class AnalyticsService {
         },
 
         scansByDay:
-          this.buildDailySeries(
-            [],
-            startDate,
-            endDate
-          ),
+  this.buildDailySeries(
+    [],
+    startDate,
+    endDate
+  ),
 
-        conversionAnalytics: {
+/*
+ * Alias for the analytics dashboard page,
+ * which reads `dailySeries`.
+ */
+dailySeries:
+  this.buildDailySeries(
+    [],
+    startDate,
+    endDate
+  ),
+
+conversionAnalytics: {
+
           timeline:
             this.buildConversionDailySeries(
               [],
@@ -238,15 +250,23 @@ export class AnalyticsService {
         qrPerformance: [],
 
         locations: {
-          countries: [],
-          cities: [],
-        },
+  countries: [],
+  cities: [],
+},
 
-        technology: {
-          devices: [],
-          browsers: [],
-          operatingSystems: [],
-        },
+cities: [],
+countries: [],
+
+technology: {
+  devices: [],
+  browsers: [],
+  operatingSystems: [],
+},
+
+devices: [],
+browsers: [],
+operatingSystems: [],
+
 
         referrers: [],
 
@@ -692,17 +712,43 @@ export class AnalyticsService {
             })
           ),
 
-        countries:
-          countries.map(
-            (item) => ({
-              name:
-                item.country,
+          countries:
+    countries.map(
+      (item) => ({
+        name:
+          item.country,
 
-              scans:
-                item._count._all,
-            })
-          ),
-      },
+        scans:
+          item._count._all,
+      })
+    ),
+},
+
+cities:
+  cities.map(
+    (item) => ({
+      name:
+        item.city,
+
+      scans:
+        item._count._all,
+    })
+  ),
+
+countries:
+  countries.map(
+    (item) => ({
+      name:
+        item.country,
+
+      scans:
+        item._count._all,
+    })
+  ),
+
+/*
+ * Technology.
+
 
       /*
        * Technology.
@@ -730,17 +776,55 @@ export class AnalyticsService {
             })
           ),
 
-        operatingSystems:
-          operatingSystems.map(
-            (item) => ({
-              name:
-                item.operatingSystem,
+          operatingSystems:
+    operatingSystems.map(
+      (item) => ({
+        name:
+          item.operatingSystem,
 
-              scans:
-                item._count._all,
-            })
-          ),
-      },
+        scans:
+          item._count._all,
+      })
+    ),
+},
+
+devices:
+  devices.map(
+    (item) => ({
+      name:
+        item.device,
+
+      scans:
+        item._count._all,
+    })
+  ),
+
+browsers:
+  browsers.map(
+    (item) => ({
+      name:
+        item.browser,
+
+      scans:
+        item._count._all,
+    })
+  ),
+
+operatingSystems:
+  operatingSystems.map(
+    (item) => ({
+      name:
+        item.operatingSystem,
+
+      scans:
+        item._count._all,
+    })
+  ),
+
+/*
+ * Traffic sources.
+ */
+
 
       /*
        * Traffic sources.

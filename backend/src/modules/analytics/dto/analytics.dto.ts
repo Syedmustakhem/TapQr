@@ -55,7 +55,10 @@ export interface RecentScanDTO {
 
   qrCodeId: string;
 
-  city: string | null;
+ipAddress: string | null;
+
+city: string | null;
+
 
   country: string | null;
 
@@ -77,21 +80,47 @@ export interface BusinessAnalyticsDTO {
 
   scansByDay: DailyScanDTO[];
 
-  qrPerformance: QRPerformanceDTO[];
+/*
+ * Alias of scansByDay for the analytics
+ * dashboard page.
+ */
+dailySeries: DailyScanDTO[];
+
+qrPerformance: QRPerformanceDTO[];
+
 
   locations: {
-    cities: AnalyticsLocationDTO[];
+  cities: AnalyticsLocationDTO[];
 
-    countries: AnalyticsLocationDTO[];
-  };
+  countries: AnalyticsLocationDTO[];
+};
 
-  technology: {
-    devices: AnalyticsTechnologyDTO[];
+/*
+ * Top-level aliases of locations.* for the
+ * analytics dashboard page.
+ */
+cities: AnalyticsLocationDTO[];
 
-    browsers: AnalyticsTechnologyDTO[];
+countries: AnalyticsLocationDTO[];
 
-    operatingSystems: AnalyticsTechnologyDTO[];
-  };
+technology: {
+  devices: AnalyticsTechnologyDTO[];
 
-  recentScans: RecentScanDTO[];
+  browsers: AnalyticsTechnologyDTO[];
+
+  operatingSystems: AnalyticsTechnologyDTO[];
+};
+
+/*
+ * Top-level aliases of technology.* for the
+ * analytics dashboard page.
+ */
+devices: AnalyticsTechnologyDTO[];
+
+browsers: AnalyticsTechnologyDTO[];
+
+operatingSystems: AnalyticsTechnologyDTO[];
+
+recentScans: RecentScanDTO[];
+
 }

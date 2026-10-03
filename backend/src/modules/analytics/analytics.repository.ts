@@ -28,11 +28,18 @@ export class AnalyticsRepository {
               qrCodeId:
                 data.qrCodeId,
 
-              ipAddress:
-                data.ipAddress,
+             ipAddress:
+  data.ipAddress,
 
-              userAgent:
-                data.userAgent,
+country:
+  data.country,
+
+city:
+  data.city,
+
+userAgent:
+  data.userAgent,
+
 
               referrer:
                 data.referrer,
@@ -884,9 +891,12 @@ export class AnalyticsRepository {
 
         qrCodeId: true,
 
-        city: true,
+ipAddress: true,
 
-        country: true,
+city: true,
+
+country: true,
+
 
         device: true,
 

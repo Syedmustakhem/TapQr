@@ -1100,8 +1100,11 @@ export class QRCodePublicService {
   async recordScan(
     shortCode: string,
     data: {
-      ipAddress?: string;
-      userAgent?: string;
+  ipAddress?: string;
+  country?: string;
+  city?: string;
+  userAgent?: string;
+
       referrer?: string;
       browser?: string;
       device?: string;
@@ -1167,10 +1170,17 @@ export class QRCodePublicService {
           qrCode.id,
 
         ipAddress:
-          data.ipAddress,
+  data.ipAddress,
 
-        userAgent:
-          data.userAgent,
+country:
+  data.country,
+
+city:
+  data.city,
+
+userAgent:
+  data.userAgent,
+
 
         referrer:
           data.referrer,
