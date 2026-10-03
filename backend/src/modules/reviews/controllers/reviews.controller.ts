@@ -65,9 +65,12 @@ export class ReviewsController {
         reviewerEmail: input.reviewerEmail ?? null,
         rating: input.rating,
         title: input.title ?? null,
-        comment: input.comment ?? null,
-        verificationToken:
-          input.verificationToken ?? null,
+comment: input.comment ?? null,
+isPrivateFeedback:
+  input.isPrivateFeedback ?? false,
+verificationToken:
+  input.verificationToken ?? null,
+
       });
 
       return ResponseHandler.created(

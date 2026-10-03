@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from "express";
 
 import { QRCodePublicService } from "./qrcode.public.service";
 
+import { resolveGeoLocation } from "../../utils/geoip";
+
 export class QRCodePublicController {
+
   private readonly service = new QRCodePublicService();
 
   /**
@@ -98,18 +101,36 @@ export class QRCodePublicController {
         ipAddress =
           forwardedFor[0]?.trim() ||
           undefined;
-      } else {
-        ipAddress =
-          req.ip || undefined;
-      }
+     } else {
+  ipAddress =
+    req.ip || undefined;
+}
 
-      const result =
-        await this.service.recordScan(
-          shortCode,
-          {
-            ipAddress,
+/*
+ * Country / city for the analytics dashboard.
+ * Never throws; degrades to undefined.
+ */
+const geo =
+  await resolveGeoLocation(
+    req.headers as Record<
+      string,
+      unknown
+    >,
+    ipAddress
+  );
 
-            userAgent:
+const result =
+  await this.service.recordScan(
+    shortCode,
+    {
+      ipAddress,
+
+      country: geo.country,
+
+      city: geo.city,
+
+      userAgent:
+
               req.get("user-agent") ||
               undefined,
 
