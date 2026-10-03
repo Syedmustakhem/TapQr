@@ -3,15 +3,17 @@ import { Prisma } from "@prisma/client";
 import {
   BusinessRepository,
 } from "./business.repository";
-import { assertCanUseReviewFunnel } from "../billing/entitlements";
+import {
+  assertCanUseReviewFunnel,
+  assertCanUseSpecialsBanner,
+  assertCanUseLoyaltyCard,
+} from "../billing/entitlements";
 import {
   CreateBusinessDTO,
   UpdateBusinessDTO,
   UpdateBusinessProfileDTO,
 } from "./business.types";
-import { assertCanUseSpecialsBanner } from "../billing/entitlements";
 import { AppError } from "../../cores/errors/AppError";
-
 function slugify(
   value: string
 ): string {
@@ -487,7 +489,8 @@ async getPublicBySlug(
       ownerId,
       businessId
     );
-if (
+
+    if (
       data.reviewFunnelEnabled ===
         true ||
       data.externalReviewUrl !==
@@ -496,7 +499,9 @@ if (
       await assertCanUseReviewFunnel(
         ownerId
       );
-      if (
+    }
+
+    if (
       data.specialsBannerEnabled ===
         true ||
       data.specialsTitle !==
@@ -510,6 +515,20 @@ if (
         ownerId
       );
     }
+
+    if (
+      data.loyaltyCardEnabled ===
+        true ||
+      data.loyaltyCardTitle !==
+        undefined ||
+      data.loyaltyStampsRequired !==
+        undefined ||
+      data.loyaltyRewardDescription !==
+        undefined
+    ) {
+      await assertCanUseLoyaltyCard(
+        ownerId
+      );
     }
     const profileData:
       Prisma.BusinessProfileUpdateInput =
@@ -590,6 +609,33 @@ if (
     ) {
       profileData.specialsValidUntil =
         data.specialsValidUntil ?? null;
+    }
+    if (
+      "loyaltyCardEnabled" in data
+    ) {
+      profileData.loyaltyCardEnabled =
+        data.loyaltyCardEnabled;
+    }
+
+    if (
+      "loyaltyCardTitle" in data
+    ) {
+      profileData.loyaltyCardTitle =
+        data.loyaltyCardTitle;
+    }
+
+    if (
+      "loyaltyStampsRequired" in data
+    ) {
+      profileData.loyaltyStampsRequired =
+        data.loyaltyStampsRequired;
+    }
+
+    if (
+      "loyaltyRewardDescription" in data
+    ) {
+      profileData.loyaltyRewardDescription =
+        data.loyaltyRewardDescription;
     }
     if ("addressLine1" in data) {
       profileData.addressLine1 =

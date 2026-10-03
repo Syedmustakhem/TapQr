@@ -174,6 +174,19 @@ export async function assertCanUseSpecialsBanner(
     );
   }
 }
+export async function assertCanUseLoyaltyCard(
+  userId: string
+): Promise<void> {
+  const plan = await getEffectivePlan(
+    userId
+  );
+
+  if (!hasFeature(plan, "loyalty_card")) {
+    throw upgradeError(
+      "Digital Loyalty Card"
+    );
+  }
+}
 export async function assertCanUseBranding(
   userId: string
 ): Promise<void> {

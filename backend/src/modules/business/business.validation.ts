@@ -351,6 +351,22 @@ export const updateBusinessProfileSchema = z
       .datetime({ offset: true })
       .nullable()
       .optional(),
+      loyaltyCardEnabled: z
+      .boolean()
+      .optional(),
+
+    loyaltyCardTitle: nullableText(80),
+
+    loyaltyStampsRequired: z
+      .number()
+      .int()
+      .min(2)
+      .max(30)
+      .nullable()
+      .optional(),
+
+    loyaltyRewardDescription:
+      nullableText(200),
     addressLine1: nullableText(200),
 
     addressLine2: nullableText(200),

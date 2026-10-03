@@ -178,24 +178,25 @@ export class QRCodePublicService {
     }
 
     return true;
-  }private buildWhatsAppUrl(
-  whatsappNumber: string | null | undefined,
-  shortCode: string
-): string | null {
-  if (!whatsappNumber) {
-    return null;
   }
+  private buildWhatsAppUrl(
+    whatsappNumber: string | null | undefined,
+    shortCode: string
+  ): string | null {
+    if (!whatsappNumber) {
+      return null;
+    }
 
-  const phoneNumber = whatsappNumber.replace(/\D/g, "");
+    const phoneNumber = whatsappNumber.replace(/\D/g, "");
 
-  if (!phoneNumber) {
-    return null;
+    if (!phoneNumber) {
+      return null;
+    }
+
+    const message = `TapQR QR:${shortCode}`;
+
+    return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
   }
-
-  const message = `TapQR QR:${shortCode}`;
-
-  return `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-}
   /**
    * ============================================================
    * GET PUBLIC QR EXPERIENCE
@@ -241,7 +242,7 @@ export class QRCodePublicService {
      * ==========================================================
      */
 
-        const baseQR =
+    const baseQR =
       await prisma.qRCode.findUnique({
         where: {
           shortCode: code,
@@ -341,7 +342,7 @@ export class QRCodePublicService {
         : null;
     /**
      * ==========================================================
-     * STEP 2 — LOAD BUSINESS ROUTING DATA
+     * STEP 3 — LOAD BUSINESS ROUTING DATA
      * ==========================================================
      */
 
@@ -374,7 +375,7 @@ export class QRCodePublicService {
 
     /**
      * ==========================================================
-     * STEP 3 — BUILD SMART ROUTING CONTEXT
+     * STEP 4 — BUILD SMART ROUTING CONTEXT
      * ==========================================================
      */
 
@@ -387,7 +388,7 @@ export class QRCodePublicService {
       | null = null;
 
     try {
-           const routingContext =
+      const routingContext =
         buildQRRoutingContext({
           req,
 
@@ -459,7 +460,7 @@ export class QRCodePublicService {
 
     /**
      * ==========================================================
-     * STEP 4 — RESOLVE FINAL EXPERIENCE
+     * STEP 5 — RESOLVE FINAL EXPERIENCE
      * ==========================================================
      */
 
@@ -479,7 +480,7 @@ export class QRCodePublicService {
     if (
       routingResult &&
       routingResult.status ===
-        "MATCHED" &&
+        QRRuleMatchStatus.MATCHED &&
       routingResult.action
     ) {
       const action =
@@ -569,22 +570,22 @@ export class QRCodePublicService {
           break;
       }
     }
-/**
- * ============================================================
- * QR INTENT DETECTION
- * ============================================================
- */
+    /**
+     * ============================================================
+     * QR INTENT DETECTION
+     * ============================================================
+     */
 
-const qrIntent = qrIntentService.detectIntent({
-  experienceType: resolvedExperienceType,
-  sourceType: baseQR.sourceType,
-  placementLabel: baseQR.placementLabel,
-  locationLabel: baseQR.locationLabel,
-  campaignName: activeCampaignName,
-});
+    const qrIntent = qrIntentService.detectIntent({
+      experienceType: resolvedExperienceType,
+      sourceType: baseQR.sourceType,
+      placementLabel: baseQR.placementLabel,
+      locationLabel: baseQR.locationLabel,
+      campaignName: activeCampaignName,
+    });
     /**
      * ==========================================================
-     * STEP 5 — DETERMINE CATALOG
+     * STEP 6 — DETERMINE CATALOG
      * ==========================================================
      */
 
@@ -602,7 +603,7 @@ const qrIntent = qrIntentService.detectIntent({
 
     /**
      * ==========================================================
-     * STEP 6 — LOAD FULL PUBLIC EXPERIENCE
+     * STEP 7 — LOAD FULL PUBLIC EXPERIENCE
      * ==========================================================
      */
 
@@ -659,19 +660,19 @@ const qrIntent = qrIntentService.detectIntent({
 
     const business =
       qrCode.business;
-const whatsappNumber =
-  business.profile?.whatsapp ??
-  business.whatsapp ??
-  null;
+    const whatsappNumber =
+      business.profile?.whatsapp ??
+      business.whatsapp ??
+      null;
 
-const whatsappUrl =
-  this.buildWhatsAppUrl(
-    whatsappNumber,
-    qrCode.shortCode
-  );
+    const whatsappUrl =
+      this.buildWhatsAppUrl(
+        whatsappNumber,
+        qrCode.shortCode
+      );
     /**
      * ==========================================================
-     * STEP 7 — PUBLIC RESPONSE
+     * STEP 8 — PUBLIC RESPONSE
      * ==========================================================
      */
 
@@ -747,9 +748,9 @@ const whatsappUrl =
        * The complete evaluator trace is never
        * exposed to the public client.
        */
-     routing: routingMetadata,
+      routing: routingMetadata,
 
-intent: qrIntent,
+      intent: qrIntent,
 
       branding:
         qrCode.branding
@@ -813,7 +814,7 @@ intent: qrIntent,
 
         description:
           business.description,
-  whatsappUrl,
+        whatsappUrl,
         profile:
           business.profile
             ? {
@@ -845,11 +846,12 @@ intent: qrIntent,
                   business.profile
                     .externalReviewUrl,
 
-                    reviewFunnelEnabled:
+                reviewFunnelEnabled:
                   business.profile
                     .reviewFunnelEnabled ??
                   false,
-                  specialsBannerEnabled:
+
+                specialsBannerEnabled:
                   business.profile
                     .specialsBannerEnabled ??
                   false,
@@ -867,6 +869,24 @@ intent: qrIntent,
                     .specialsValidUntil
                     ? business.profile.specialsValidUntil.toISOString()
                     : null,
+
+                loyaltyCardEnabled:
+                  business.profile
+                    .loyaltyCardEnabled ??
+                  false,
+
+                loyaltyCardTitle:
+                  business.profile
+                    .loyaltyCardTitle,
+
+                loyaltyStampsRequired:
+                  business.profile
+                    .loyaltyStampsRequired ??
+                  10,
+
+                loyaltyRewardDescription:
+                  business.profile
+                    .loyaltyRewardDescription,
 
                 address: {
                   line1:
