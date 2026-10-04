@@ -8,6 +8,7 @@ import {
   assertCanUseSpecialsBanner,
   assertCanUseLoyaltyCard,
   assertCanUseWhatsAppOrdering,
+  assertCanUseUpiPay,
 } from "../billing/entitlements";
 import {
   CreateBusinessDTO,
@@ -540,6 +541,14 @@ async getPublicBySlug(
         ownerId
       );
     }
+    if (
+      data.upiPayEnabled ===
+      true
+    ) {
+      await assertCanUseUpiPay(
+        ownerId
+      );
+    }
     const profileData:
       Prisma.BusinessProfileUpdateInput =
       {};
@@ -632,6 +641,35 @@ async getPublicBySlug(
     ) {
       profileData.whatsappOrderingEnabled =
         data.whatsappOrderingEnabled;
+    }
+
+    if (
+      "upiPayEnabled" in data
+    ) {
+      profileData.upiPayEnabled =
+        data.upiPayEnabled;
+    }
+
+    if (
+      "upiVpa" in data
+    ) {
+      profileData.upiVpa =
+        data.upiVpa ?? null;
+    }
+
+    if (
+      "upiPayeeName" in data
+    ) {
+      profileData.upiPayeeName =
+        data.upiPayeeName ?? null;
+    }
+
+    if (
+      "upiPresetAmounts" in data
+    ) {
+      profileData.upiPresetAmounts =
+        (data.upiPresetAmounts as unknown as Prisma.InputJsonValue) ??
+        null;
     }
 
     if (

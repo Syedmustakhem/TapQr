@@ -323,6 +323,10 @@ model BusinessProfile {
   loyaltyRewardDescription   String?
   // Pro: Scan-to-WhatsApp Ordering — order cart via WhatsApp.
   whatsappOrderingEnabled    Boolean   @default(false)
+  upiPayEnabled              Boolean   @default(false)
+  upiVpa                     String?
+  upiPayeeName               String?
+  upiPresetAmounts           Json?
   // Pro: Appointment Booking — bookable services on the scan experience.
   // Modes: APPOINTMENT | TABLE | ORDER | TOKEN | EVENT | RENTAL
   appointmentBookingEnabled  Boolean   @default(false)

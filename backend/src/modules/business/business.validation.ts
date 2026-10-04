@@ -359,6 +359,34 @@ export const updateBusinessProfileSchema = z
       .boolean()
       .optional(),
 
+      upiPayEnabled: z
+      .boolean()
+      .optional(),
+
+      upiVpa: z
+      .string()
+      .trim()
+      .max(100)
+      .regex(
+        /^[\w.\-]{2,256}@[a-zA-Z]{2,64}$/,
+        "Enter a valid UPI ID (e.g. name@upi)."
+      )
+      .nullable()
+      .optional(),
+
+      upiPayeeName: z
+      .string()
+      .trim()
+      .max(80)
+      .nullable()
+      .optional(),
+
+      upiPresetAmounts: z
+      .array(z.number().int().min(1).max(1000000))
+      .max(6)
+      .nullable()
+      .optional(),
+
     loyaltyCardTitle: nullableText(80),
 
     loyaltyStampsRequired: z

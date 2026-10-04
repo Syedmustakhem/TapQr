@@ -95,6 +95,10 @@ specialsBannerEnabled?: boolean;
     loyaltyStampsRequired?: number | null;
     loyaltyRewardDescription?: string | null;
     whatsappOrderingEnabled?: boolean;
+    upiPayEnabled?: boolean;
+    upiVpa?: string | null;
+    upiPayeeName?: string | null;
+    upiPresetAmounts?: number[] | null;
   addressLine1?: string | null;
   addressLine2?: string | null;
 
