@@ -282,6 +282,8 @@ model Business {
   reviews       Review[]
   reviewReports ReviewReport[]
 
+  appointments Appointment[]
+
   campaigns Campaign[]
 
   @@index([ownerId])
@@ -309,21 +311,33 @@ model BusinessProfile {
   externalReviewUrl String?
 
   // Pro: Review Funnel — star-first rating gate on the scan experience.
-  reviewFunnelEnabled      Boolean   @default(false)
+  reviewFunnelEnabled        Boolean   @default(false)
   // Pro: Today's Specials Banner — promotional strip on the scan experience.
-  specialsBannerEnabled    Boolean   @default(false)
-  specialsTitle            String?
-  specialsDescription      String?
-  specialsValidUntil       DateTime?
-  loyaltyCardEnabled       Boolean   @default(false)
-  loyaltyCardTitle         String?
-  loyaltyStampsRequired    Int?
-  loyaltyRewardDescription String?
+  specialsBannerEnabled      Boolean   @default(false)
+  specialsTitle              String?
+  specialsDescription        String?
+  specialsValidUntil         DateTime?
+  loyaltyCardEnabled         Boolean   @default(false)
+  loyaltyCardTitle           String?
+  loyaltyStampsRequired      Int?
+  loyaltyRewardDescription   String?
+  // Pro: Scan-to-WhatsApp Ordering — order cart via WhatsApp.
+  whatsappOrderingEnabled    Boolean   @default(false)
+  // Pro: Appointment Booking — bookable services on the scan experience.
+  // Modes: APPOINTMENT | TABLE | ORDER | TOKEN | EVENT | RENTAL
+  appointmentBookingEnabled  Boolean   @default(false)
+  appointmentBookingMode     String    @default("APPOINTMENT")
+  appointmentServices        Json?
+  appointmentEvents          Json?
+  appointmentSlotMinutes     Int?
+  appointmentAdvanceDays     Int?
+  appointmentMaxPartySize    Int?
+  appointmentMaxTokensPerDay Int?
   // Public contact
-  website                  String?
-  email                    String?
-  phone                    String?
-  whatsapp                 String?
+  website                    String?
+  email                      String?
+  phone                      String?
+  whatsapp                   String?
 
   // Physical location
   addressLine1 String?
@@ -480,6 +494,68 @@ model Review {
   @@index([userId])
   @@index([status])
   @@index([isVerified])
+}
+
+// ============================================================
+// APPOINTMENTS
+// Pro: Appointment Booking — slots booked by scanners.
+// ============================================================
+
+model Appointment {
+  id String @id @default(cuid())
+
+  businessId String
+
+  // Booking mode: APPOINTMENT | TABLE | ORDER | TOKEN | EVENT | RENTAL
+  mode String @default("APPOINTMENT")
+
+  // References the service id inside BusinessProfile.appointmentServices (JSON).
+  // For EVENT mode: references the event id in appointmentEvents.
+  serviceId   String?
+  serviceName String
+
+  // Calendar date of the appointment (date part only).
+  date DateTime @db.Date
+
+  // For RENTAL mode: end of the rental period (date part only).
+  endDate DateTime? @db.Date
+
+  // "HH:mm" 24-hour strings (APPOINTMENT / TABLE modes).
+  startTime String?
+  endTime   String?
+
+  // TABLE mode: number of guests. EVENT mode: number of seats.
+  partySize Int?
+
+  // TOKEN mode: queue number for the day.
+  tokenNumber Int?
+
+  // ORDER mode: [{id, name, quantity, price}].
+  // TABLE mode: pre-ordered food [{id, name, quantity, price}].
+  items Json?
+
+  customerName  String
+  customerPhone String
+  note          String?
+
+  status AppointmentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([businessId, date])
+  @@index([businessId, status])
+  @@index([businessId, mode])
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }
 
 // ============================================================

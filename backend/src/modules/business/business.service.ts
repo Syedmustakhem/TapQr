@@ -7,6 +7,7 @@ import {
   assertCanUseReviewFunnel,
   assertCanUseSpecialsBanner,
   assertCanUseLoyaltyCard,
+  assertCanUseWhatsAppOrdering,
 } from "../billing/entitlements";
 import {
   CreateBusinessDTO,
@@ -530,6 +531,15 @@ async getPublicBySlug(
         ownerId
       );
     }
+
+    if (
+      data.whatsappOrderingEnabled ===
+      true
+    ) {
+      await assertCanUseWhatsAppOrdering(
+        ownerId
+      );
+    }
     const profileData:
       Prisma.BusinessProfileUpdateInput =
       {};
@@ -615,6 +625,13 @@ async getPublicBySlug(
     ) {
       profileData.loyaltyCardEnabled =
         data.loyaltyCardEnabled;
+    }
+
+    if (
+      "whatsappOrderingEnabled" in data
+    ) {
+      profileData.whatsappOrderingEnabled =
+        data.whatsappOrderingEnabled;
     }
 
     if (

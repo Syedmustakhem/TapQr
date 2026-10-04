@@ -38,6 +38,7 @@ import {
 
 import reviewsRoutes from "./modules/reviews/routes/reviews.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
+import appointmentsRoutes from "./modules/appointments/appointments.routes";
 
 import qrExperimentsRoutes from "./modules/qr-experiments/qr-experiments.routes";
 
@@ -267,6 +268,11 @@ app.use(
 app.use(
   "/api/reviews",
   reviewsRoutes
+);
+
+app.use(
+  "/api/appointments",
+  appointmentsRoutes
 );
 
 /*

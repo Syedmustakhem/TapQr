@@ -888,6 +888,46 @@ export class QRCodePublicService {
                   business.profile
                     .loyaltyRewardDescription,
 
+                whatsappOrderingEnabled:
+                  business.profile
+                    .whatsappOrderingEnabled ??
+                  false,
+
+                appointmentBookingEnabled:
+                  business.profile
+                    .appointmentBookingEnabled ??
+                  false,
+
+                appointmentBookingMode:
+                  business.profile
+                    .appointmentBookingMode ??
+                  "APPOINTMENT",
+
+                appointmentServices:
+                  business.profile
+                    .appointmentServices ??
+                  [],
+
+                appointmentEvents:
+                  business.profile
+                    .appointmentEvents ??
+                  [],
+
+                appointmentSlotMinutes:
+                  business.profile
+                    .appointmentSlotMinutes ??
+                  30,
+
+                appointmentAdvanceDays:
+                  business.profile
+                    .appointmentAdvanceDays ??
+                  14,
+
+                appointmentMaxPartySize:
+                  business.profile
+                    .appointmentMaxPartySize ??
+                  12,
+
                 address: {
                   line1:
                     business.profile

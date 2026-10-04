@@ -94,6 +94,7 @@ specialsBannerEnabled?: boolean;
     loyaltyCardTitle?: string | null;
     loyaltyStampsRequired?: number | null;
     loyaltyRewardDescription?: string | null;
+    whatsappOrderingEnabled?: boolean;
   addressLine1?: string | null;
   addressLine2?: string | null;
 

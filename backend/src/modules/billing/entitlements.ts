@@ -198,3 +198,29 @@ export async function assertCanUseBranding(
     throw upgradeError("Custom branding");
   }
 }
+export async function assertCanUseAppointmentBooking(
+  userId: string
+): Promise<void> {
+  const plan = await getEffectivePlan(
+    userId
+  );
+
+  if (!hasFeature(plan, "appointment_booking")) {
+    throw upgradeError(
+      "Appointment Booking"
+    );
+  }
+}
+export async function assertCanUseWhatsAppOrdering(
+  userId: string
+): Promise<void> {
+  const plan = await getEffectivePlan(
+    userId
+  );
+
+  if (!hasFeature(plan, "whatsapp_ordering")) {
+    throw upgradeError(
+      "WhatsApp Ordering"
+    );
+  }
+}
