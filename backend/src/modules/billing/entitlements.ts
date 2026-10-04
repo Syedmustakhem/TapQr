@@ -224,3 +224,16 @@ export async function assertCanUseWhatsAppOrdering(
     );
   }
 }
+export async function assertCanUseUpiPay(
+  userId: string
+): Promise<void> {
+  const plan = await getEffectivePlan(
+    userId
+  );
+
+  if (!hasFeature(plan, "upi_pay")) {
+    throw upgradeError(
+      "UPI Pay"
+    );
+  }
+}

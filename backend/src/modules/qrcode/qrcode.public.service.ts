@@ -893,6 +893,24 @@ export class QRCodePublicService {
                     .whatsappOrderingEnabled ??
                   false,
 
+                upiPayEnabled:
+                  business.profile
+                    .upiPayEnabled ??
+                  false,
+
+                upiVpa:
+                  business.profile
+                    .upiVpa ?? null,
+
+                upiPayeeName:
+                  business.profile
+                    .upiPayeeName ?? null,
+
+                upiPresetAmounts:
+                  business.profile
+                    .upiPresetAmounts ??
+                  null,
+
                 appointmentBookingEnabled:
                   business.profile
                     .appointmentBookingEnabled ??
