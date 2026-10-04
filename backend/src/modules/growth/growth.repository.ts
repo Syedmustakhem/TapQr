@@ -296,4 +296,116 @@ export class GrowthRepository {
       }
     );
   }
+
+  /*
+   * Double-sided referral payout, in ONE atomic transaction.
+   *
+   *  1. Claims the referral with an atomic PENDING -> REWARDED
+   *     transition. Returns false when another worker already
+   *     claimed it (webhook retried mid-flight) — the caller
+   *     then does nothing. Exactly one payout per referral,
+   *     ever. No intermediate state, no double-grant.
+   *  2. Grants referrerDays to the referrer (reason
+   *     REFERRAL_REWARD, referralId set as the ledger anchor)
+   *     and refereeDays to the referee (reason
+   *     REFEREE_BONUS).
+   *  3. Both credits stack AFTER existing Pro time
+   *     (max(now, proUntil) + days) — never overwriting or
+   *     shortening paid time.
+   */
+  async grantReferralRewards(
+    referrerUserId: string,
+    refereeUserId: string,
+    referralId: string,
+    referrerDays: number,
+    refereeDays: number
+  ): Promise<boolean> {
+    const now = new Date();
+
+    return prisma.$transaction(
+      async (tx) => {
+        const claimed =
+          await tx.referral.updateMany({
+            where: {
+              id: referralId,
+              status: "PENDING",
+            },
+            data: {
+              status: "REWARDED",
+              qualifiedAt: now,
+              rewardedAt: now,
+            },
+          });
+
+        if (claimed.count === 0) {
+          return false;
+        }
+
+        const grants = [
+          {
+            userId: referrerUserId,
+            days: referrerDays,
+            reason: "REFERRAL_REWARD",
+            refId: referralId as
+              | string
+              | null,
+          },
+          {
+            userId: refereeUserId,
+            days: refereeDays,
+            reason: "REFEREE_BONUS",
+            refId: null as
+              | string
+              | null,
+          },
+        ];
+
+        for (const grant of grants) {
+          await tx.proCredit.create({
+            data: {
+              userId: grant.userId,
+              days: grant.days,
+              reason: grant.reason,
+              referralId: grant.refId,
+            },
+          });
+
+          const user =
+            await tx.user.findUnique({
+              where: {
+                id: grant.userId,
+              },
+              select: {
+                proUntil: true,
+              },
+            });
+
+          const base =
+            user?.proUntil &&
+            user.proUntil.getTime() >
+              now.getTime()
+              ? user.proUntil
+              : now;
+
+          await tx.user.update({
+            where: {
+              id: grant.userId,
+            },
+            data: {
+              proUntil: new Date(
+                base.getTime() +
+                  grant.days *
+                    24 *
+                    60 *
+                    60 *
+                    1000
+              ),
+            },
+          });
+        }
+
+        return true;
+      }
+    );
+  }
 }
