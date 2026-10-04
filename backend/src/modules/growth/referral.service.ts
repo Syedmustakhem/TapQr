@@ -4,7 +4,7 @@ import { GrowthRepository } from "./growth.repository";
 
 /*
  * ============================================================
- * REFERRAL SERVICE  —  "Refer & Earn: 1 month Pro free"
+ * REFERRAL SERVICE  —  "Refer & Earn: double-sided rewards"
  * ============================================================
  *
  * Rules (the trustable/secure part):
@@ -25,14 +25,19 @@ import { GrowthRepository } from "./growth.repository";
  *     and referee share one verified phone, no reward.
  *  7. Yearly cap: max 6 rewarded referrals per referrer per
  *     rolling 365 days. Farming beyond that earns nothing.
- *  8. Rewards are idempotent: ProCredit.referralId is UNIQUE,
- *     so retried webhooks can never double-grant.
+ *  8. Payout is DOUBLE-SIDED and atomic: the referrer gets
+ *     30 days Pro (REFERRAL_REWARD) and the paying referee
+ *     gets 45 days Pro bonus (REFEREE_BONUS = 30d + 15d
+ *     extra), in ONE transaction. An atomic PENDING ->
+ *     REWARDED claim means retried webhooks can never
+ *     double-grant either side.
  *  9. Rewards extend proUntil AFTER existing Pro time
- *     (max(now, proUntil) + 30d) — credits stack, never
+ *     (max(now, proUntil) + days) — credits stack, never
  *     overwrite or shorten paid time.
  */
 
 export const REFERRAL_REWARD_DAYS = 30;
+export const REFEREE_BONUS_DAYS = 45;
 export const MAX_REWARDS_PER_YEAR = 6;
 
 // No 0/O, 1/I/L — codes are read aloud and typed by hand.
@@ -231,6 +236,7 @@ export async function getReferralStats(
     earnedDays,
     proUntil,
     rewardDays: REFERRAL_REWARD_DAYS,
+    refereeBonusDays: REFEREE_BONUS_DAYS,
     maxRewardsPerYear:
       MAX_REWARDS_PER_YEAR,
   };
@@ -318,28 +324,16 @@ export async function onCapturedPayment(
     return;
   }
 
-  // Rule 8 + 9: idempotent grant, stacks after existing time.
-  try {
-    await repository.grantProDays(
-      referral.referrerUserId,
-      REFERRAL_REWARD_DAYS,
-      "REFERRAL_REWARD",
-      referral.id
-    );
-  } catch (error: any) {
-    // P2002 on referralId = this referral already paid
-    // (webhook retried mid-flight). Treat as rewarded.
-    if (error?.code !== "P2002") {
-      throw error;
-    }
-  }
-
-  await repository.updateReferral(
+  // Rules 8 + 9: ONE atomic transaction claims the referral
+  // and grants BOTH sides — 30d to the referrer, 45d bonus to
+  // the paying referee. Returns false when another worker
+  // already claimed it (webhook retried mid-flight): then
+  // there is nothing left to do.
+  await repository.grantReferralRewards(
+    referral.referrerUserId,
+    refereeUserId,
     referral.id,
-    {
-      status: "REWARDED",
-      qualifiedAt: now,
-      rewardedAt: now,
-    }
+    REFERRAL_REWARD_DAYS,
+    REFEREE_BONUS_DAYS
   );
 }
