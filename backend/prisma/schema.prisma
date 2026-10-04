@@ -31,6 +31,15 @@ model User {
   subscriptions           Subscription[]
   payments                Payment[]
 
+  // Pro access granted WITHOUT a paid subscription
+  // (trial + referral credits). getEffectivePlan() in
+  // billing/entitlements.ts treats proUntil > now as Pro.
+  proUntil       DateTime?
+  trial          Trial?
+  referralCode   ReferralCode?
+  referralsGiven Referral[]    @relation("Referrer")
+  proCredits     ProCredit[]
+
   invitedMembers BusinessMember[] @relation("InvitedBy")
 }
 
@@ -2165,4 +2174,99 @@ enum QRRuleAuditAction {
   PRIORITY_CHANGED
   OVERRIDE_CREATED
   OVERRIDE_DISABLED
+}
+
+/**
+ * ============================================================
+ * TRIAL + REFERRAL (growth)
+ * ============================================================
+ * Pro access without a paid subscription flows through
+ * User.proUntil — a single timestamp until which the user is
+ * treated as Pro. Trials set it once (+15 days); referral
+ * rewards extend it (+30 days per qualified referral).
+ * ProCredit rows are the append-only audit ledger behind it.
+ */
+
+enum TrialStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  REJECTED
+}
+
+model Trial {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Snapshot of the OTP-verified phone that claimed this trial.
+  // Anti-abuse: one trial per verified phone, enforced in the
+  // trial service (a second account with the same phone is
+  // rejected at claim time).
+  phone String
+
+  status      TrialStatus @default(ACTIVE)
+  startsAt    DateTime    @default(now())
+  endsAt      DateTime
+  convertedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([status, endsAt])
+  @@index([phone])
+}
+
+model ReferralCode {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Crypto-random, unguessable (never sequential).
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  referrals Referral[]
+}
+
+model Referral {
+  id     String       @id @default(uuid())
+  codeId String
+  code   ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  referrerUserId String
+  referrer       User   @relation("Referrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+
+  // One referral row per referee — a referee can only ever
+  // earn their referrer ONE reward (no double-counting).
+  refereeUserId String         @unique
+  status        ReferralStatus @default(PENDING)
+  note          String?
+  qualifiedAt   DateTime?
+  rewardedAt    DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([referrerUserId, status])
+  @@index([status, createdAt])
+}
+
+model ProCredit {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  days   Int
+  reason String // TRIAL | REFERRAL_REWARD | MANUAL
+
+  // Idempotency key: exactly one credit row per referral,
+  // so webhook retries can never double-grant a reward.
+  referralId String? @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

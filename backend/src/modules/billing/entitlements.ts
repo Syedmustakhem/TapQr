@@ -61,8 +61,10 @@ function toEffectivePlan(
 
 /*
  * The user's current plan.
- * No ACTIVE subscription  ->  FREE.
- * (Extend here later: trials, grandfathering, org overrides.)
+ * No ACTIVE subscription  ->  FREE,
+ * UNLESS User.proUntil is in the future (trial or referral
+ * credits) — then the Pro plan shape applies.
+ * (Extend here later: grandfathering, org overrides.)
  */
 export async function getEffectivePlan(
   userId: string
@@ -72,9 +74,31 @@ export async function getEffectivePlan(
       userId
     );
 
-  return toEffectivePlan(
-    subscription?.plan ?? null
-  );
+  if (subscription?.plan) {
+    return toEffectivePlan(subscription.plan);
+  }
+
+  // Trial + referral Pro credits live on User.proUntil.
+  // No cron needed: once the timestamp passes, access
+  // drops back to Free automatically.
+  const proUntil =
+    await repository.getUserProUntil(userId);
+
+  if (
+    proUntil &&
+    proUntil.getTime() > Date.now()
+  ) {
+    const proPlan =
+      await repository.getPlan(
+        "PRO_MONTHLY"
+      );
+
+    if (proPlan) {
+      return toEffectivePlan(proPlan);
+    }
+  }
+
+  return FREE_PLAN;
 }
 
 export function hasFeature(

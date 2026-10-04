@@ -9,6 +9,10 @@ import {
   getEffectivePlan,
   type EffectivePlan,
 } from "./entitlements";
+import {
+  onSubscriptionActivated,
+  onPaymentCaptured,
+} from "../growth/growth.hooks";
 import type { CheckoutInput } from "./billing.validation";
 
 /*
@@ -336,7 +340,21 @@ export class BillingService {
               status: "captured",
             })
             .catch(() => undefined);
+
+          // Referral payout trigger: ONLY the referee's
+          // first captured payment can qualify a reward.
+          // Fire-and-forget — never fail the webhook.
+          onPaymentCaptured(
+            subscription.userId
+          ).catch(() => undefined);
         }
+
+        // Trial conversion: a subscription turning ACTIVE
+        // marks any ACTIVE trial as CONVERTED.
+        // Fire-and-forget — never fail the webhook.
+        onSubscriptionActivated(
+          subscription.userId
+        ).catch(() => undefined);
 
         return { handled: true };
       }
