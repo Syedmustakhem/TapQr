@@ -157,6 +157,19 @@ export class BillingRepository {
     });
   }
 
+  async getUserProUntil(
+    userId: string
+  ): Promise<Date | null> {
+    const user = await prisma.user.findUnique(
+      {
+        where: { id: userId },
+        select: { proUntil: true },
+      }
+    );
+
+    return user?.proUntil ?? null;
+  }
+
   async countQRCodes(userId: string) {
     return prisma.qRCode.count({
       where: {

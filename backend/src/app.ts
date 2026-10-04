@@ -15,6 +15,7 @@ import advancedAnalyticsRoutes from "./modules/analytics/analytics-advanced.rout
 import staffRoutes from "./modules/staff/routes/staff.routes";
 import visitorAnalyticsRoutes from "./modules/analytics/analytics-visitors.routes";
 import billingRoutes from "./modules/billing/billing.routes";
+import growthRoutes from "./modules/growth/growth.routes";
 import variantRoutes from "./modules/catalog/variant.routes";
 import catalogRoutes from "./modules/catalog/catalog.routes";
 import categoryRoutes from "./modules/catalog/category.routes";
@@ -89,8 +90,8 @@ const allowedOrigins = [
 
   "https://tapqr.shop",
   "https://www.tapqr.shop",
-  "https://www.tapqrhub.in",
   "https://tapqrhub.in",
+  "https://www.tapqrhub.in",
 ];
 
 app.use(
@@ -196,6 +197,7 @@ app.use(
   campaignRoutes
 );
 app.use("/api/billing", billingRoutes);
+app.use("/api/growth", growthRoutes);
 
 /*
 |--------------------------------------------------------------------------
