@@ -355,6 +355,10 @@ export const updateBusinessProfileSchema = z
       .boolean()
       .optional(),
 
+      whatsappOrderingEnabled: z
+      .boolean()
+      .optional(),
+
     loyaltyCardTitle: nullableText(80),
 
     loyaltyStampsRequired: z
