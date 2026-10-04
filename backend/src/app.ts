@@ -89,6 +89,8 @@ const allowedOrigins = [
 
   "https://tapqr.shop",
   "https://www.tapqr.shop",
+  "https://www.tapqrhub.in",
+  "https://tapqrhub.in",
 ];
 
 app.use(
