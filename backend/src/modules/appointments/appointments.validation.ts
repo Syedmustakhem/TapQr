@@ -45,6 +45,21 @@ export const appointmentServiceSchema =
       .min(0)
       .nullable()
       .optional(),
+
+    /*
+     * Staff mobile for booking alerts (E.164, e.g. +919121657235).
+     * When set, new bookings for THIS service notify this
+     * number on WhatsApp instead of the business owner.
+     */
+    staffMobile: z
+      .string()
+      .trim()
+      .regex(
+        /^\+[1-9]\d{6,14}$/,
+        "Staff mobile must be in E.164 format, e.g. +919121657235"
+      )
+      .nullable()
+      .optional(),
   });
 
 export const appointmentEventSchema =

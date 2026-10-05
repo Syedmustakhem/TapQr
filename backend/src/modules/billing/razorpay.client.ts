@@ -131,6 +131,86 @@ export async function cancelRazorpaySubscription(
   );
 }
 
+export interface RazorpayInvoice {
+  id: string;
+  payment_id?: string | null;
+  short_url?: string | null;
+  status?: string | null;
+}
+
+export interface RazorpayToken {
+  id: string;
+  method?: string | null;
+  card?: {
+    last4?: string | null;
+    network?: string | null;
+    name?: string | null;
+  } | null;
+  bank?: string | null;
+  vpa?: string | null;
+}
+
+/*
+ * Update a live subscription to a different plan
+ * (monthly <-> yearly). Razorpay prorates the change —
+ * the customer is charged or credited the difference
+ * on the next cycle.
+ */
+export async function updateRazorpaySubscriptionPlan(
+  razorpaySubscriptionId: string,
+  newPlanId: string
+): Promise<RazorpaySubscription> {
+  return razorpayRequest<RazorpaySubscription>(
+    `/subscriptions/${encodeURIComponent(
+      razorpaySubscriptionId
+    )}`,
+    {
+      method: "PATCH",
+      body: {
+        plan_id: newPlanId,
+        schedule_change_at: "now",
+      },
+    }
+  );
+}
+
+/*
+ * Invoices Razorpay generated for a captured payment.
+ * short_url is the shareable GST invoice link.
+ */
+export async function fetchRazorpayInvoices(
+  razorpayPaymentId: string
+): Promise<RazorpayInvoice[]> {
+  const payload =
+    await razorpayRequest<{
+      items?: RazorpayInvoice[];
+    }>(
+      `/invoices?payment_id=${encodeURIComponent(
+        razorpayPaymentId
+      )}`
+    );
+
+  return payload.items ?? [];
+}
+
+/*
+ * Saved payment methods (tokens) on a Razorpay customer.
+ */
+export async function fetchCustomerTokens(
+  razorpayCustomerId: string
+): Promise<RazorpayToken[]> {
+  const payload =
+    await razorpayRequest<{
+      items?: RazorpayToken[];
+    }>(
+      `/customers/${encodeURIComponent(
+        razorpayCustomerId
+      )}/tokens`
+    );
+
+  return payload.items ?? [];
+}
+
 export function getKeyId(): string {
   return credentials().keyId;
 }

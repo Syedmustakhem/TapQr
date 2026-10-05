@@ -12,6 +12,7 @@ import type {
   CreateAppointmentInput,
 } from "./appointments.types";
 import { AppError } from "../../cores/errors/AppError";
+import { sendNotificationWhatsApp } from "../notifications/providers/whatsapp.provider";
 
 const DAY_KEYS = [
   "sunday",
@@ -532,37 +533,51 @@ export class AppointmentsService {
       ?.appointmentBookingMode ??
       "APPOINTMENT") as BookingMode;
 
+    let result;
+
     switch (mode) {
       case "APPOINTMENT":
-        return this.createAppointmentBooking(
-          business,
-          body
-        );
+        result =
+          await this.createAppointmentBooking(
+            business,
+            body
+          );
+        break;
       case "TABLE":
-        return this.createTableBooking(
-          business,
-          body
-        );
+        result =
+          await this.createTableBooking(
+            business,
+            body
+          );
+        break;
       case "ORDER":
-        return this.createOrderBooking(
-          business,
-          body
-        );
+        result =
+          await this.createOrderBooking(
+            business,
+            body
+          );
+        break;
       case "TOKEN":
-        return this.createTokenBooking(
-          business,
-          body
-        );
+        result =
+          await this.createTokenBooking(
+            business,
+            body
+          );
+        break;
       case "EVENT":
-        return this.createEventBooking(
-          business,
-          body
-        );
+        result =
+          await this.createEventBooking(
+            business,
+            body
+          );
+        break;
       case "RENTAL":
-        return this.createRentalBooking(
-          business,
-          body
-        );
+        result =
+          await this.createRentalBooking(
+            business,
+            body
+          );
+        break;
       default:
         throw new AppError(
           "Unknown booking mode.",
@@ -570,6 +585,86 @@ export class AppointmentsService {
           "UNKNOWN_MODE"
         );
     }
+
+    // Fire-and-forget: route the booking alert to the
+    // service's staff mobile when one is configured.
+    void this.notifyBookingStaff(
+      business,
+      body.serviceId,
+      body
+    ).catch(() => {
+      /* alerts must never break a booking */
+    });
+
+    return result;
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * Booking staff alerts (per-service mobile)
+   * ------------------------------------------------------------
+   *
+   * When the booked service has a staffMobile, the new-booking
+   * alert goes to that number on WhatsApp. Otherwise no alert
+   * is sent (the owner sees bookings on the dashboard).
+   *
+   * Uses WHATSAPP_BOOKING_TEMPLATE_NAME when set, else the
+   * default notification template.
+   */
+  private async notifyBookingStaff(
+    business: BusinessWithProfile,
+    serviceId: string | undefined,
+    body: {
+      serviceId?: string;
+      date?: string;
+      startTime?: string;
+      partySize?: number;
+      customerName: string;
+      customerPhone: string;
+      note?: string;
+    }
+  ): Promise<void> {
+    if (!serviceId) return;
+
+    const services =
+      (business.profile
+        ?.appointmentServices as
+        | AppointmentServiceConfig[]
+        | null
+        | undefined) ?? [];
+
+    const service = services.find(
+      (s) => s.id === serviceId
+    );
+
+    const staffMobile =
+  service?.staffMobile?.trim();
+
+if (!staffMobile) return;
+
+const when =
+  body.date &&
+  body.startTime
+    ? `${body.date} at ${body.startTime}`
+    : body.date ?? "soon";
+
+const message =
+  `New booking for ${service?.name ?? "a service"}: ` +
+  `${body.customerName} (${body.customerPhone}) — ${when}.` +
+  (body.note
+    ? ` Note: ${body.note}`
+    : "");
+
+    await sendNotificationWhatsApp({
+      toPhoneE164: staffMobile,
+      recipientName:
+        service?.name ?? "there",
+      message,
+      templateName:
+        process.env
+          .WHATSAPP_BOOKING_TEMPLATE_NAME?.trim() ||
+        undefined,
+    });
   }
 
   /* ---------------- APPOINTMENT ---------------- */
