@@ -7,6 +7,12 @@ export interface NotificationWhatsAppInput {
   toPhoneE164: string;
   recipientName: string;
   message: string;
+  /**
+   * Override the Meta template name for this send.
+   * Defaults to WHATSAPP_NOTIFICATION_TEMPLATE_NAME.
+   * Set WHATSAPP_BOOKING_TEMPLATE_NAME for booking alerts.
+   */
+  templateName?: string;
 }
 
 export interface NotificationWhatsAppResult {
@@ -55,6 +61,7 @@ export async function sendNotificationWhatsApp(
   const accessToken = env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   const templateName =
+    input.templateName?.trim() ||
     env.WHATSAPP_NOTIFICATION_TEMPLATE_NAME?.trim();
   const templateLanguage =
     env.WHATSAPP_NOTIFICATION_TEMPLATE_LANG?.trim() || "en_US";

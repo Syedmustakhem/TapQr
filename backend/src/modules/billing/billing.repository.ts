@@ -83,6 +83,7 @@ export class BillingRepository {
         | "HALTED"
         | "CANCELLED"
         | "EXPIRED";
+      planCode?: string;
       currentPeriodStart?: Date | null;
       currentPeriodEnd?: Date | null;
       cancelAtPeriodEnd?: boolean;
@@ -94,6 +95,10 @@ export class BillingRepository {
         ...(data.status !==
           undefined && {
           status: data.status,
+        }),
+        ...(data.planCode !==
+          undefined && {
+          planCode: data.planCode,
         }),
         ...(data.currentPeriodStart !==
           undefined && {

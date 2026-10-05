@@ -16,6 +16,7 @@ import staffRoutes from "./modules/staff/routes/staff.routes";
 import visitorAnalyticsRoutes from "./modules/analytics/analytics-visitors.routes";
 import billingRoutes from "./modules/billing/billing.routes";
 import growthRoutes from "./modules/growth/growth.routes";
+import settingsRoutes from "./modules/settings/settings.routes";
 import variantRoutes from "./modules/catalog/variant.routes";
 import catalogRoutes from "./modules/catalog/catalog.routes";
 import categoryRoutes from "./modules/catalog/category.routes";
@@ -198,6 +199,7 @@ app.use(
 );
 app.use("/api/billing", billingRoutes);
 app.use("/api/growth", growthRoutes);
+app.use("/api/settings", settingsRoutes);
 
 /*
 |--------------------------------------------------------------------------

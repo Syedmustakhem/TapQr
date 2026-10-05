@@ -3,6 +3,9 @@ import { BillingRepository } from "./billing.repository";
 import {
   createRazorpaySubscription,
   cancelRazorpaySubscription,
+  updateRazorpaySubscriptionPlan,
+  fetchRazorpayInvoices,
+  fetchCustomerTokens,
   getKeyId,
 } from "./razorpay.client";
 import {
@@ -220,6 +223,219 @@ export class BillingService {
       status: "CANCELLED_AT_PERIOD_END",
       currentPeriodEnd:
         subscription.currentPeriodEnd,
+    };
+  }
+
+  /*
+   * Full billing history for the "Billing history" table.
+   */
+  async getHistory(userId: string) {
+    const payments =
+      await this.repository.getPayments(
+        userId,
+        50
+      );
+
+    return payments.map((p) => ({
+      id: p.id,
+      amountPaise: p.amountPaise,
+      currency: p.currency,
+      status: p.status,
+      razorpayPaymentId:
+        p.razorpayPaymentId,
+      createdAt: p.createdAt,
+    }));
+  }
+
+  /*
+   * GST invoice link for a payment.
+   * Returns Razorpay's hosted invoice URL (short_url).
+   */
+  async getInvoiceUrl(
+    userId: string,
+    paymentId: string
+  ) {
+    const payments =
+      await this.repository.getPayments(
+        userId,
+        50
+      );
+
+    const payment = payments.find(
+      (p) => p.id === paymentId
+    );
+
+    if (!payment) {
+      throw new AppError(
+        "Payment not found.",
+        404,
+        "PAYMENT_NOT_FOUND"
+      );
+    }
+
+    if (!payment.razorpayPaymentId) {
+      throw new AppError(
+        "No invoice is available for this payment yet.",
+        404,
+        "INVOICE_NOT_AVAILABLE"
+      );
+    }
+
+    const invoices =
+      await fetchRazorpayInvoices(
+        payment.razorpayPaymentId
+      );
+
+    const invoice = invoices[0];
+
+    if (!invoice?.short_url) {
+      throw new AppError(
+        "The invoice is still being generated. Try again in a few minutes.",
+        404,
+        "INVOICE_NOT_READY"
+      );
+    }
+
+    return {
+      invoiceId: invoice.id,
+      url: invoice.short_url,
+    };
+  }
+
+  /*
+   * Saved payment methods (cards/UPI tokens) on the
+   * Razorpay customer attached to the active subscription.
+   */
+  async getPaymentMethods(
+    userId: string
+  ) {
+    const subscription =
+      await this.repository.getActiveSubscription(
+        userId
+      );
+
+    if (
+      !subscription?.razorpayCustomerId
+    ) {
+      return [];
+    }
+
+    const tokens =
+      await fetchCustomerTokens(
+        subscription.razorpayCustomerId
+      );
+
+    return tokens.map((t) => ({
+      id: t.id,
+      method: t.method,
+      last4: t.card?.last4 ?? null,
+      network: t.card?.network ?? null,
+      cardName: t.card?.name ?? null,
+      bank: t.bank ?? null,
+      vpa: t.vpa ?? null,
+    }));
+  }
+
+  /*
+   * Switch between PRO_MONTHLY and PRO_YEARLY.
+   * Razorpay prorates the change immediately
+   * ("schedule_change_at: now").
+   */
+  async switchPlan(
+    userId: string,
+    targetPlanCode: string
+  ) {
+    if (
+      targetPlanCode !== "PRO_MONTHLY" &&
+      targetPlanCode !== "PRO_YEARLY"
+    ) {
+      throw new AppError(
+        "Invalid plan.",
+        400,
+        "INVALID_PLAN"
+      );
+    }
+
+    const subscription =
+      await this.repository.getActiveSubscription(
+        userId
+      );
+
+    if (!subscription) {
+      throw new AppError(
+        "No active subscription found.",
+        404,
+        "NO_ACTIVE_SUBSCRIPTION"
+      );
+    }
+
+    if (
+      subscription.planCode ===
+      targetPlanCode
+    ) {
+      throw new AppError(
+        "You are already on this plan.",
+        400,
+        "ALREADY_SUBSCRIBED"
+      );
+    }
+
+    if (
+      !subscription.razorpaySubscriptionId
+    ) {
+      throw new AppError(
+        "This subscription cannot be switched.",
+        400,
+        "SWITCH_NOT_SUPPORTED"
+      );
+    }
+
+    const plan =
+      await this.repository.getPlan(
+        targetPlanCode
+      );
+
+    if (!plan || !plan.isActive) {
+      throw new AppError(
+        "This plan is not available.",
+        400,
+        "PLAN_NOT_AVAILABLE"
+      );
+    }
+
+    const razorpayPlanId =
+      razorpayPlanIdFor(
+        targetPlanCode,
+        plan
+      );
+
+    const updated =
+      await updateRazorpaySubscriptionPlan(
+        subscription.razorpaySubscriptionId,
+        razorpayPlanId
+      );
+
+    await this.repository.updateSubscriptionStatus(
+      subscription.id,
+      {
+        planCode: targetPlanCode,
+        currentPeriodStart: updated.current_start
+          ? new Date(
+              updated.current_start * 1000
+            )
+          : null,
+        currentPeriodEnd: updated.current_end
+          ? new Date(
+              updated.current_end * 1000
+            )
+          : null,
+      }
+    );
+
+    return {
+      planCode: targetPlanCode,
+      planName: plan.name,
+      status: updated.status ?? "active",
     };
   }
 

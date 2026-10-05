@@ -6,7 +6,10 @@ import {
 import { AuthRequest } from "../auth/auth.types";
 import { BillingService } from "./billing.service";
 import { verifyWebhookSignature } from "./razorpay.client";
-import type { CheckoutInput } from "./billing.validation";
+import type {
+  CheckoutInput,
+  SwitchPlanInput,
+} from "./billing.validation";
 
 /*
  * ============================================================
@@ -68,6 +71,94 @@ export class BillingController {
       const result =
         await this.service.cancelSubscription(
           req.user!.id
+        );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getHistory = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const result =
+        await this.service.getHistory(
+          req.user!.id
+        );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getInvoice = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const raw = req.params.paymentId;
+      const paymentId = (
+        Array.isArray(raw) ? raw[0] : raw
+      ) ?? "";
+
+      const result =
+        await this.service.getInvoiceUrl(
+          req.user!.id,
+          paymentId
+        );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPaymentMethods = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const result =
+        await this.service.getPaymentMethods(
+          req.user!.id
+        );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  switchPlan = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const result =
+        await this.service.switchPlan(
+          req.user!.id,
+          (req.body as SwitchPlanInput)
+            .planCode
         );
 
       res.status(200).json({

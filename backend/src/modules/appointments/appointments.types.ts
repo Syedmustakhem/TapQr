@@ -39,6 +39,12 @@ export type AppointmentServiceConfig = {
   name: string;
   durationMinutes: number;
   price?: number | null;
+  /**
+   * Staff mobile (E.164) for booking alerts.
+   * When set, new bookings for this service notify
+   * this number on WhatsApp instead of the owner.
+   */
+  staffMobile?: string | null;
 };
 
 /*

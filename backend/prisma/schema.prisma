@@ -18,6 +18,8 @@ model User {
   phone                   String?                 @unique
   role                    UserRole                @default(OWNER)
   isActive                Boolean                 @default(true)
+  language                String                  @default("en")
+  timezone                String                  @default("Asia/Kolkata")
   reviews                 Review[]
   reviewReports           ReviewReport[]
   createdAt               DateTime                @default(now())
@@ -41,6 +43,7 @@ model User {
   proCredits     ProCredit[]
 
   invitedMembers BusinessMember[] @relation("InvitedBy")
+  apiKeys        ApiKey[]
 }
 
 model AuthProvider {
@@ -2265,6 +2268,33 @@ model ProCredit {
   // Idempotency key: exactly one credit row per referral,
   // so webhook retries can never double-grant a reward.
   referralId String? @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ============================================
+// API KEY (Developer settings / AgentOS)
+// ============================================
+
+model ApiKey {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String
+
+  // SHA-256 of the key. The plaintext key is shown ONCE at
+  // creation and never stored.
+  keyHash String @unique
+
+  // First 12 chars of the key for display, e.g. "tapqr_9f2k…".
+  prefix String
+
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
 
   createdAt DateTime @default(now())
 

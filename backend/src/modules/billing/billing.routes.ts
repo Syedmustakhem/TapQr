@@ -6,7 +6,10 @@ import { authenticate } from "../auth/auth.middleware";
 
 import { validate } from "../../cores/middleware/validate";
 
-import { checkoutSchema } from "./billing.validation";
+import {
+  checkoutSchema,
+  switchPlanSchema,
+} from "./billing.validation";
 
 const router = Router();
 
@@ -44,6 +47,27 @@ router.get(
 router.post(
   "/cancel",
   controller.cancelSubscription
+);
+
+router.get(
+  "/history",
+  controller.getHistory
+);
+
+router.get(
+  "/invoices/:paymentId",
+  controller.getInvoice
+);
+
+router.get(
+  "/payment-methods",
+  controller.getPaymentMethods
+);
+
+router.post(
+  "/switch-plan",
+  validate(switchPlanSchema, "body"),
+  controller.switchPlan
 );
 
 export default router;
