@@ -1,15 +1,6 @@
 import { AppointmentStatus } from "@prisma/client";
 
-/*
- * Booking modes — one engine, six business types.
- *
- * APPOINTMENT: hospital / clinic / salon — service + time slot.
- * TABLE:       restaurant — date + time + party size + food pre-order.
- * ORDER:       shopkeeper — product cart + pickup details.
- * TOKEN:       clinic / office — queue token for today, no slot.
- * EVENT:       workshop / class — event + seats.
- * RENTAL:      cars / equipment — item + date range.
- */
+
 export type BookingMode =
   | "APPOINTMENT"
   | "TABLE"
@@ -28,12 +19,6 @@ export const BOOKING_MODES: BookingMode[] =
     "RENTAL",
   ];
 
-/*
- * A bookable service as stored in
- * BusinessProfile.appointmentServices (JSON).
- * Used by APPOINTMENT (services), TOKEN (departments/counters),
- * RENTAL (rentable items, price = per day).
- */
 export type AppointmentServiceConfig = {
   id: string;
   name: string;
