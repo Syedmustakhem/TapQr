@@ -44,6 +44,7 @@ model User {
 
   invitedMembers BusinessMember[] @relation("InvitedBy")
   apiKeys        ApiKey[]
+  supportTickets SupportTicket[]
 }
 
 model AuthProvider {
@@ -2033,6 +2034,7 @@ enum UserRole {
   OWNER
   STAFF
   ADMIN
+  SUPER_ADMIN
 }
 
 enum BusinessStatus {
@@ -2299,4 +2301,66 @@ model ApiKey {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ============================================
+// ADMIN AUDIT LOG
+// ============================================
+// Every super-admin action is recorded here.
+// Append-only: no update/delete endpoints exist.
+
+model AdminAuditLog {
+  id String @id @default(uuid())
+
+  adminUserId String
+  adminEmail  String
+
+  action     String // e.g. USER_SUSPEND, PRO_GRANT, PLAN_UPDATE
+  targetType String? // e.g. User, Business, Plan
+  targetId   String?
+
+  details Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ============================================
+// SUPPORT TICKET (user -> admin inbox)
+// ============================================
+
+model SupportTicket {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subject String
+  message String
+
+  status String @default("OPEN") // OPEN | ANSWERED | CLOSED
+
+  adminReply  String?
+  repliedAt   DateTime?
+  repliedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+// ============================================
+// FEATURE FLAG (admin-controlled toggles)
+// ============================================
+
+model FeatureFlag {
+  key         String  @id
+  enabled     Boolean @default(false)
+  description String?
+
+  updatedAt DateTime @updatedAt
 }
