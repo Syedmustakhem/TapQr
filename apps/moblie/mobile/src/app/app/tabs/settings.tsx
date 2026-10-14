@@ -18,6 +18,21 @@ import {
 import { COLORS } from "../../../constants/colors";
 import { SPACING } from "../../../constants/spacing";
 
+import { logout as apiLogout } from "../../../api/authApi";
+
+import {
+  fetchMe,
+  updateMe,
+} from "../../../api/settingsApi";
+
+import {
+  getBusinesses,
+  updateBusiness,
+  updateBusinessProfile,
+} from "../../../api/businessApi";
+
+import { useCurrentBusiness } from "../../../hooks/useCurrentBusiness";
+
 type ModalType =
   | "business"
   | "account"
@@ -71,10 +86,18 @@ export default function SettingsScreen() {
   const [saving, setSaving] =
     useState(false);
 
+  const { businessId } =
+    useCurrentBusiness();
+
   useEffect(() => {
     loadSettings();
   }, []);
 
+  /*
+   * Device-only preferences stay in AsyncStorage;
+   * account + business fields come from the API
+   * (GET /auth/me, GET /businesses).
+   */
   const loadSettings = async () => {
     try {
       const stored =
@@ -94,8 +117,40 @@ export default function SettingsScreen() {
         error
       );
     }
+
+    try {
+      const [me, businesses] =
+        await Promise.all([
+          fetchMe(),
+          getBusinesses(),
+        ]);
+
+      setSettings((current) => ({
+        ...current,
+        userName:
+          me?.fullName || current.userName,
+        email:
+          me?.email || current.email,
+        phone:
+          me?.phone || current.phone,
+        businessName:
+          businesses[0]?.name ||
+          current.businessName,
+      }));
+    } catch (error) {
+      console.error(
+        "Failed to load account:",
+        error
+      );
+    }
   };
 
+  /*
+   * Save routing:
+   * - account name  -> PATCH /auth/me
+   * - business fields -> PATCH /businesses/:id (+ /profile for address)
+   * - appearance / notification toggles -> device-local AsyncStorage
+   */
   const saveSettings = async (
     updates: Partial<SettingsData>
   ) => {
@@ -114,11 +169,80 @@ export default function SettingsScreen() {
         JSON.stringify(updated)
       );
 
+      if (
+        updates.userName !== undefined &&
+        updates.userName !==
+          settings.userName
+      ) {
+        await updateMe({
+          fullName: updates.userName,
+        });
+      }
+
+      if (businessId) {
+        const businessPatch: {
+          name?: string;
+          category?: string;
+          phone?: string;
+        } = {};
+
+        if (
+          updates.businessName !==
+          undefined
+        ) {
+          businessPatch.name =
+            updates.businessName;
+        }
+
+        if (
+          updates.category !== undefined
+        ) {
+          businessPatch.category =
+            updates.category;
+        }
+
+        if (
+          updates.phone !== undefined
+        ) {
+          businessPatch.phone =
+            updates.phone;
+        }
+
+        if (
+          Object.keys(businessPatch)
+            .length > 0
+        ) {
+          await updateBusiness(
+            businessId,
+            businessPatch
+          );
+        }
+
+        if (
+          updates.address !== undefined
+        ) {
+          await updateBusinessProfile(
+            businessId,
+            {
+              addressLine1:
+                updates.address || null,
+            }
+          );
+        }
+      }
+
       setModal(null);
     } catch (error) {
       console.error(
         "Failed to save settings:",
         error
+      );
+
+      Alert.alert(
+        "Save failed",
+        error instanceof Error
+          ? error.message
+          : "Could not save your changes. Please try again."
       );
     } finally {
       setSaving(false);
@@ -139,18 +263,19 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove([
-                "@tapqr_user",
-                "@tapqr_token",
-              ]);
-
-              router.replace(
-                "/(auth)/login"
-              );
+              /*
+               * POST /auth/logout + clear secure
+               * tokens (mirrors authApi.logout).
+               */
+              await apiLogout();
             } catch (error) {
               console.error(
                 "Logout failed:",
                 error
+              );
+            } finally {
+              router.replace(
+                "/(auth)/login"
               );
             }
           },
@@ -582,7 +707,7 @@ function SettingsModal({
             <InfoContent
               icon="lock-closed-outline"
               title="Account Security"
-              text="Your account security settings will be connected to the TapQR backend when authentication is integrated."
+              text="You sign in with a one-time passcode (email or WhatsApp) — there is no password to leak or forget."
             />
           )}
 

@@ -14,6 +14,8 @@ import QRCode from "react-native-qrcode-svg";
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 
+import { publicQRUrl } from "../../api/qrcodeApi";
+
 const QR_COLORS = [
   "#111827",
   "#2563EB",
@@ -56,6 +58,7 @@ export default function QRCustomizeScreen() {
     name?: string;
     destination?: string;
     type?: string;
+    shortCode?: string;
   }>();
 
   const [qrColor, setQrColor] = useState(
@@ -69,12 +72,23 @@ export default function QRCustomizeScreen() {
   const [selectedStyle, setSelectedStyle] =
     useState("classic");
 
-  const destination = useMemo(
-    () =>
-      params.destination?.toString() ||
-      "https://example.com",
-    [params.destination]
-  );
+  /*
+   * The QR image encodes the public scan URL
+   * (https://tapqr.shop/r/:shortCode), generated
+   * client-side — no backend call needed.
+   */
+  const destination = useMemo(() => {
+    const shortCode =
+      params.shortCode?.toString() || "";
+
+    if (shortCode) {
+      return publicQRUrl(shortCode);
+    }
+
+    return (
+      params.destination?.toString() || ""
+    );
+  }, [params.destination, params.shortCode]);
 
   const qrSize = 210;
 
@@ -160,7 +174,10 @@ export default function QRCustomizeScreen() {
             ]}
           >
             <QRCode
-              value={destination}
+              value={
+                destination ||
+                "https://tapqr.shop"
+              }
               size={qrSize}
               color={qrColor}
               backgroundColor={background}

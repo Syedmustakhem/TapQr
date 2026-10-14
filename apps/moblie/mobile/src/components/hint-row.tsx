@@ -29,7 +29,6 @@ const styles = StyleSheet.create({
   },
   codeSnippet: {
     borderRadius: Spacing.two,
-    paddingVertical: Spacing.half,
-    paddingHorizontal: Spacing.two,
+paddingVertical: Spacing.one / 2,    paddingHorizontal: Spacing.two,
   },
 });

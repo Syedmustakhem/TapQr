@@ -13,7 +13,8 @@ import {
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
-import { saveQR } from "../../services/qrStorage";
+import { saveQRCode } from "../../services/qrStorage";
+import { publicQRUrl } from "../../api/qrcodeApi";
 type QRType = "DYNAMIC" | "STATIC";
 
 export default function QRPreviewScreen() {
@@ -21,6 +22,7 @@ export default function QRPreviewScreen() {
     id?: string;
     name?: string;
     destination?: string;
+    shortCode?: string;
     type?: string;
     destinationType?: string;
     qrColor?: string;
@@ -31,9 +33,19 @@ export default function QRPreviewScreen() {
   const name =
     params.name?.toString().trim() || "My QR Code";
 
+  /*
+   * The QR image encodes the public scan URL
+   * (https://tapqr.shop/r/:shortCode), generated
+   * client-side — no backend call needed.
+   */
+  const shortCode =
+    params.shortCode?.toString().trim() || "";
+
   const destination =
     params.destination?.toString().trim() ||
-    "https://tapqr.app";
+    (shortCode
+      ? publicQRUrl(shortCode)
+      : "");
 
   const qrType: QRType =
     params.type === "STATIC"
@@ -109,6 +121,8 @@ export default function QRPreviewScreen() {
       name,
       destination,
       type: qrType,
+      status: "ACTIVE" as const,
+      scans: 0,
       destinationType,
       qrColor,
       backgroundColor,
@@ -116,7 +130,7 @@ export default function QRPreviewScreen() {
       createdAt: new Date().toISOString(),
     };
 
-    await saveQR(qr);
+    await saveQRCode(qr);
 
     Alert.alert(
       "QR Saved",

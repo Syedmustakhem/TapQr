@@ -14,6 +14,15 @@ import {
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 
+import {
+  Alert,
+} from "react-native";
+
+import {
+  createBusiness,
+  updateBusiness,
+} from "../../api/businessApi";
+
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
 
@@ -91,49 +100,37 @@ export default function BusinessSetupScreen() {
     try {
       setLoading(true);
 
-      const businessData = {
-        businessName:
-          businessName.trim(),
-
-        category:
-          category.trim(),
-
-        phone:
-          phone.trim(),
-
-        address:
-          address.trim(),
-      };
-
-      console.log(
-        "Business setup:",
-        businessData
-      );
-
       /*
-       * Backend API will be connected here.
-       *
-       * Example:
-       *
-       * POST /business
-       *
-       * {
-       *   businessName,
-       *   category,
-       *   phone,
-       *   address
-       * }
+       * POST /businesses — mirrors the web dashboard
+       * create form ({ name, phone, description }).
+       * Category is a business-level field, saved with
+       * a follow-up PATCH /businesses/:id.
        */
+      const created = await createBusiness({
+        name: businessName.trim(),
+        phone: phone.trim(),
+        description:
+          address.trim() || undefined,
+      });
 
-      await new Promise((resolve) =>
-  setTimeout(resolve, 800)
-);
+      if (category.trim()) {
+        await updateBusiness(created.id, {
+          category: category.trim(),
+        });
+      }
 
-router.replace("/app/tabs");
+      router.replace("/app/tabs");
     } catch (error) {
       console.error(
         "Business setup failed:",
         error
+      );
+
+      Alert.alert(
+        "Setup failed",
+        error instanceof Error
+          ? error.message
+          : "Could not create your business. Please try again."
       );
     } finally {
       setLoading(false);

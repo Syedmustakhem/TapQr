@@ -1,39 +1,60 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import { Notification } from "../types/notification";
-import { notificationService } from "../services/mock/notificationService";
+
+import {
+  getNotifications,
+  markAllNotificationsRead as apiMarkAllRead,
+  markNotificationRead as apiMarkRead,
+} from "../api/notificationsApi";
 
 export function useNotifications() {
-  const [notifications, setNotifications] = useState<
-    Notification[]
-  >([]);
+  const [notifications, setNotifications] =
+    useState<Notification[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [error, setError] = useState<string | null>(
-    null
-  );
+  const [error, setError] = useState<
+    string | null
+  >(null);
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  /*
+   * GET /notifications — mirrors the web dashboard
+   * notifications page.
+   */
+  const loadNotifications =
+    useCallback(async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const data =
-        await notificationService.getNotifications();
+        const data =
+          await getNotifications({
+            limit: 50,
+          });
 
-      setNotifications(data);
-    } catch (error) {
-      setError("Unable to load notifications.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        setNotifications(data);
+      } catch (error) {
+        setError(
+          "Unable to load notifications."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, []);
 
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
+  /*
+   * POST /notifications/:id/read (optimistic).
+   */
   const markAsRead = (id: string) => {
     setNotifications((current) =>
       current.map((notification) =>
@@ -45,14 +66,35 @@ export function useNotifications() {
           : notification
       )
     );
+
+    void apiMarkRead(id).catch(
+      (error) => {
+        console.error(
+          "Failed to mark notification as read:",
+          error
+        );
+      }
+    );
   };
 
+  /*
+   * POST /notifications/read-all (optimistic).
+   */
   const markAllAsRead = () => {
     setNotifications((current) =>
       current.map((notification) => ({
         ...notification,
         read: true,
       }))
+    );
+
+    void apiMarkAllRead().catch(
+      (error) => {
+        console.error(
+          "Failed to mark all notifications as read:",
+          error
+        );
+      }
     );
   };
 

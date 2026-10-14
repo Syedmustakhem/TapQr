@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 import {
+  ActivityIndicator,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -13,151 +15,389 @@ import {
 import { COLORS } from "../../../constants/colors";
 import { SPACING } from "../../../constants/spacing";
 
+import {
+  getBusinessAnalytics,
+} from "../../../api/analyticsApi";
+
+import {
+  formatCount,
+  relativeTime,
+  toNumber,
+} from "../../../api/utils";
+
+import { useCurrentBusiness } from "../../../hooks/useCurrentBusiness";
+
 type Period = "7D" | "30D" | "90D";
 
-type ScanData = {
-  day: string;
-  scans: number;
+const PERIOD_DAYS: Record<Period, number> = {
+  "7D": 7,
+  "30D": 30,
+  "90D": 90,
 };
 
-type QRPerformance = {
-  name: string;
-  scans: number;
-  percentage: number;
-  status: "Active" | "Inactive";
-};
+/*
+ * Short axis label for a scans-by-day bucket.
+ */
+function dayLabel(
+  iso: string,
+  period: Period
+): string {
+  const date = new Date(iso);
 
-type RecentScan = {
-  qr: string;
-  device: string;
-  location: string;
-  time: string;
-  icon: keyof typeof Ionicons.glyphMap;
-};
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
 
-const SCAN_DATA: Record<Period, ScanData[]> = {
-  "7D": [
-    { day: "Mon", scans: 120 },
-    { day: "Tue", scans: 180 },
-    { day: "Wed", scans: 145 },
-    { day: "Thu", scans: 230 },
-    { day: "Fri", scans: 310 },
-    { day: "Sat", scans: 270 },
-    { day: "Sun", scans: 390 },
-  ],
+  if (period === "7D") {
+    return date.toLocaleDateString(
+      undefined,
+      { weekday: "short" }
+    );
+  }
 
-  "30D": [
-    { day: "W1", scans: 620 },
-    { day: "W2", scans: 810 },
-    { day: "W3", scans: 970 },
-    { day: "W4", scans: 1240 },
-  ],
+  return date.toLocaleDateString(
+    undefined,
+    {
+      day: "numeric",
+      month: "short",
+    }
+  );
+}
 
-  "90D": [
-    { day: "M1", scans: 2100 },
-    { day: "M2", scans: 2860 },
-    { day: "M3", scans: 3740 },
-  ],
-};
+function deviceIcon(
+  label: string
+): keyof typeof Ionicons.glyphMap {
+  const lower = label.toLowerCase();
 
-const QR_PERFORMANCE: QRPerformance[] = [
-  {
-    name: "Restaurant Menu",
-    scans: 482,
-    percentage: 92,
-    status: "Active",
-  },
-  {
-    name: "Google Review",
-    scans: 318,
-    percentage: 76,
-    status: "Active",
-  },
-  {
-    name: "Instagram Profile",
-    scans: 246,
-    percentage: 59,
-    status: "Active",
-  },
-  {
-    name: "Business Website",
-    scans: 202,
-    percentage: 48,
-    status: "Active",
-  },
-  {
-    name: "Contact Card",
-    scans: 124,
-    percentage: 30,
-    status: "Inactive",
-  },
-];
+  if (
+    lower.includes("iphone") ||
+    lower.includes("ios") ||
+    lower.includes("apple")
+  ) {
+    return "logo-apple";
+  }
 
-const RECENT_SCANS: RecentScan[] = [
-  {
-    qr: "Restaurant Menu",
-    device: "iPhone",
-    location: "Kadiri",
-    time: "2 min ago",
-    icon: "phone-portrait-outline",
-  },
-  {
-    qr: "Google Review",
-    device: "Android",
-    location: "Kadiri",
-    time: "8 min ago",
-    icon: "phone-portrait-outline",
-  },
-  {
-    qr: "Instagram Profile",
-    device: "iPhone",
-    location: "Bengaluru",
-    time: "16 min ago",
-    icon: "phone-portrait-outline",
-  },
-  {
-    qr: "Business Website",
-    device: "Android",
-    location: "Hyderabad",
-    time: "32 min ago",
-    icon: "phone-portrait-outline",
-  },
-  {
-    qr: "Restaurant Menu",
-    device: "Android",
-    location: "Kadiri",
-    time: "45 min ago",
-    icon: "phone-portrait-outline",
-  },
-];
+  if (lower.includes("android")) {
+    return "logo-android";
+  }
+
+  return "desktop-outline";
+}
 
 export default function AnalyticsScreen() {
   const { width } = useWindowDimensions();
 
   const isLargeScreen = width >= 900;
 
- const [period, setPeriod] =
-  useState<Period>("7D");
+  const [period, setPeriod] =
+    useState<Period>("7D");
 
-  const scanData = SCAN_DATA[period];
+  const { businessId } =
+    useCurrentBusiness();
 
-  const totalScans =
-    scanData.reduce(
-      (total, item) => total + item.scans,
+  const days = PERIOD_DAYS[period];
+
+  /*
+   * GET /analytics/business/:businessId?days=&limit=
+   * — mirrors the web dashboard analytics page.
+   */
+  const query = useQuery({
+    queryKey: [
+      "analytics",
+      businessId,
+      days,
+    ],
+    queryFn: () =>
+      getBusinessAnalytics(
+        businessId as string,
+        days,
+        10
+      ),
+    enabled: Boolean(businessId),
+  });
+
+  const data = query.data ?? null;
+
+  const overview = data?.overview ?? {};
+
+  /*
+   * KPI values.
+   */
+  const totalScans = toNumber(
+    overview.totalScans
+  );
+
+  const uniqueVisitors = toNumber(
+    overview.uniqueVisitors
+  );
+
+  const activeQRCodes = toNumber(
+    overview.activeQrCodes
+  );
+
+  const totalQRCodes = toNumber(
+    overview.totalQrCodes
+  );
+
+  const percentageChange = toNumber(
+    overview.percentageChange
+  );
+
+  const changePositive =
+    percentageChange >= 0;
+
+  const changeLabel = `${
+    changePositive ? "+" : ""
+  }${percentageChange.toFixed(1)}%`;
+
+  const activeShare =
+    totalQRCodes > 0
+      ? Math.round(
+          (activeQRCodes / totalQRCodes) *
+            100
+        )
+      : 0;
+
+  /*
+   * Scan trend series.
+   */
+  const scanSeries = useMemo(
+    () =>
+      (data?.scansByDay ?? []).map(
+        (row) => ({
+          day: dayLabel(
+            row.date,
+            period
+          ),
+          scans: toNumber(row.scans),
+        })
+      ),
+    [data, period]
+  );
+
+  const chartTotal = scanSeries.reduce(
+    (total, item) => total + item.scans,
+    0
+  );
+
+  const maxScans = scanSeries.length
+    ? Math.max(
+        ...scanSeries.map(
+          (item) => item.scans
+        )
+      )
+    : 0;
+
+  const firstValue =
+    scanSeries[0]?.scans ?? 0;
+
+  const lastValue =
+    scanSeries[scanSeries.length - 1]
+      ?.scans ?? 0;
+
+  const todaysScans = lastValue;
+
+  const growth =
+    firstValue > 0
+      ? ((lastValue - firstValue) /
+          firstValue) *
+        100
+      : 0;
+
+  const growthPositive = growth >= 0;
+
+  /*
+   * Top QR leaderboard.
+   */
+  const topQrs = useMemo(() => {
+    const rows = [
+      ...(data?.qrPerformance ?? []),
+    ];
+
+    rows.sort(
+      (a, b) =>
+        toNumber(b.scanCount) -
+        toNumber(a.scanCount)
+    );
+
+    const top = rows.slice(0, 5);
+
+    const max = top.length
+      ? Math.max(
+          ...top.map((row) =>
+            toNumber(row.scanCount)
+          )
+        )
+      : 0;
+
+    return top.map((row) => {
+      const scans = toNumber(
+        row.scanCount
+      );
+
+      return {
+        name: row.name,
+        scans,
+        percentage:
+          max > 0
+            ? Math.round(
+                (scans / max) * 100
+              )
+            : 0,
+        status:
+          (row.status ?? "")
+            .toUpperCase() === "ACTIVE"
+            ? "Active"
+            : "Inactive",
+      };
+    });
+  }, [data]);
+
+  /*
+   * Device breakdown rows.
+   */
+  const devices = useMemo(() => {
+    const rows = data?.devices ?? [];
+
+    const total = rows.reduce(
+      (sum, row) =>
+        sum + toNumber(row.scans),
       0
     );
 
-  const maxScans = Math.max(
-    ...scanData.map((item) => item.scans)
+    return rows
+      .slice(0, 5)
+      .map((row) => {
+        const label =
+          row.name ?? "Unknown";
+
+        const pct =
+          total > 0
+            ? Math.round(
+                (toNumber(row.scans) /
+                  total) *
+                  100
+              )
+            : 0;
+
+        return {
+          icon: deviceIcon(label),
+          label,
+          value: `${pct}%`,
+        };
+      });
+  }, [data]);
+
+  /*
+   * Recent scans feed.
+   */
+  const qrNameById = useMemo(() => {
+    const map = new Map<
+      string,
+      string
+    >();
+
+    for (const row of data?.qrPerformance ??
+      []) {
+      map.set(row.id, row.name);
+    }
+
+    return map;
+  }, [data]);
+
+  const recentScans = useMemo(
+    () =>
+      (data?.recentScans ?? [])
+        .slice(0, 5)
+        .map((scan) => ({
+          id: scan.id,
+          qr:
+            qrNameById.get(
+              scan.qrCodeId
+            ) ?? "QR code",
+          device:
+            scan.device ||
+            scan.browser ||
+            "Unknown device",
+          location:
+            [
+              scan.city,
+              scan.country,
+            ]
+              .filter(Boolean)
+              .join(", ") ||
+            "Unknown location",
+          time: relativeTime(
+            scan.scannedAt
+          ),
+        })),
+    [data, qrNameById]
   );
 
-  const firstValue = scanData[0]?.scans || 1;
+  const insight =
+    topQrs.length > 0
+      ? `Your ${topQrs[0].name} QR is currently your strongest performer with ${formatCount(topQrs[0].scans)} scans in the selected period.`
+      : "Share your QR codes to start collecting live scan analytics.";
 
-  const lastValue =
-    scanData[scanData.length - 1]?.scans || 1;
+  /*
+   * LOADING
+   */
+  if (query.isLoading) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View style={styles.loader}>
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+          />
 
-  const growth =
-    ((lastValue - firstValue) / firstValue) * 100;
+          <Text
+            style={styles.loaderText}
+          >
+            Loading analytics...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /*
+   * ERROR / NO BUSINESS
+   */
+  if (query.isError || !businessId) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View style={styles.loader}>
+          <Text
+            style={styles.errorTitle}
+          >
+            Unable to load analytics
+          </Text>
+
+          <Text
+            style={styles.errorText}
+          >
+            {!businessId
+              ? "Create a business to see analytics."
+              : "Check your connection and try again."}
+          </Text>
+
+          <Text
+            style={styles.retry}
+            onPress={() =>
+              void query.refetch()
+            }
+          >
+            Tap to retry
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -242,32 +482,36 @@ export default function AnalyticsScreen() {
           <KpiCard
             icon="scan-outline"
             title="Total Scans"
-            value="1,248"
-            change="+18.6%"
-            positive
+            value={formatCount(totalScans)}
+            change={changeLabel}
+            positive={changePositive}
           />
 
           <KpiCard
             icon="people-outline"
             title="Unique Visitors"
-            value="842"
-            change="+12.4%"
-            positive
+            value={formatCount(
+              uniqueVisitors
+            )}
+            change={changeLabel}
+            positive={changePositive}
           />
 
           <KpiCard
             icon="flash-outline"
             title="Today's Scans"
-            value="126"
-            change="+24.8%"
-            positive
+            value={formatCount(todaysScans)}
+            change={`${
+              growthPositive ? "+" : ""
+            }${growth.toFixed(1)}%`}
+            positive={growthPositive}
           />
 
           <KpiCard
             icon="qr-code-outline"
             title="Active QR Codes"
-            value="10"
-            change="83%"
+            value={String(activeQRCodes)}
+            change={`${activeShare}%`}
             positive
           />
         </View>
@@ -288,20 +532,29 @@ export default function AnalyticsScreen() {
 
             <View style={styles.growthBadge}>
               <Ionicons
-                name="trending-up"
+                name={
+                  growthPositive
+                    ? "trending-up"
+                    : "trending-down"
+                }
                 size={14}
-                color="#15803D"
+                color={
+                  growthPositive
+                    ? "#15803D"
+                    : "#B91C1C"
+                }
               />
 
               <Text style={styles.growthText}>
-                +{growth.toFixed(1)}%
+                {growthPositive ? "+" : ""}
+                {growth.toFixed(1)}%
               </Text>
             </View>
           </View>
 
           <View style={styles.chartSummary}>
             <Text style={styles.chartTotal}>
-              {totalScans.toLocaleString()}
+              {formatCount(chartTotal)}
             </Text>
 
             <Text style={styles.chartTotalLabel}>
@@ -310,18 +563,19 @@ export default function AnalyticsScreen() {
           </View>
 
           <View style={styles.chart}>
-            {scanData.map((item) => {
+            {scanSeries.map((item, index) => {
               const height =
                 maxScans > 0
                   ? (item.scans / maxScans) * 180
                   : 0;
 
               const isHighest =
-                item.scans === maxScans;
+                item.scans === maxScans &&
+                maxScans > 0;
 
               return (
                 <View
-                  key={item.day}
+                  key={`${item.day}-${index}`}
                   style={styles.chartColumn}
                 >
                   <Text style={styles.chartValue}>
@@ -387,10 +641,16 @@ export default function AnalyticsScreen() {
             </View>
 
             <View style={styles.qrList}>
-              {QR_PERFORMANCE.map(
-                (item, index) => (
+              {topQrs.length === 0 ? (
+                <Text
+                  style={styles.emptySection}
+                >
+                  No QR performance data yet.
+                </Text>
+              ) : (
+                topQrs.map((item, index) => (
                   <View
-                    key={item.name}
+                    key={`${item.name}-${index}`}
                     style={styles.qrRow}
                   >
                     <View
@@ -453,7 +713,7 @@ export default function AnalyticsScreen() {
                       </Text>
                     </View>
                   </View>
-                )
+                ))
               )}
             </View>
           </View>
@@ -484,23 +744,22 @@ export default function AnalyticsScreen() {
               />
             </View>
 
-            <DeviceRow
-              icon="logo-apple"
-              label="iPhone"
-              value="58%"
-            />
-
-            <DeviceRow
-              icon="logo-android"
-              label="Android"
-              value="35%"
-            />
-
-            <DeviceRow
-              icon="desktop-outline"
-              label="Desktop"
-              value="7%"
-            />
+            {devices.length === 0 ? (
+              <Text
+                style={styles.emptySection}
+              >
+                No device data yet.
+              </Text>
+            ) : (
+              devices.map((device) => (
+                <DeviceRow
+                  key={device.label}
+                  icon={device.icon}
+                  label={device.label}
+                  value={device.value}
+                />
+              ))
+            )}
           </View>
         </View>
 
@@ -521,11 +780,7 @@ export default function AnalyticsScreen() {
             </Text>
 
             <Text style={styles.insightText}>
-              Your Restaurant Menu QR is currently
-              your strongest performer. Scan activity
-              is trending upward, with the highest
-              activity occurring toward the end of
-              the selected period.
+              {insight}
             </Text>
           </View>
         </View>
@@ -552,42 +807,54 @@ export default function AnalyticsScreen() {
           </View>
 
           <View style={styles.activityList}>
-            {RECENT_SCANS.map((scan) => (
-              <View
-                key={`${scan.qr}-${scan.time}`}
-                style={styles.activityRow}
+            {recentScans.length === 0 ? (
+              <Text
+                style={styles.emptySection}
               >
-                <View style={styles.activityIcon}>
-                  <Ionicons
-                    name={scan.icon}
-                    size={18}
-                    color={COLORS.primary}
-                  />
-                </View>
-
+                No recent scans.
+              </Text>
+            ) : (
+              recentScans.map((scan) => (
                 <View
-                  style={styles.activityInfo}
+                  key={scan.id}
+                  style={styles.activityRow}
                 >
-                  <Text
-                    numberOfLines={1}
-                    style={styles.activityQR}
+                  <View
+                    style={styles.activityIcon}
                   >
-                    {scan.qr}
-                  </Text>
+                    <Ionicons
+                      name="phone-portrait-outline"
+                      size={18}
+                      color={COLORS.primary}
+                    />
+                  </View>
+
+                  <View
+                    style={styles.activityInfo}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={styles.activityQR}
+                    >
+                      {scan.qr}
+                    </Text>
+
+                    <Text
+                      style={styles.activityMeta}
+                    >
+                      {scan.device} •{" "}
+                      {scan.location}
+                    </Text>
+                  </View>
 
                   <Text
-                    style={styles.activityMeta}
+                    style={styles.activityTime}
                   >
-                    {scan.device} •{" "}
-                    {scan.location}
+                    {scan.time}
                   </Text>
                 </View>
-
-                <Text style={styles.activityTime}>
-                  {scan.time}
-                </Text>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </View>
 
@@ -601,18 +868,14 @@ export default function AnalyticsScreen() {
           />
 
           <Text style={styles.footerText}>
-            Analytics shown here are currently
-            frontend preview data.
+            Live analytics from your TapQR
+            business.
           </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-/* ================================================= */
-/* KPI CARD                                          */
-/* ================================================= */
 
 function KpiCard({
   icon,
@@ -744,6 +1007,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+
+  loaderText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.text,
+    textAlign: "center",
+  },
+
+  errorText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+  },
+
+  retry: {
+    marginTop: 16,
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
+  emptySection: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    paddingVertical: 8,
   },
 
   content: {

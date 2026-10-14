@@ -10,7 +10,7 @@ import {
   colors,
   radius,
   spacing,
-} from "../../theme";
+} from "../../constants/theme";
 
 import ScalePress from "../animations/ScalePress";
 
