@@ -1,6 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  useEffect,
+  useState,
+} from "react";
+import {
+  Alert,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -13,6 +18,13 @@ import QRCode from "react-native-qrcode-svg";
 
 import { COLORS } from "../../constants/colors";
 import { SPACING } from "../../constants/spacing";
+
+import {
+  getQRBranding,
+  updateQRBranding,
+  publicQRUrl,
+} from "../../api/qrcodeApi";
+import type { QRBranding } from "../../api/qrcodeApi";
 
 const QR_COLORS = [
   "#111827",
@@ -46,29 +58,95 @@ export default function QRDesignScreen() {
     id?: string;
     name?: string;
     destination?: string;
+    shortCode?: string;
   }>();
 
   const qrId = params.id?.toString() || "";
 
+  const shortCode =
+    params.shortCode?.toString() || "";
+
+  /*
+   * The QR image encodes the public scan URL
+   * (https://tapqr.shop/r/:shortCode), generated
+   * client-side — no backend call needed.
+   */
   const destination =
-    params.destination?.toString() ||
-    "https://tapqr.app";
+    params.destination?.toString() || "";
+
+  const qrValue = shortCode
+    ? publicQRUrl(shortCode)
+    : destination;
 
   const initialName =
     params.name?.toString() ||
     "My QR Code";
 
   const [qrName, setQrName] =
-    React.useState(initialName);
+    useState(initialName);
 
   const [qrColor, setQrColor] =
-    React.useState("#111827");
+    useState("#111827");
 
   const [backgroundColor, setBackgroundColor] =
-    React.useState("#FFFFFF");
+    useState("#FFFFFF");
 
   const [selectedFrame, setSelectedFrame] =
-    React.useState("None");
+    useState("None");
+
+  const [saving, setSaving] =
+    useState(false);
+
+  /*
+   * GET /qrcodes/:qrCodeId/branding — prefill the
+   * design from the saved QR Studio branding,
+   * mirroring the web studio page.
+   */
+  useEffect(() => {
+    let active = true;
+
+    if (!qrId) {
+      return;
+    }
+
+    (async () => {
+      try {
+        const branding =
+          await getQRBranding(qrId);
+
+        if (!active || !branding) {
+          return;
+        }
+
+        if (
+          typeof branding.qrForegroundColor ===
+          "string"
+        ) {
+          setQrColor(
+            branding.qrForegroundColor
+          );
+        }
+
+        if (
+          typeof branding.qrBackgroundColor ===
+          "string"
+        ) {
+          setBackgroundColor(
+            branding.qrBackgroundColor
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load QR branding:",
+          error
+        );
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [qrId]);
 
   const handleReset = () => {
     setQrName(initialName);
@@ -84,11 +162,61 @@ export default function QRDesignScreen() {
         id: qrId,
         name: qrName,
         destination,
+        shortCode,
         qrColor,
         backgroundColor,
         frame: selectedFrame,
       },
     });
+  };
+
+  /*
+   * PUT /qrcodes/:qrCodeId/branding — persist the
+   * current QR Studio design to the backend.
+   */
+  const handleSave = async () => {
+    if (!qrId) {
+      Alert.alert(
+        "Save Unavailable",
+        "This QR code hasn't been saved yet, so there's no design to store."
+      );
+      return;
+    }
+
+    if (saving) {
+      return;
+    }
+
+    setSaving(true);
+
+    const branding: QRBranding = {
+      qrForegroundColor: qrColor,
+      qrBackgroundColor: backgroundColor,
+    };
+
+    try {
+      await updateQRBranding(
+        qrId,
+        branding
+      );
+
+      Alert.alert(
+        "Design Saved",
+        "Your QR design has been saved successfully."
+      );
+    } catch (error) {
+      console.error(
+        "Failed to save QR branding:",
+        error
+      );
+
+      Alert.alert(
+        "Save Failed",
+        "We couldn't save your design right now. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -171,7 +299,10 @@ export default function QRDesignScreen() {
           >
             <View style={styles.qrWrapper}>
               <QRCode
-                value={destination}
+                value={
+                  qrValue ||
+                  "https://tapqr.shop"
+                }
                 size={190}
                 color={qrColor}
                 backgroundColor={backgroundColor}
@@ -414,25 +545,65 @@ export default function QRDesignScreen() {
           </Text>
         </View>
 
-        {/* PREVIEW BUTTON */}
+        {/* ACTIONS */}
 
-        <Pressable
-          onPress={handlePreview}
-          style={({ pressed }) => [
-            styles.previewButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.previewButtonText}>
-            Continue to Preview
-          </Text>
+        <View style={styles.actions}>
+          {/* SAVE DESIGN */}
 
-          <Ionicons
-            name="arrow-forward"
-            size={20}
-            color={COLORS.white}
-          />
-        </Pressable>
+          <Pressable
+            onPress={handleSave}
+            disabled={saving}
+            style={({ pressed }) => [
+              styles.saveButton,
+              pressed &&
+                !saving &&
+                styles.pressed,
+              saving && styles.disabled,
+            ]}
+          >
+            <Ionicons
+              name={
+                saving
+                  ? "time-outline"
+                  : "save-outline"
+              }
+              size={20}
+              color={COLORS.white}
+            />
+
+            <Text
+              style={styles.saveButtonText}
+            >
+              {saving
+                ? "Saving…"
+                : "Save Design"}
+            </Text>
+          </Pressable>
+
+          {/* PREVIEW BUTTON */}
+
+          <Pressable
+            onPress={handlePreview}
+            style={({ pressed }) => [
+              styles.previewButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              style={
+                styles.previewButtonText
+              }
+            >
+              Continue to Preview
+            </Text>
+
+            <Ionicons
+              name="arrow-forward"
+              size={20}
+              color={COLORS.white}
+            />
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -697,13 +868,37 @@ const styles = StyleSheet.create({
 
   previewButton: {
     height: 54,
-    marginTop: SPACING.xxl,
     borderRadius: 15,
     backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  actions: {
+    marginTop: SPACING.xxl,
+    gap: SPACING.md,
+  },
+
+  saveButton: {
+    height: 54,
+    borderRadius: 15,
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  saveButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.white,
+  },
+
+  disabled: {
+    opacity: 0.6,
   },
 
   previewButtonText: {

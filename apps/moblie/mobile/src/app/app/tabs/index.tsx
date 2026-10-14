@@ -591,7 +591,7 @@ export default function HomeScreen() {
 
           <Pressable
             onPress={() =>
-              router.push("/app/analytics")
+              router.push("/app/tabs/analytics")
             }
           >
             <Text style={styles.sectionAction}>
@@ -653,7 +653,7 @@ export default function HomeScreen() {
             title="View QR Codes"
             description="Manage your existing QR codes"
             onPress={() =>
-              router.push("/app/qrcodes")
+              router.push("/app/tabs/qrcodes")
             }
           />
 
@@ -662,7 +662,7 @@ export default function HomeScreen() {
             title="View Analytics"
             description="Track scans and customer activity"
             onPress={() =>
-              router.push("/app/analytics")
+              router.push("/app/tabs/analytics")
             }
           />
         </View>
@@ -677,7 +677,7 @@ export default function HomeScreen() {
           {qrCodes.length > 0 && (
             <Pressable
               onPress={() =>
-                router.push("/app/qrcodes")
+                router.push("/app/tabs/qrcodes")
               }
             >
               <Text style={styles.sectionAction}>

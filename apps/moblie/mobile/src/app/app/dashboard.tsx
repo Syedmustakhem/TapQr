@@ -1,5 +1,9 @@
 import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,12 +14,169 @@ import {
 import StatCard from "../../components/dashboard/StatCard";
 import QuickAction from "../../components/dashboard/QuickAction";
 
+import {
+  getBusinessAnalytics,
+} from "../../api/analyticsApi";
+
+import {
+  relativeTime,
+  toNumber,
+} from "../../api/utils";
+
+import { useCurrentBusiness } from "../../hooks/useCurrentBusiness";
+
 export default function DashboardScreen() {
+  const {
+    business,
+    businessId,
+    isLoading: businessLoading,
+    isError: businessError,
+    refetch: refetchBusinesses,
+  } = useCurrentBusiness();
+
+  const analyticsQuery = useQuery({
+    queryKey: [
+      "analytics",
+      businessId,
+      30,
+    ],
+    queryFn: () =>
+      getBusinessAnalytics(
+        businessId as string,
+        30,
+        10
+      ),
+    enabled: Boolean(businessId),
+  });
+
+  const analytics =
+    analyticsQuery.data ?? null;
+
+  const overview =
+    analytics?.overview ?? {};
+
+  /*
+   * KPI values from GET /analytics/business/:id.
+   */
+  const totalQRCodes = toNumber(
+    overview.totalQrCodes
+  );
+
+  const totalScans = toNumber(
+    overview.totalScans
+  );
+
+  const activeQRCodes = toNumber(
+    overview.activeQrCodes
+  );
+
+  const uniqueVisitors = toNumber(
+    overview.uniqueVisitors
+  );
+
+  /*
+   * QR name lookup for the recent-scans feed.
+   */
+  const qrNames = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const row of analytics?.qrPerformance ??
+      []) {
+      map.set(row.id, row.name);
+    }
+
+    return map;
+  }, [analytics]);
+
+  const recentScans = useMemo(
+    () =>
+      (analytics?.recentScans ?? []).slice(
+        0,
+        3
+      ),
+    [analytics]
+  );
+
+  const loading =
+    businessLoading ||
+    analyticsQuery.isLoading;
+
+  const refreshing =
+    analyticsQuery.isFetching &&
+    !analyticsQuery.isLoading;
+
+  const handleRefresh = () => {
+    refetchBusinesses();
+    void analyticsQuery.refetch();
+  };
+
+  /*
+   * LOADING
+   */
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View style={styles.loader}>
+          <ActivityIndicator
+            size="large"
+            color="#2563EB"
+          />
+
+          <Text style={styles.loaderText}>
+            Loading your dashboard...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  /*
+   * ERROR / NO BUSINESS
+   */
+  if (
+    businessError ||
+    analyticsQuery.isError ||
+    !business
+  ) {
+    return (
+      <SafeAreaView
+        style={styles.container}
+      >
+        <View style={styles.loader}>
+          <Text style={styles.errorTitle}>
+            Unable to load dashboard
+          </Text>
+
+          <Text style={styles.errorText}>
+            {!business
+              ? "Create a business to see your overview."
+              : "Check your connection and try again."}
+          </Text>
+
+          <Text
+            style={styles.retry}
+            onPress={handleRefresh}
+          >
+            Tap to retry
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
       >
         <View style={styles.header}>
           <View>
@@ -28,7 +189,8 @@ export default function DashboardScreen() {
             </Text>
 
             <Text style={styles.subtitle}>
-              Here's your business overview.
+              {business.name} — here&apos;s
+              your business overview.
             </Text>
           </View>
         </View>
@@ -40,28 +202,32 @@ export default function DashboardScreen() {
         <View style={styles.row}>
           <StatCard
             title="QR Codes"
-            value={12}
+            value={totalQRCodes}
             subtitle="Total created"
+            icon="qr-code-outline"
           />
 
           <StatCard
             title="Total Scans"
-            value="1,248"
+            value={totalScans}
             subtitle="All time"
+            icon="scan-outline"
           />
         </View>
 
         <View style={styles.row}>
           <StatCard
             title="Active"
-            value={10}
+            value={activeQRCodes}
             subtitle="Currently active"
+            icon="checkmark-circle-outline"
           />
 
           <StatCard
-            title="Customers"
-            value={486}
-            subtitle="Engaged users"
+            title="Visitors"
+            value={uniqueVisitors}
+            subtitle="Unique visitors"
+            icon="people-outline"
           />
         </View>
 
@@ -73,7 +239,7 @@ export default function DashboardScreen() {
           title="+ Create QR Code"
           subtitle="Create a new QR code for your business"
           onPress={() => {
-            console.log("Create QR");
+            router.push("/app/create-qr");
           }}
         />
 
@@ -81,7 +247,7 @@ export default function DashboardScreen() {
           title="▣ View QR Codes"
           subtitle="Manage your existing QR codes"
           onPress={() => {
-            console.log("View QR codes");
+            router.push("/app/tabs/qrcodes");
           }}
         />
 
@@ -89,7 +255,7 @@ export default function DashboardScreen() {
           title="Analytics"
           subtitle="See scans and customer activity"
           onPress={() => {
-            console.log("Analytics");
+            router.push("/app/tabs/analytics");
           }}
         />
 
@@ -98,23 +264,70 @@ export default function DashboardScreen() {
         </Text>
 
         <View style={styles.activityCard}>
-          <Text style={styles.activityTitle}>
-            QR code scanned
-          </Text>
+          {recentScans.length === 0 ? (
+            <Text
+              style={styles.activityEmpty}
+            >
+              No scans yet. Share your QR
+              code to start seeing activity
+              here.
+            </Text>
+          ) : (
+            recentScans.map(
+              (scan, index) => {
+                const name =
+                  qrNames.get(
+                    scan.qrCodeId
+                  ) ?? "QR code";
 
-          <Text style={styles.activityTime}>
-            2 minutes ago
-          </Text>
+                const location =
+                  [
+                    scan.city,
+                    scan.country,
+                  ]
+                    .filter(Boolean)
+                    .join(", ");
 
-          <View style={styles.divider} />
+                return (
+                  <View
+                    key={scan.id}
+                  >
+                    {index > 0 && (
+                      <View
+                        style={
+                          styles.divider
+                        }
+                      />
+                    )}
 
-          <Text style={styles.activityTitle}>
-            New QR code created
-          </Text>
+                    <Text
+                      style={
+                        styles.activityTitle
+                      }
+                    >
+                      {name} scanned
+                    </Text>
 
-          <Text style={styles.activityTime}>
-            1 hour ago
-          </Text>
+                    <Text
+                      style={
+                        styles.activityTime
+                      }
+                    >
+                      {relativeTime(
+                        scan.scannedAt
+                      )}
+                      {location
+                        ? ` • ${location}`
+                        : ""}
+                      {scan.device
+                        ? ` • ${scan.device}`
+                        : ""}
+                    </Text>
+                  </View>
+                );
+              }
+            )
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -130,6 +343,40 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+
+  loaderText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
+    textAlign: "center",
+  },
+
+  errorText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+
+  retry: {
+    marginTop: 16,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#2563EB",
   },
 
   header: {
@@ -187,6 +434,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: "#6B7280",
+  },
+
+  activityEmpty: {
+    fontSize: 14,
+    color: "#6B7280",
+    lineHeight: 20,
   },
 
   divider: {

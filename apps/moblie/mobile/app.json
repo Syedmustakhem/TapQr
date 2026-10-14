@@ -8,7 +8,7 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +35,10 @@
         }
       ],
       "expo-secure-store",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-image",
+      "expo-web-browser",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -43,6 +46,8 @@
     },
     "extra": {
       "router": {},
+      "googleWebClientId": "330141025278-3rt2j0q93nmc0t09s4a1r5735mjfep7l.apps.googleusercontent.com",
+      "googleAndroidClientId": "330141025278-e6t5epo96vu86plevj5l8p4v74397n17.apps.googleusercontent.com",
       "eas": {
         "projectId": "ba737c2c-0e6b-4569-8f92-0262bbe8fd95"
       }

@@ -14,10 +14,21 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { COLORS } from "../../../constants/colors";
 import { SPACING } from "../../../constants/spacing";
+
+import {
+  QRCodeRecord,
+  deleteQRCode,
+  getQRCodes,
+  publicQRUrl,
+  setQRCodeStatus,
+} from "../../../api/qrcodeApi";
+
+import { toNumber } from "../../../api/utils";
+
+import { useCurrentBusiness } from "../../../hooks/useCurrentBusiness";
 
 type QRType = "STATIC" | "DYNAMIC";
 type QRStatus = "ACTIVE" | "PAUSED";
@@ -31,6 +42,7 @@ type QRCodeItem = {
   destination: string;
   destinationType: string;
   createdAt: string;
+  shortCode?: string;
 };
 
 type Filter =
@@ -40,7 +52,34 @@ type Filter =
   | "DYNAMIC"
   | "STATIC";
 
-const STORAGE_KEY = "@tapqr_qr_codes";
+/*
+ * Map a backend QRCodeRecord to the list UI model.
+ * Mirrors the web dashboard QR list.
+ */
+function toQRCodeItem(
+  record: QRCodeRecord
+): QRCodeItem {
+  return {
+    id: record.id,
+    name: record.name,
+    type:
+      record.type === "STATIC"
+        ? "STATIC"
+        : "DYNAMIC",
+    status:
+      record.status === "PAUSED"
+        ? "PAUSED"
+        : "ACTIVE",
+    scans: toNumber(record.scanCount),
+    destination:
+      record.destinationUrl ||
+      publicQRUrl(record.shortCode),
+    destinationType:
+      record.experienceType || "WEBSITE",
+    createdAt: record.createdAt || "",
+    shortCode: record.shortCode,
+  };
+}
 
 export default function QRCodesScreen() {
   const [qrCodes, setQrCodes] = useState<QRCodeItem[]>([]);
@@ -50,26 +89,26 @@ export default function QRCodesScreen() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("ALL");
 
+  const { businessId } = useCurrentBusiness();
+
   /*
-   * LOAD QR CODES
+   * LOAD QR CODES — GET /qrcodes/business/:businessId
    */
   const loadQRCodes = useCallback(async () => {
+    if (!businessId) {
+      setQrCodes([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     try {
-      const stored =
-        await AsyncStorage.getItem(STORAGE_KEY);
+      const records =
+        await getQRCodes(businessId);
 
-      if (!stored) {
-        setQrCodes([]);
-        return;
-      }
-
-      const parsed = JSON.parse(stored);
-
-      if (Array.isArray(parsed)) {
-        setQrCodes(parsed);
-      } else {
-        setQrCodes([]);
-      }
+      setQrCodes(
+        records.map(toQRCodeItem)
+      );
     } catch (error) {
       console.error(
         "Failed to load QR codes:",
@@ -86,7 +125,7 @@ export default function QRCodesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [businessId]);
 
   /*
    * INITIAL LOAD
@@ -169,20 +208,6 @@ export default function QRCodesScreen() {
   );
 
   /*
-   * SAVE QR CODES
-   */
-  const saveQRCodes = async (
-    updatedQRCodes: QRCodeItem[]
-  ) => {
-    await AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(updatedQRCodes)
-    );
-
-    setQrCodes(updatedQRCodes);
-  };
-
-  /*
    * OPEN QR DETAILS
    */
   const handleOpenDetails = (
@@ -198,6 +223,7 @@ export default function QRCodesScreen() {
         destinationType:
           qr.destinationType,
         status: qr.status,
+        shortCode: qr.shortCode ?? "",
       },
     });
   };
@@ -217,12 +243,14 @@ export default function QRCodesScreen() {
         type: qr.type,
         destinationType:
           qr.destinationType,
+        shortCode: qr.shortCode ?? "",
       },
     });
   };
 
   /*
-   * PAUSE / ACTIVATE
+   * PAUSE / ACTIVATE — PUT /qrcodes/:id { status }
+   * (mirrors the web dashboard row action)
    */
   const handleToggleStatus = (
     qr: QRCodeItem
@@ -254,17 +282,21 @@ export default function QRCodesScreen() {
               : "Pause",
           onPress: async () => {
             try {
-              const updated =
-                qrCodes.map((item) =>
+              await setQRCodeStatus(
+                qr.id,
+                nextStatus
+              );
+
+              setQrCodes((current) =>
+                current.map((item) =>
                   item.id === qr.id
                     ? {
                         ...item,
                         status: nextStatus,
                       }
                     : item
-                );
-
-              await saveQRCodes(updated);
+                )
+              );
             } catch (error) {
               console.error(
                 "Failed to update QR status:",
@@ -301,13 +333,14 @@ export default function QRCodesScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const updated =
-                qrCodes.filter(
+              await deleteQRCode(qr.id);
+
+              setQrCodes((current) =>
+                current.filter(
                   (item) =>
                     item.id !== qr.id
-                );
-
-              await saveQRCodes(updated);
+                )
+              );
             } catch (error) {
               console.error(
                 "Failed to delete QR:",

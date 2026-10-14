@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,7 +30,7 @@ export default function QRDetailsScreen() {
     createdAt?: string;
   }>();
 
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = useState(false);
 
   const qrId = params.id || "";
   const name = params.name || "Untitled QR";
